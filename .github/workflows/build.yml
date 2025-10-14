@@ -15,6 +15,18 @@ jobs:
       with:
         submodules: recursive  # Fetch all submodules
 
+    - name: Initialize Submodules
+      run: |
+        git submodule sync --recursive
+        git submodule update --init --force --depth=1 --recursive
+        # Validate submodules
+        for dir in src/libs/FreeRTOS src/libs/arduinoFFT src/libs/littlefs src/libs/lvgl; do
+          if [ ! -d "$dir" ] || [ ! -f "$dir/.git" ]; then
+            echo "Submodule $dir missing or not initialized"
+            exit 1
+          fi
+        done
+
     - name: Install Arm GCC Toolchain
       uses: carlosperate/arm-none-eabi-gcc-action@v1
       id: arm-toolchain
@@ -41,3 +53,4 @@ jobs:
       with:
         name: praxiom
         path: build/praxiom.hex
+      
