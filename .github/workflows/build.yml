@@ -13,39 +13,30 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        submodules: recursive  # Attempt to fetch all submodules
+        submodules: recursive  # Fetch remaining submodules
 
     - name: Initialize Submodules
       run: |
         git submodule sync --recursive
-        # Force initialize FreeRTOS submodule to V10.5.1 with structure validation
-        if [ ! -d "src/libs/FreeRTOS" ] || [ ! -f "src/libs/FreeRTOS/portable/MemMang/heap_4.c" ]; then
-          echo "FreeRTOS submodule missing or incomplete, reinitializing to V10.5.1..."
-          rm -rf src/libs/FreeRTOS
-          git submodule add --force https://github.com/FreeRTOS/FreeRTOS-Kernel.git src/libs/FreeRTOS
-          git submodule update --init --force src/libs/FreeRTOS
-          (cd src/libs/FreeRTOS && git fetch --tags && git checkout tags/V10.5.1)
-          if [ ! -f "src/libs/FreeRTOS/portable/MemMang/heap_4.c" ]; then
-            echo "FreeRTOS V10.5.1 initialization failed; listing directory contents for debug:"
-            ls -la src/libs/FreeRTOS/
-            ls -la src/libs/FreeRTOS/portable/MemMang/
-            exit 1
-          fi
-        fi
-        # Initialize and validate other submodules
         git submodule update --init --force --depth=1 --recursive
+        # Validate other submodules (skip FreeRTOS, as it's local)
         for dir in src/libs/arduinoFFT src/libs/littlefs src/libs/lvgl; do
           if [ ! -d "$dir" ] || [ ! -f "$dir/.git" ]; then
             echo "Submodule $dir missing or not initialized"
             exit 1
           fi
         done
+        # Validate local FreeRTOS copy
+        if [ ! -f "src/libs/FreeRTOS/portable/MemMang/heap_4.c" ]; then
+          echo "Local FreeRTOS copy missing; ensure it's committed"
+          exit 1
+        fi
 
     - name: Install Arm GCC Toolchain
       uses: carlosperate/arm-none-eabi-gcc-action@v1
       id: arm-toolchain
       with:
-        release: '10.3-2021.10'  # Match the observed toolchain version
+        release: '10.3-2021.10'  # Match observed version
 
     - name: Install Ninja
       run: sudo apt-get update && sudo apt-get install -y ninja-build
