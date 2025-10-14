@@ -13,34 +13,25 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        submodules: recursive  # Fetch all submodules
+        submodules: recursive  # Attempt to fetch submodules
 
     - name: Initialize Submodules
       run: |
-        git submodule sync --recursive
-        git submodule update --init --force --depth=1 --recursive
-        # Validate and reinitialize FreeRTOS submodule with explicit correction
+        # Force initialize FreeRTOS if not present
         if [ ! -d "src/libs/FreeRTOS" ] || [ ! -f "src/libs/FreeRTOS/croutine.c" ]; then
-          echo "FreeRTOS submodule missing or not initialized, reinitializing..."
+          echo "FreeRTOS submodule missing or not initialized, cloning manually..."
           rm -rf src/libs/FreeRTOS
-          git submodule add --force https://github.com/FreeRTOS/FreeRTOS-Kernel.git src/libs/FreeRTOS
-          git submodule update --init --force src/libs/FreeRTOS
-          (cd src/libs/FreeRTOS && git checkout main && git pull --rebase)
+          git clone --depth 1 https://github.com/FreeRTOS/FreeRTOS-Kernel.git src/libs/FreeRTOS
+          (cd src/libs/FreeRTOS && git checkout main)
           if [ ! -f "src/libs/FreeRTOS/croutine.c" ]; then
-            echo "FreeRTOS reinitialization failed; files still missing"
+            echo "FreeRTOS manual clone failed; files still missing"
             exit 1
           fi
         fi
-        # Validate arduinoFFT submodule
-        if [ ! -d "src/libs/arduinoFFT" ] || [ ! -f "src/libs/arduinoFFT/.git" ]; then
-          echo "arduinoFFT submodule missing or not initialized, adding..."
-          rm -rf src/libs/arduinoFFT
-          git submodule add https://github.com/kosme/arduinoFFT.git src/libs/arduinoFFT
-          git submodule update --init src/libs/arduinoFFT
-          (cd src/libs/arduinoFFT && git checkout master)
-        fi
-        # Validate other submodules
-        for dir in src/libs/littlefs src/libs/lvgl; do
+        # Initialize and validate other submodules
+        git submodule sync --recursive
+        git submodule update --init --force --depth=1 --recursive
+        for dir in src/libs/arduinoFFT src/libs/littlefs src/libs/lvgl; do
           if [ ! -d "$dir" ] || [ ! -f "$dir/.git" ]; then
             echo "Submodule $dir missing or not initialized"
             exit 1
