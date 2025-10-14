@@ -18,7 +18,7 @@ jobs:
     - name: Initialize Submodules
       run: |
         git submodule sync --recursive
-        # Force initialize FreeRTOS submodule to V10.5.1
+        # Force initialize FreeRTOS submodule to V10.5.1 with structure validation
         if [ ! -d "src/libs/FreeRTOS" ] || [ ! -f "src/libs/FreeRTOS/portable/MemMang/heap_4.c" ]; then
           echo "FreeRTOS submodule missing or incomplete, reinitializing to V10.5.1..."
           rm -rf src/libs/FreeRTOS
@@ -28,6 +28,7 @@ jobs:
           if [ ! -f "src/libs/FreeRTOS/portable/MemMang/heap_4.c" ]; then
             echo "FreeRTOS V10.5.1 initialization failed; listing directory contents for debug:"
             ls -la src/libs/FreeRTOS/
+            ls -la src/libs/FreeRTOS/portable/MemMang/
             exit 1
           fi
         fi
