@@ -18,26 +18,17 @@ jobs:
     - name: Initialize Submodules
       run: |
         git submodule sync --recursive
-        # Force initialize FreeRTOS submodule with retries
-        for i in {1..3}; do
-          if [ ! -d "src/libs/FreeRTOS" ] || [ ! -f "src/libs/FreeRTOS/croutine.c" ]; then
-            echo "Attempt $i: FreeRTOS submodule missing or not initialized, reinitializing..."
-            rm -rf src/libs/FreeRTOS
-            git submodule add --force https://github.com/FreeRTOS/FreeRTOS-Kernel.git src/libs/FreeRTOS || { echo "Submodule add failed"; continue; }
-            git submodule update --init --force src/libs/FreeRTOS || { echo "Submodule update failed"; continue; }
-            (cd src/libs/FreeRTOS && git checkout main && git pull --rebase) || { echo "Checkout/pull failed"; continue; }
-            if [ -f "src/libs/FreeRTOS/croutine.c" ]; then
-              echo "FreeRTOS initialized successfully on attempt $i"
-              break
-            fi
-          else
-            echo "FreeRTOS already initialized"
-            break
+        # Force initialize FreeRTOS submodule to a specific version (V10.5.1)
+        if [ ! -d "src/libs/FreeRTOS" ] || [ ! -f "src/libs/FreeRTOS/portable/MemMang/heap_4.c" ]; then
+          echo "FreeRTOS submodule missing or incomplete, reinitializing to V10.5.1..."
+          rm -rf src/libs/FreeRTOS
+          git submodule add --force https://github.com/FreeRTOS/FreeRTOS-Kernel.git src/libs/FreeRTOS
+          git submodule update --init --force src/libs/FreeRTOS
+          (cd src/libs/FreeRTOS && git fetch --tags && git checkout tags/V10.5.1)
+          if [ ! -f "src/libs/FreeRTOS/portable/MemMang/heap_4.c" ]; then
+            echo "FreeRTOS V10.5.1 initialization failed; heap_4.c not found"
+            exit 1
           fi
-        done
-        if [ ! -f "src/libs/FreeRTOS/croutine.c" ]; then
-          echo "Failed to initialize FreeRTOS after 3 attempts"
-          exit 1
         fi
         # Initialize and validate other submodules
         git submodule update --init --force --depth=1 --recursive
