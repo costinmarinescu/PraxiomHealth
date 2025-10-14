@@ -1,16 +1,16 @@
-[submodule "libs/FreeRTOS"]
-	path = libs/FreeRTOS
+[submodule "src/libs/FreeRTOS"]
+	path = src/libs/FreeRTOS
 	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
 	branch = main
-[submodule "libs/arduinoFFT"]
-	path = libs/arduinoFFT
+[submodule "src/libs/arduinoFFT"]
+	path = src/libs/arduinoFFT
 	url = https://github.com/kosme/arduinoFFT.git
 	branch = master
-[submodule "libs/littlefs"]
-	path = libs/littlefs
+[submodule "src/libs/littlefs"]
+	path = src/libs/littlefs
 	url = https://github.com/littlefs-project/littlefs.git
 	branch = master
-[submodule "libs/lvgl"]
-	path = libs/lvgl
+[submodule "src/libs/lvgl"]
+	path = src/libs/lvgl
 	url = https://github.com/lvgl/lvgl.git
 	branch = release/v8
