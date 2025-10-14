@@ -19,9 +19,9 @@ jobs:
       run: |
         git submodule sync --recursive
         git submodule update --init --force --depth=1 --recursive
-        # Validate FreeRTOS submodule
+        # Validate and reinitialize FreeRTOS submodule if missing
         if [ ! -d "src/libs/FreeRTOS" ] || [ ! -f "src/libs/FreeRTOS/croutine.c" ]; then
-          echo "FreeRTOS submodule missing or not initialized"
+          echo "FreeRTOS submodule missing or not initialized, reinitializing..."
           rm -rf src/libs/FreeRTOS
           git submodule add https://github.com/FreeRTOS/FreeRTOS-Kernel.git src/libs/FreeRTOS
           git submodule update --init src/libs/FreeRTOS
