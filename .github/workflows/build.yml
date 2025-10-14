@@ -19,13 +19,17 @@ jobs:
       run: |
         git submodule sync --recursive
         git submodule update --init --force --depth=1 --recursive
-        # Validate and reinitialize FreeRTOS submodule if missing
+        # Validate and reinitialize FreeRTOS submodule with explicit path correction
         if [ ! -d "src/libs/FreeRTOS" ] || [ ! -f "src/libs/FreeRTOS/croutine.c" ]; then
           echo "FreeRTOS submodule missing or not initialized, reinitializing..."
           rm -rf src/libs/FreeRTOS
-          git submodule add https://github.com/FreeRTOS/FreeRTOS-Kernel.git src/libs/FreeRTOS
-          git submodule update --init src/libs/FreeRTOS
+          git submodule add --force https://github.com/FreeRTOS/FreeRTOS-Kernel.git src/libs/FreeRTOS
+          git submodule update --init --force src/libs/FreeRTOS
           (cd src/libs/FreeRTOS && git checkout main)
+          if [ ! -f "src/libs/FreeRTOS/croutine.c" ]; then
+            echo "FreeRTOS reinitialization failed; files still missing"
+            exit 1
+          fi
         fi
         # Validate other submodules
         for dir in src/libs/arduinoFFT src/libs/littlefs src/libs/lvgl; do
