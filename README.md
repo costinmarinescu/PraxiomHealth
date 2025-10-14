@@ -30,7 +30,7 @@
 - [PineTimeStyle Watch face](https://pine64.org/documentation/PineTime/Watchfaces/PineTimeStyle)
   - [Weather integration](https://pine64.org/documentation/PineTime/Software/InfiniTime_weather/)
 
-### Companion apps
+### Companio
 
 - [Gadgetbridge](https://gadgetbridge.org/) (Android)
 - [Amazfish](https://github.com/piggz/harbour-amazfish/) ([SailfishOS](https://sailfishos-chum.github.io/apps/harbour-amazfish/), [Ubuntu Touch](https://open-store.io/app/uk.co.piggz.amazfish), [Flatpak](https://flathub.org/apps/uk.co.piggz.amazfish))
