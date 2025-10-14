@@ -1,0 +1,43 @@
+name: Build Firmware
+
+on:
+  push:
+    branches: [ develop ]
+  pull_request:
+    branches: [ develop ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive  # Fetch all submodules
+
+    - name: Install Arm GCC Toolchain
+      uses: carlosperate/arm-none-eabi-gcc-action@v1
+      id: arm-toolchain
+      with:
+        release: '13.3.Rel1'
+
+    - name: Install Ninja
+      run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+    - name: Download nRF5 SDK
+      run: |
+        wget -q --show-progress https://nsscprodmedia.blob.core.windows.net/prod/software-and-other-downloads/sdks/nrf5/binaries/nrf5_sdk_17.1.0_ddde560.zip || { echo "Download failed, using fallback"; exit 1; }
+        unzip -q nrf5_sdk_17.1.0_ddde560.zip -d . || { echo "Unzip failed"; exit 1; }
+        echo "NRF5_SDK_PATH=$(pwd)/nRF5_SDK_v17.1.0" >> $GITHUB_ENV
+
+    - name: Configure CMake
+      run: cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=src/toolchain.cmake -DCMAKE_C_COMPILER=${{ steps.arm-toolchain.outputs.path }}/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=${{ steps.arm-toolchain.outputs.path }}/arm-none-eabi-g++ -DCMAKE_ASM_COMPILER=${{ steps.arm-toolchain.outputs.path }}/arm-none-eabi-gcc -DCMAKE_MAKE_PROGRAM=/usr/bin/ninja -DNRF5_SDK_PATH=$NRF5_SDK_PATH -DBOARD=pine_time_nrf52832
+
+    - name: Build
+      run: ninja -C build
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: praxiom
+        path: build/praxiom.hex
