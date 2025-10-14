@@ -13,7 +13,7 @@ if(NOT EXISTS ${FREERTOS_DIR})
     message(FATAL_ERROR "FreeRTOS directory not found at ${FREERTOS_DIR}. Ensure submodule is initialized.")
 endif()
 
-# FreeRTOS sources (adjusted for V10.5.1 structure)
+# FreeRTOS sources (verified for V10.5.1)
 set(FREERTOS_SOURCES
     ${FREERTOS_DIR}/croutine.c
     ${FREERTOS_DIR}/event_groups.c
