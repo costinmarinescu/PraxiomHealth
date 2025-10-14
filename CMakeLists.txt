@@ -23,6 +23,6 @@ set(FREERTOS_SOURCES
 
 add_library(freertos STATIC ${FREERTOS_SOURCES})
 
-target_include_directories(freertos PUBLIC
+target_include_directories(freertos PUBLIC)
   ${FREERTOS_DIR}/include
   ${FREERTOS_DIR}/portable/GCC
