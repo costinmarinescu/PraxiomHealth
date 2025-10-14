@@ -3,14 +3,14 @@
 	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
 	branch = main
 [submodule "libs/arduinoFFT"]
-	path = src/libs/arduinoFFT
+	path = libs/arduinoFFT
 	url = https://github.com/kosme/arduinoFFT.git
 	branch = master
 [submodule "libs/littlefs"]
-	path = src/libs/littlefs
+	path = libs/littlefs
 	url = https://github.com/littlefs-project/littlefs.git
 	branch = master
 [submodule "libs/lvgl"]
-	path = src/libs/lvgl
+	path = libs/lvgl
 	url = https://github.com/lvgl/lvgl.git
 	branch = release/v8
