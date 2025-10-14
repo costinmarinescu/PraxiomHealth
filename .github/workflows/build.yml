@@ -15,11 +15,26 @@ jobs:
       with:
         submodules: recursive  # Attempt to fetch remaining submodules
 
-    - name: Initialize Submodules
+    - name: Initialize Submodules and FreeRTOS
       run: |
+        # Ensure FreeRTOS directory is present with local copy
+        if [ ! -d "src/libs/FreeRTOS" ] || [ ! -f "src/libs/FreeRTOS/croutine.c" ]; then
+          echo "FreeRTOS directory missing, setting up local copy..."
+          rm -rf src/libs/FreeRTOS
+          mkdir -p src/libs/FreeRTOS
+          # Download and extract FreeRTOS as a fallback
+          wget -q --show-progress https://github.com/FreeRTOS/FreeRTOS-Kernel/archive/refs/heads/main.zip -O freertos.zip
+          unzip -q freertos.zip -d src/libs/FreeRTOS
+          mv src/libs/FreeRTOS/FreeRTOS-Kernel-main/* src/libs/FreeRTOS/
+          rm -rf src/libs/FreeRTOS/FreeRTOS-Kernel-main freertos.zip
+          if [ ! -f "src/libs/FreeRTOS/croutine.c" ]; then
+            echo "FreeRTOS setup failed; croutine.c not found"
+            exit 1
+          fi
+        fi
+        # Initialize and validate other submodules
         git submodule sync --recursive
         git submodule update --init --force --depth=1 --recursive
-        # Validate other submodules
         for dir in src/libs/arduinoFFT src/libs/littlefs src/libs/lvgl; do
           if [ ! -d "$dir" ] || [ ! -f "$dir/.git" ]; then
             echo "Submodule $dir missing or not initialized"
@@ -31,7 +46,7 @@ jobs:
       uses: carlosperate/arm-none-eabi-gcc-action@v1
       id: arm-toolchain
       with:
-        release: '10.3-2021.10'  # Match observed version
+        release: '10.3-2021.10'  # Match the observed toolchain version
 
     - name: Install Ninja
       run: sudo apt-get update && sudo apt-get install -y ninja-build
@@ -43,7 +58,7 @@ jobs:
         echo "NRF5_SDK_PATH=$(pwd)/nRF5_SDK_v17.1.0" >> $GITHUB_ENV
 
     - name: Configure CMake
-      run: cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=src/toolchain.cmake -DCMAKE_C_COMPILER=${{ steps.arm-toolchain.outputs.path }}/bin/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=${{ steps.arm-toolchain.outputs.path }}/bin/arm-none-eabi-g++ -CMAKE_ASM_COMPILER=${{ steps.arm-toolchain.outputs.path }}/bin/arm-none-eabi-gcc -DCMAKE_MAKE_PROGRAM=/usr/bin/ninja -DNRF5_SDK_PATH=$NRF5_SDK_PATH -DBOARD=pine_time_nrf52832 -DBUILD_DFU=1 -DBUILD_RESOURCES=1
+      run: cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=src/toolchain.cmake -DCMAKE_C_COMPILER=${{ steps.arm-toolchain.outputs.path }}/bin/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=${{ steps.arm-toolchain.outputs.path }}/bin/arm-none-eabi-g++ -CMAKE_ASM_COMPILER=${{ steps.arm-toolchain.outputs.path }}/bin/arm-none-eabi-gcc -DCMAKE_MAKE_PROGRAM=/usr/bin/ninja -DNRF5_SDK_PATH=$NRF5_SDK_PATH -DBOARD=pine_time_nrf52832 -DBUILD_DFU=1 -BUILD_RESOURCES=1
 
     - name: Build
       run: ninja -C build
