@@ -31,7 +31,7 @@ jobs:
       uses: carlosperate/arm-none-eabi-gcc-action@v1
       id: arm-toolchain
       with:
-        release: '13.3.Rel1'
+        release: '10.3-2021.10'  # Match the observed toolchain version
 
     - name: Install Ninja
       run: sudo apt-get update && sudo apt-get install -y ninja-build
@@ -43,7 +43,7 @@ jobs:
         echo "NRF5_SDK_PATH=$(pwd)/nRF5_SDK_v17.1.0" >> $GITHUB_ENV
 
     - name: Configure CMake
-      run: cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=src/toolchain.cmake -DCMAKE_C_COMPILER=${{ steps.arm-toolchain.outputs.path }}/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=${{ steps.arm-toolchain.outputs.path }}/arm-none-eabi-g++ -DCMAKE_ASM_COMPILER=${{ steps.arm-toolchain.outputs.path }}/arm-none-eabi-gcc -DCMAKE_MAKE_PROGRAM=/usr/bin/ninja -DNRF5_SDK_PATH=$NRF5_SDK_PATH -DBOARD=pine_time_nrf52832
+      run: cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=src/toolchain.cmake -DCMAKE_C_COMPILER=${{ steps.arm-toolchain.outputs.path }}/bin/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=${{ steps.arm-toolchain.outputs.path }}/bin/arm-none-eabi-g++ -DCMAKE_ASM_COMPILER=${{ steps.arm-toolchain.outputs.path }}/bin/arm-none-eabi-gcc -DCMAKE_MAKE_PROGRAM=/usr/bin/ninja -DNRF5_SDK_PATH=$NRF5_SDK_PATH -DBOARD=pine_time_nrf52832 -DBUILD_DFU=1 -DBUILD_RESOURCES=1
 
     - name: Build
       run: ninja -C build
@@ -53,4 +53,3 @@ jobs:
       with:
         name: praxiom
         path: build/praxiom.hex
-      
