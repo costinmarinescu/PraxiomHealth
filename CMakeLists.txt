@@ -5,15 +5,10 @@ project(PraxiomFirmware)
 # Set board
 set(BOARD pine_time_nrf52832)
 
-# Set FreeRTOS directory (using submodule)
+# Set FreeRTOS directory (using committed local copy)
 set(FREERTOS_DIR ${PROJECT_SOURCE_DIR}/src/libs/FreeRTOS)
 
-# Check if FreeRTOS directory exists
-if(NOT EXISTS ${FREERTOS_DIR})
-    message(FATAL_ERROR "FreeRTOS directory not found at ${FREERTOS_DIR}. Ensure submodule is initialized.")
-endif()
-
-# FreeRTOS sources (verified for V10.5.1)
+# FreeRTOS sources (verified for V10.5.1 structure)
 set(FREERTOS_SOURCES
     ${FREERTOS_DIR}/croutine.c
     ${FREERTOS_DIR}/event_groups.c
