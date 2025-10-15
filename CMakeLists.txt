@@ -29,9 +29,9 @@ set(CMAKE_OSX_SYSROOT "/")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "")
 
 set(SDK_SOURCE_FILES
-        # Startup
+        # Startup - FIXED: Removed /gcc/ from path
         ${NRF5_SDK_PATH}/modules/nrfx/mdk/system_nrf52.c
-        ${NRF5_SDK_PATH}/modules/nrfx/mdk/gcc/startup_nrf52.S
+        ${NRF5_SDK_PATH}/modules/nrfx/mdk/startup_nrf52.S
 
         # Base SDK
         ${NRF5_SDK_PATH}/components/boards/boards.c
@@ -290,7 +290,8 @@ list(APPEND SOURCE_FILES
         src/components/ble/AlertNotificationClient.cpp
         src/components/ble/DfuService.cpp
         src/components/ble/CurrentTimeService.cpp
-        src/components/ble/AlartNotificationService.cpp
+        # FIXED: Corrected typo from "Alart" to "Alert"
+        src/components/ble/AlertNotificationService.cpp
         src/components/ble/MusicService.cpp
         src/components/ble/SimpleWeatherService.cpp
         src/components/ble/NavigationService.cpp
@@ -355,7 +356,8 @@ list(APPEND RECOVERY_SOURCE_FILES
         src/components/ble/AlertNotificationClient.cpp
         src/components/ble/DfuService.cpp
         src/components/ble/CurrentTimeService.cpp
-        src/components/ble/AlartNotificationService.cpp
+        # FIXED: Corrected typo from "Alart" to "Alert"  
+        src/components/ble/AlertNotificationService.cpp
         src/components/ble/MusicService.cpp
         src/components/ble/SimpleWeatherService.cpp
         src/components/ble/BatteryInformationService.cpp
