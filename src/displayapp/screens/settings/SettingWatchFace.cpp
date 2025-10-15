@@ -6,52 +6,47 @@
 
 using namespace Pinetime::Applications::Screens;
 
-constexpr const char* SettingWatchFace::title;
-constexpr const char* SettingWatchFace::symbol;
+constexpr const char* SettingWatchFace::title = "Watch face";
+constexpr const char* SettingWatchFace::symbol = Symbols::home;
 
 namespace {
-  uint32_t IndexOf(const std::array<Pinetime::Applications::Screens::SettingWatchFace::Item,
-                                    Pinetime::Applications::UserWatchFaceTypes::Count>& watchfaces,
+  uint32_t IndexOf(const std::array<Pinetime::Applications::Screens::SettingWatchFace::Item, Pinetime::Applications::UserWatchFaceTypes::Count>& watchfaces,
                    Pinetime::Applications::WatchFace watchface) {
     size_t index = 0;
-    auto found = std::find_if(watchfaces.begin(),
-                              watchfaces.end(),
-                              [&index, &watchface](const Pinetime::Applications::Screens::SettingWatchFace::Item& item) {
-                                const bool result = item.watchface == watchface;
-                                if (!result) {
-                                  index++;
-                                }
-                                return result;
-                              });
+    auto found = std::find_if(watchfaces.begin(), watchfaces.end(), [&index, watchface](const auto& item) {
+      const bool result = item.watchface == watchface;
+      if (!result) {
+        index++;
+      }
+      return result;
+    });
     if (found == watchfaces.end()) {
       index = 0;
     }
-
     return index;
   }
 
-  Pinetime::Applications::WatchFace IndexToWatchFace(const std::array<Pinetime::Applications::Screens::SettingWatchFace::Item,
-                                                                      Pinetime::Applications::UserWatchFaceTypes::Count>& watchfaces,
+  Pinetime::Applications::WatchFace IndexToWatchFace(const std::array<Pinetime::Applications::Screens::SettingWatchFace::Item, Pinetime::Applications::UserWatchFaceTypes::Count>& watchfaces,
                                                      size_t index) {
     if (index >= watchfaces.size()) {
       return watchfaces[0].watchface;
     }
     return watchfaces[index].watchface;
   }
-}
 
-auto SettingWatchFace::CreateScreenList() const {
-  std::array<std::function<std::unique_ptr<Screen>()>, nScreens> screens;
-  for (size_t i = 0; i < screens.size(); i++) {
-    screens[i] = [this, i]() -> std::unique_ptr<Screen> {
-      return CreateScreen(i);
-    };
+  auto SettingWatchFace::CreateScreenList() const {
+    std::array<std::function<std::unique_ptr<Screen>()>, nScreens> screens;
+    for (size_t i = 0; i < screens.size(); i++) {
+      screens[i] = [this, i]() -> std::unique_ptr<Screen> {
+        return CreateScreen(i);
+      };
+    }
+    return screens;
   }
-  return screens;
 }
 
 SettingWatchFace::SettingWatchFace(Pinetime::Applications::DisplayApp* app,
-                                   std::array<Screens::SettingWatchFace::Item, UserWatchFaceTypes::Count>&& watchfaceItems,
+                                   std::array<Screens::SettingWatchFace::Item, UserWatchFaceTypes::Count> watchfaceItems,
                                    Pinetime::Controllers::Settings& settingsController,
                                    Pinetime::Controllers::FS& filesystem)
   : watchfaceItems {std::move(watchfaceItems)},
@@ -69,6 +64,8 @@ bool SettingWatchFace::OnTouchEvent(Pinetime::Applications::TouchEvents event) {
 }
 
 std::unique_ptr<Screen> SettingWatchFace::CreateScreen(unsigned int screenNum) const {
+  // Updated to handle 7 watch faces including Praxiom Health
+  constexpr int settingsPerScreen = 4;
   std::array<Screens::CheckboxList::Item, settingsPerScreen> watchfacesOnThisScreen;
   for (int i = 0; i < settingsPerScreen; i++) {
     if (i + (screenNum * settingsPerScreen) >= watchfaceItems.size()) {
@@ -78,15 +75,15 @@ std::unique_ptr<Screen> SettingWatchFace::CreateScreen(unsigned int screenNum) c
       watchfacesOnThisScreen[i] = Screens::CheckboxList::Item {item.name, item.enabled};
     }
   }
-
+  
   return std::make_unique<Screens::CheckboxList>(
     screenNum,
     nScreens,
     title,
     symbol,
     static_cast<uint32_t>(IndexOf(watchfaceItems, settingsController.GetWatchFace())),
-    [this, &settings = settingsController](uint32_t index) {
-      settings.SetWatchFace(IndexToWatchFace(watchfaceItems, index));
+    [this](uint32_t index) {
+      settingsController.SetWatchFace(IndexToWatchFace(watchfaceItems, index));
       settings.SaveSettings();
     },
     watchfacesOnThisScreen);
