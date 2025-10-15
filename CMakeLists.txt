@@ -918,7 +918,6 @@ if (BUILD_DFU)
 endif ()
 
 # Build binary intended to be used by bootloader...
-endif ()
 
 # FIXED: Protected add_subdirectory calls with if(EXISTS) checks
 if(EXISTS ${CMAKE_SOURCE_DIR}/src/displayapp/fonts)
