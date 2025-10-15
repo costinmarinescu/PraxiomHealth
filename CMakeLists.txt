@@ -14,11 +14,7 @@ if (DEFINED ARM_NONE_EABI_TOOLCHAIN_PATH)
     set(ARM_NONE_EABI_TOOLCHAIN_BIN_PATH ${ARM_NONE_EABI_TOOLCHAIN_PATH}/bin)
 endif ()
 
-# FIXED: Commented out the problematic NRF_TARGET check
-# if (NOT NRF_TARGET MATCHES "nrf52")
-#    message(FATAL_ERROR "Only rRF52 boards are supported right now")
-# endif ()
-
+# check if all the necessary tools paths have been provided.
 if(NOT DEFINED TARGET_DEVICE)
     set(TARGET_DEVICE "PINETIME")
 endif()
@@ -90,449 +86,450 @@ set(SDK_SOURCE_FILES
         )
 
 set(TINYCRYPT_SRC
-        libs/mynewt-nimble/ext/tinycrypt/src/aes_encrypt.c
-        libs/mynewt-nimble/ext/tinycrypt/src/utils.c
-        libs/mynewt-nimble/ext/tinycrypt/src/cmac_mode.c
-        libs/mynewt-nimble/ext/tinycrypt/src/ecc.c
-        libs/mynewt-nimble/ext/tinycrypt/src/ecc_dh.c
+        src/libs/mynewt-nimble/ext/tinycrypt/src/aes_encrypt.c
+        src/libs/mynewt-nimble/ext/tinycrypt/src/utils.c
+        src/libs/mynewt-nimble/ext/tinycrypt/src/cmac_mode.c
+        src/libs/mynewt-nimble/ext/tinycrypt/src/ecc.c
+        src/libs/mynewt-nimble/ext/tinycrypt/src/ecc_dh.c
         )
 
 # NIMBLE
 set(NIMBLE_SRC
-        libs/mynewt-nimble/porting/npl/freertos/src/nimble_port_freertos.c
-        libs/mynewt-nimble/porting/npl/freertos/src/npl_os_freertos.c
+        src/libs/mynewt-nimble/porting/npl/freertos/src/nimble_port_freertos.c
+        src/libs/mynewt-nimble/porting/npl/freertos/src/npl_os_freertos.c
 
-        libs/mynewt-nimble/nimble/host/src/ble_hs.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_hci_evt.c
-        libs/mynewt-nimble/nimble/host/src/ble_l2cap_sig_cmd.c
-        libs/mynewt-nimble/nimble/host/src/ble_l2cap_sig.c
-        libs/mynewt-nimble/nimble/host/src/ble_l2cap.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_mbuf.c
-        libs/mynewt-nimble/nimble/host/src/ble_sm.c
-        libs/mynewt-nimble/nimble/host/src/ble_sm_cmd.c
-        libs/mynewt-nimble/nimble/host/src/ble_sm_lgcy.c
-        libs/mynewt-nimble/nimble/host/src/ble_sm_alg.c
-        libs/mynewt-nimble/nimble/host/src/ble_sm_sc.c
-        libs/mynewt-nimble/nimble/host/src/ble_gap.c
-        libs/mynewt-nimble/nimble/host/src/ble_gatts.c
-        libs/mynewt-nimble/nimble/host/src/ble_gattc.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_conn.c
-        libs/mynewt-nimble/nimble/host/src/ble_att_svr.c
-        libs/mynewt-nimble/nimble/host/src/ble_store.c
-        libs/mynewt-nimble/nimble/host/src/ble_store_util.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_pvcy.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_hci.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_log.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_hci_util.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_hci_cmd.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_cfg.c
-        libs/mynewt-nimble/nimble/host/src/ble_uuid.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_id.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_misc.c
-        libs/mynewt-nimble/nimble/host/src/ble_att.c
-        libs/mynewt-nimble/nimble/host/src/ble_att_clt.c
-        libs/mynewt-nimble/nimble/host/src/ble_att_svr.c
-        libs/mynewt-nimble/nimble/host/src/ble_att_cmd.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_atomic.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_adv.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_flow.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_mqueue.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_stop.c
-        libs/mynewt-nimble/nimble/host/src/ble_hs_startup.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_hci_evt.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_l2cap_sig_cmd.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_l2cap_sig.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_l2cap.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_mbuf.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_sm.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_sm_cmd.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_sm_lgcy.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_sm_alg.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_sm_sc.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_gap.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_gatts.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_gattc.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_conn.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_att_svr.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_store.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_store_util.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_pvcy.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_hci.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_log.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_hci_util.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_hci_cmd.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_cfg.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_uuid.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_id.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_misc.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_att.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_att_clt.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_att_svr.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_att_cmd.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_atomic.c
 
-        libs/mynewt-nimble/nimble/host/store/ram/src/ble_store_ram.c
-        libs/mynewt-nimble/nimble/host/src/ble_monitor.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_adv.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_flow.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_mqueue.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_stop.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_hs_startup.c
 
-        libs/mynewt-nimble/nimble/transport/ram/src/ble_hci_ram.c
+        src/libs/mynewt-nimble/nimble/host/store/ram/src/ble_store_ram.c
+        src/libs/mynewt-nimble/nimble/host/src/ble_monitor.c
 
-        libs/mynewt-nimble/nimble/controller/src/ble_ll.c
-        libs/mynewt-nimble/nimble/controller/src/ble_ll_rand.c
-        libs/mynewt-nimble/nimble/controller/src/ble_ll_conn.c
-        libs/mynewt-nimble/nimble/controller/src/ble_ll_ctrl.c
-        libs/mynewt-nimble/nimble/controller/src/ble_ll_hci.c
-        libs/mynewt-nimble/nimble/controller/src/ble_ll_conn_hci.c
-        libs/mynewt-nimble/nimble/controller/src/ble_ll_utils.c
-        libs/mynewt-nimble/nimble/controller/src/ble_ll_scan.c
-        libs/mynewt-nimble/nimble/controller/src/ble_ll_whitelist.c
-        libs/mynewt-nimble/nimble/controller/src/ble_ll_adv.c
-        libs/mynewt-nimble/nimble/controller/src/ble_ll_sched.c
-        libs/mynewt-nimble/nimble/controller/src/ble_ll_supp_cmd.c
-        libs/mynewt-nimble/nimble/controller/src/ble_ll_hci_ev.c
-        libs/mynewt-nimble/nimble/controller/src/ble_ll_rfmgmt.c
-        libs/mynewt-nimble/nimble/controller/src/ble_ll_resolv.c
+        src/libs/mynewt-nimble/nimble/transport/ram/src/ble_hci_ram.c
 
-        libs/mynewt-nimble/porting/nimble/src/os_cputime.c
-        libs/mynewt-nimble/porting/nimble/src/os_cputime_pwr2.c
-        libs/mynewt-nimble/porting/nimble/src/os_mbuf.c
-        libs/mynewt-nimble/porting/nimble/src/os_mempool.c
-        libs/mynewt-nimble/porting/nimble/src/hal_timer.c
-        libs/mynewt-nimble/porting/nimble/src/mem.c
-        libs/mynewt-nimble/porting/nimble/src/endian.c
-        libs/mynewt-nimble/porting/nimble/src/os_msys_init.c
+        src/libs/mynewt-nimble/nimble/controller/src/ble_ll.c
+        src/libs/mynewt-nimble/nimble/controller/src/ble_ll_rand.c
+        src/libs/mynewt-nimble/nimble/controller/src/ble_ll_conn.c
+        src/libs/mynewt-nimble/nimble/controller/src/ble_ll_ctrl.c
+        src/libs/mynewt-nimble/nimble/controller/src/ble_ll_hci.c
+        src/libs/mynewt-nimble/nimble/controller/src/ble_ll_conn_hci.c
+        src/libs/mynewt-nimble/nimble/controller/src/ble_ll_utils.c
+        src/libs/mynewt-nimble/nimble/controller/src/ble_ll_scan.c
+        src/libs/mynewt-nimble/nimble/controller/src/ble_ll_whitelist.c
+        src/libs/mynewt-nimble/nimble/controller/src/ble_ll_adv.c
+        src/libs/mynewt-nimble/nimble/controller/src/ble_ll_sched.c
+        src/libs/mynewt-nimble/nimble/controller/src/ble_ll_supp_cmd.c
+        src/libs/mynewt-nimble/nimble/controller/src/ble_ll_hci_ev.c
+        src/libs/mynewt-nimble/nimble/controller/src/ble_ll_rfmgmt.c
+        src/libs/mynewt-nimble/nimble/controller/src/ble_ll_resolv.c
 
-        libs/mynewt-nimble/nimble/drivers/nrf52/src/ble_hw.c
-        libs/mynewt-nimble/nimble/drivers/nrf52/src/ble_phy.c
+        src/libs/mynewt-nimble/porting/nimble/src/os_cputime.c
+        src/libs/mynewt-nimble/porting/nimble/src/os_cputime_pwr2.c
+        src/libs/mynewt-nimble/porting/nimble/src/os_mbuf.c
+        src/libs/mynewt-nimble/porting/nimble/src/os_mempool.c
+        src/libs/mynewt-nimble/porting/nimble/src/hal_timer.c
+        src/libs/mynewt-nimble/porting/nimble/src/mem.c
+        src/libs/mynewt-nimble/porting/nimble/src/endian.c
+        src/libs/mynewt-nimble/porting/nimble/src/os_msys_init.c
 
-        libs/mynewt-nimble/nimble/host/services/gap/src/ble_svc_gap.c
-        libs/mynewt-nimble/nimble/host/services/gatt/src/ble_svc_gatt.c
-        libs/mynewt-nimble/nimble/host/util/src/addr.c
+        src/libs/mynewt-nimble/nimble/drivers/nrf52/src/ble_hw.c
+        src/libs/mynewt-nimble/nimble/drivers/nrf52/src/ble_phy.c
+
+        src/libs/mynewt-nimble/nimble/host/services/gap/src/ble_svc_gap.c
+        src/libs/mynewt-nimble/nimble/host/services/gatt/src/ble_svc_gatt.c
+        src/libs/mynewt-nimble/nimble/host/util/src/addr.c
         )
 
 set(LITTLEFS_SRC
-        libs/littlefs/lfs_util.h
-        libs/littlefs/lfs.h
-        libs/littlefs/lfs_util.c
-        libs/littlefs/lfs.c
+        src/libs/littlefs/lfs_util.h
+        src/libs/littlefs/lfs.h
+        src/libs/littlefs/lfs_util.c
+        src/libs/littlefs/lfs.c
         )
 
 set(LVGL_SRC
-        libs/lv_conf.h
-        libs/lvgl/lvgl.h
+        src/libs/lv_conf.h
+        src/libs/lvgl/lvgl.h
         )
 
-list(APPEND IMAGEFILES displayapp/icons/battery/batteryicon.c)
+list(APPEND IMAGEFILES src/displayapp/icons/battery/batteryicon.c)
 
 list(APPEND SOURCE_FILES
-        stdlib.c
-        FreeRTOS/heap_4_infinitime.c
-        BootloaderVersion.cpp
-        logging/NrfLogger.cpp
-        displayapp/DisplayApp.cpp
-        displayapp/screens/Screen.cpp
-        displayapp/screens/Tile.cpp
-        displayapp/screens/InfiniPaint.cpp
-        displayapp/screens/Paddle.cpp
-        displayapp/screens/StopWatch.cpp
-        displayapp/screens/BatteryIcon.cpp
-        displayapp/screens/BleIcon.cpp
-        displayapp/screens/NotificationIcon.cpp
-        displayapp/screens/SystemInfo.cpp
-        displayapp/screens/Label.cpp
-        displayapp/screens/FirmwareUpdate.cpp
-        displayapp/screens/Music.cpp
-        displayapp/screens/Navigation.cpp
-        displayapp/screens/Metronome.cpp
-        displayapp/screens/Motion.cpp
-        displayapp/screens/Weather.cpp
-        displayapp/screens/Calculator.cpp
-        displayapp/screens/FirmwareValidation.cpp
-        displayapp/screens/ApplicationList.cpp
-        displayapp/screens/Notifications.cpp
-        displayapp/screens/Twos.cpp
-        displayapp/screens/HeartRate.cpp
-        displayapp/screens/FlashLight.cpp
-        displayapp/screens/List.cpp
-        displayapp/screens/CheckboxList.cpp
-        displayapp/screens/BatteryInfo.cpp
-        displayapp/screens/Steps.cpp
-        displayapp/screens/Timer.cpp
-        displayapp/screens/Dice.cpp
-        displayapp/screens/PassKey.cpp
-        displayapp/screens/Error.cpp
-        displayapp/screens/Alarm.cpp
-        displayapp/screens/Styles.cpp
-        displayapp/screens/WeatherSymbols.cpp
+        src/stdlib.c
+        src/FreeRTOS/heap_4_infinitime.c
+        src/BootloaderVersion.cpp
+        src/logging/NrfLogger.cpp
+        src/displayapp/DisplayApp.cpp
+        src/displayapp/screens/Screen.cpp
+        src/displayapp/screens/Tile.cpp
+        src/displayapp/screens/InfiniPaint.cpp
+        src/displayapp/screens/Paddle.cpp
+        src/displayapp/screens/StopWatch.cpp
+        src/displayapp/screens/BatteryIcon.cpp
+        src/displayapp/screens/BleIcon.cpp
+        src/displayapp/screens/NotificationIcon.cpp
+        src/displayapp/screens/SystemInfo.cpp
+        src/displayapp/screens/Label.cpp
+        src/displayapp/screens/FirmwareUpdate.cpp
+        src/displayapp/screens/Music.cpp
+        src/displayapp/screens/Navigation.cpp
+        src/displayapp/screens/Metronome.cpp
+        src/displayapp/screens/Motion.cpp
+        src/displayapp/screens/Weather.cpp
+        src/displayapp/screens/Calculator.cpp
+        src/displayapp/screens/FirmwareValidation.cpp
+        src/displayapp/screens/ApplicationList.cpp
+        src/displayapp/screens/Notifications.cpp
+        src/displayapp/screens/Twos.cpp
+        src/displayapp/screens/HeartRate.cpp
+        src/displayapp/screens/FlashLight.cpp
+        src/displayapp/screens/List.cpp
+        src/displayapp/screens/CheckboxList.cpp
+        src/displayapp/screens/BatteryInfo.cpp
+        src/displayapp/screens/Steps.cpp
+        src/displayapp/screens/Timer.cpp
+        src/displayapp/screens/Dice.cpp
+        src/displayapp/screens/PassKey.cpp
+        src/displayapp/screens/Error.cpp
+        src/displayapp/screens/Alarm.cpp
+        src/displayapp/screens/Styles.cpp
+        src/displayapp/screens/WeatherSymbols.cpp
 
-        displayapp/Colors.cpp
-        displayapp/widgets/Counter.cpp
-        displayapp/widgets/PageIndicator.cpp
-        displayapp/widgets/DotIndicator.cpp
-        displayapp/widgets/StatusIcons.cpp
+        src/displayapp/Colors.cpp
+        src/displayapp/widgets/Counter.cpp
+        src/displayapp/widgets/PageIndicator.cpp
+        src/displayapp/widgets/DotIndicator.cpp
+        src/displayapp/widgets/StatusIcons.cpp
 
         # Settings
-        displayapp/screens/settings/QuickSettings.cpp
-        displayapp/screens/settings/Settings.cpp
-        displayapp/screens/settings/SettingWatchFace.cpp
-        displayapp/screens/settings/SettingTimeFormat.cpp
-        displayapp/screens/settings/SettingWeatherFormat.cpp
-        displayapp/screens/settings/SettingWakeUp.cpp
-        displayapp/screens/settings/SettingDisplay.cpp
-        displayapp/screens/settings/SettingSteps.cpp
-        displayapp/screens/settings/SettingSetDateTime.cpp
-        displayapp/screens/settings/SettingSetDate.cpp
-        displayapp/screens/settings/SettingSetTime.cpp
-        displayapp/screens/settings/SettingChimes.cpp
-        displayapp/screens/settings/SettingShakeThreshold.cpp
-        displayapp/screens/settings/SettingBluetooth.cpp
-        displayapp/screens/settings/SettingOTA.cpp
+        src/displayapp/screens/settings/QuickSettings.cpp
+        src/displayapp/screens/settings/Settings.cpp
+        src/displayapp/screens/settings/SettingWatchFace.cpp
+        src/displayapp/screens/settings/SettingTimeFormat.cpp
+        src/displayapp/screens/settings/SettingWeatherFormat.cpp
+        src/displayapp/screens/settings/SettingWakeUp.cpp
+        src/displayapp/screens/settings/SettingDisplay.cpp
+        src/displayapp/screens/settings/SettingSteps.cpp
+        src/displayapp/screens/settings/SettingSetDateTime.cpp
+        src/displayapp/screens/settings/SettingSetDate.cpp
+        src/displayapp/screens/settings/SettingSetTime.cpp
+        src/displayapp/screens/settings/SettingChimes.cpp
+        src/displayapp/screens/settings/SettingShakeThreshold.cpp
+        src/displayapp/screens/settings/SettingBluetooth.cpp
+        src/displayapp/screens/settings/SettingOTA.cpp
 
         # Watch faces
-        displayapp/screens/WatchFaceAnalog.cpp
-        displayapp/screens/WatchFaceDigital.cpp
-        displayapp/screens/WatchFaceInfineat.cpp
-        displayapp/screens/WatchFaceTerminal.cpp
-        displayapp/screens/WatchFacePineTimeStyle.cpp
-        displayapp/screens/WatchFaceCasioStyleG7710.cpp
-        displayapp/screens/WatchFacePrideFlag.cpp
-        displayapp/screens/WatchFacePraxiomHealth.cpp
+        src/displayapp/screens/WatchFaceAnalog.cpp
+        src/displayapp/screens/WatchFaceDigital.cpp
+        src/displayapp/screens/WatchFaceInfineat.cpp
+        src/displayapp/screens/WatchFaceTerminal.cpp
+        src/displayapp/screens/WatchFacePineTimeStyle.cpp
+        src/displayapp/screens/WatchFaceCasioStyleG7710.cpp
+        src/displayapp/screens/WatchFacePrideFlag.cpp
+        src/displayapp/screens/WatchFacePraxiomHealth.cpp
         
         # Praxiom Health Bio-Age Components
-        components/praxiom/BioAgeCalculator.cpp
+        src/components/praxiom/BioAgeCalculator.cpp
 
-        main.cpp
-        drivers/St7789.cpp
-        drivers/SpiNorFlash.cpp
-        drivers/SpiMaster.cpp
-        drivers/Spi.cpp
-        drivers/Watchdog.cpp
-        drivers/InternalFlash.cpp
-        drivers/Hrs3300.cpp
-        drivers/Bma421.cpp
-        drivers/Bma421_C/bma4.c
-        drivers/Bma421_C/bma423.c
+        src/main.cpp
+        src/drivers/St7789.cpp
+        src/drivers/SpiNorFlash.cpp
+        src/drivers/SpiMaster.cpp
+        src/drivers/Spi.cpp
+        src/drivers/Watchdog.cpp
+        src/drivers/InternalFlash.cpp
+        src/drivers/Hrs3300.cpp
+        src/drivers/Bma421.cpp
+        src/drivers/Bma421_C/bma4.c
+        src/drivers/Bma421_C/bma423.c
 
-        components/battery/BatteryController.cpp
-        components/ble/BleController.cpp
-        components/ble/NotificationManager.cpp
-        components/datetime/DateTimeController.cpp
-        components/brightness/BrightnessController.cpp
-        components/motion/MotionController.cpp
-        components/ble/NimbleController.cpp
-        components/ble/DeviceInformationService.cpp
-        components/ble/CurrentTimeClient.cpp
-        components/ble/AlertNotificationClient.cpp
-        components/ble/DfuService.cpp
-        components/ble/CurrentTimeService.cpp
-        components/ble/AlartNotificationService.cpp
-        components/ble/MusicService.cpp
-        components/ble/SimpleWeatherService.cpp
-        components/ble/NavigationService.cpp
-        components/ble/BatteryInformationService.cpp
-        components/ble/FSService.cpp
-        components/ble/ImmediateAlertService.cpp
-        components/ble/ServiceDiscovery.cpp
-        components/ble/HeartRateService.cpp
-        components/ble/MotionService.cpp
-        components/firmwarevalidator/FirmwareValidator.cpp
-        components/motor/MotorController.cpp
-        components/settings/Settings.cpp
-        components/timer/Timer.cpp
-        components/alarm/AlarmController.cpp
-        components/fs/FS.cpp
+        src/components/battery/BatteryController.cpp
+        src/components/ble/BleController.cpp
+        src/components/ble/NotificationManager.cpp
+        src/components/datetime/DateTimeController.cpp
+        src/components/brightness/BrightnessController.cpp
+        src/components/motion/MotionController.cpp
+        src/components/ble/NimbleController.cpp
+        src/components/ble/DeviceInformationService.cpp
+        src/components/ble/CurrentTimeClient.cpp
+        src/components/ble/AlertNotificationClient.cpp
+        src/components/ble/DfuService.cpp
+        src/components/ble/CurrentTimeService.cpp
+        src/components/ble/AlartNotificationService.cpp
+        src/components/ble/MusicService.cpp
+        src/components/ble/SimpleWeatherService.cpp
+        src/components/ble/NavigationService.cpp
+        src/components/ble/BatteryInformationService.cpp
+        src/components/ble/FSService.cpp
+        src/components/ble/ImmediateAlertService.cpp
+        src/components/ble/ServiceDiscovery.cpp
+        src/components/ble/HeartRateService.cpp
+        src/components/ble/MotionService.cpp
+        src/components/firmwarevalidator/FirmwareValidator.cpp
+        src/components/motor/MotorController.cpp
+        src/components/settings/Settings.cpp
+        src/components/timer/Timer.cpp
+        src/components/alarm/AlarmController.cpp
+        src/components/fs/FS.cpp
 
-        drivers/Cst816s.cpp
-        FreeRTOS/port.c
-        FreeRTOS/port_cmsis_systick.c
-        FreeRTOS/port_cmsis.c
-        displayapp/LittleVgl.cpp
-        displayapp/InfiniTimeTheme.cpp
-        systemtask/SystemTask.cpp
-        systemtask/SystemMonitor.cpp
-        systemtask/WakeLock.cpp
-        drivers/TwiMaster.cpp
-        heartratetask/HeartRateTask.cpp
-        components/heartrate/HeartRateController.cpp
-        components/heartrate/Ppg.cpp
-        buttonhandler/ButtonHandler.cpp
-        touchhandler/TouchHandler.cpp
-        utility/Math.cpp
+        src/drivers/Cst816s.cpp
+        src/FreeRTOS/port.c
+        src/FreeRTOS/port_cmsis_systick.c
+        src/FreeRTOS/port_cmsis.c
+        src/displayapp/LittleVgl.cpp
+        src/displayapp/InfiniTimeTheme.cpp
+        src/systemtask/SystemTask.cpp
+        src/systemtask/SystemMonitor.cpp
+        src/systemtask/WakeLock.cpp
+        src/drivers/TwiMaster.cpp
+        src/heartratetask/HeartRateTask.cpp
+        src/components/heartrate/HeartRateController.cpp
+        src/components/heartrate/Ppg.cpp
+        src/buttonhandler/ButtonHandler.cpp
+        src/touchhandler/TouchHandler.cpp
+        src/utility/Math.cpp
         )
 
 list(APPEND RECOVERY_SOURCE_FILES
-        stdlib.c
-        FreeRTOS/heap_4_infinitime.c
-        BootloaderVersion.cpp
-        logging/NrfLogger.cpp
-        displayapp/DisplayAppRecovery.cpp
-        main.cpp
-        drivers/St7789.cpp
-        drivers/SpiNorFlash.cpp
-        drivers/SpiMaster.cpp
-        drivers/Spi.cpp
-        drivers/Watchdog.cpp
-        drivers/InternalFlash.cpp
-        drivers/Hrs3300.cpp
-        drivers/Bma421.cpp
-        drivers/Bma421_C/bma4.c
-        drivers/Bma421_C/bma423.c
+        src/stdlib.c
+        src/FreeRTOS/heap_4_infinitime.c
+        src/BootloaderVersion.cpp
+        src/logging/NrfLogger.cpp
+        src/displayapp/DisplayAppRecovery.cpp
+        src/main.cpp
+        src/drivers/St7789.cpp
+        src/drivers/SpiNorFlash.cpp
+        src/drivers/SpiMaster.cpp
+        src/drivers/Spi.cpp
+        src/drivers/Watchdog.cpp
+        src/drivers/InternalFlash.cpp
+        src/drivers/Hrs3300.cpp
+        src/drivers/Bma421.cpp
+        src/drivers/Bma421_C/bma4.c
+        src/drivers/Bma421_C/bma423.c
 
-        components/battery/BatteryController.cpp
-        components/ble/BleController.cpp
-        components/ble/NotificationManager.cpp
-        components/datetime/DateTimeController.cpp
-        components/brightness/BrightnessController.cpp
-        components/motion/MotionController.cpp
-        components/ble/NimbleController.cpp
-        components/ble/DeviceInformationService.cpp
-        components/ble/CurrentTimeClient.cpp
-        components/ble/AlertNotificationClient.cpp
-        components/ble/DfuService.cpp
-        components/ble/CurrentTimeService.cpp
-        components/ble/AlartNotificationService.cpp
-        components/ble/MusicService.cpp
-        components/ble/SimpleWeatherService.cpp
-        components/ble/BatteryInformationService.cpp
-        components/ble/FSService.cpp
-        components/ble/ImmediateAlertService.cpp
-        components/ble/ServiceDiscovery.cpp
-        components/ble/NavigationService.cpp
-        components/ble/HeartRateService.cpp
-        components/ble/MotionService.cpp
-        components/firmwarevalidator/FirmwareValidator.cpp
-        components/settings/Settings.cpp
-        components/timer/Timer.cpp
-        components/alarm/AlarmController.cpp
+        src/components/battery/BatteryController.cpp
+        src/components/ble/BleController.cpp
+        src/components/ble/NotificationManager.cpp
+        src/components/datetime/DateTimeController.cpp
+        src/components/brightness/BrightnessController.cpp
+        src/components/motion/MotionController.cpp
+        src/components/ble/NimbleController.cpp
+        src/components/ble/DeviceInformationService.cpp
+        src/components/ble/CurrentTimeClient.cpp
+        src/components/ble/AlertNotificationClient.cpp
+        src/components/ble/DfuService.cpp
+        src/components/ble/CurrentTimeService.cpp
+        src/components/ble/AlartNotificationService.cpp
+        src/components/ble/MusicService.cpp
+        src/components/ble/SimpleWeatherService.cpp
+        src/components/ble/BatteryInformationService.cpp
+        src/components/ble/FSService.cpp
+        src/components/ble/ImmediateAlertService.cpp
+        src/components/ble/ServiceDiscovery.cpp
+        src/components/ble/NavigationService.cpp
+        src/components/ble/HeartRateService.cpp
+        src/components/ble/MotionService.cpp
+        src/components/firmwarevalidator/FirmwareValidator.cpp
+        src/components/settings/Settings.cpp
+        src/components/timer/Timer.cpp
+        src/components/alarm/AlarmController.cpp
 
-        drivers/Cst816s.cpp
-        FreeRTOS/port.c
-        FreeRTOS/port_cmsis_systick.c
-        FreeRTOS/port_cmsis.c
-        systemtask/SystemTask.cpp
-        systemtask/SystemMonitor.cpp
-        systemtask/WakeLock.cpp
-        drivers/TwiMaster.cpp
-        components/rle/RleDecoder.cpp
-        components/heartrate/HeartRateController.cpp
-        heartratetask/HeartRateTask.cpp
-        components/heartrate/Ppg.cpp
-        components/motor/MotorController.cpp
-        components/fs/FS.cpp
-        buttonhandler/ButtonHandler.cpp
-        touchhandler/TouchHandler.cpp
-        utility/Math.cpp
+        src/drivers/Cst816s.cpp
+        src/FreeRTOS/port.c
+        src/FreeRTOS/port_cmsis_systick.c
+        src/FreeRTOS/port_cmsis.c
+        src/systemtask/SystemTask.cpp
+        src/systemtask/SystemMonitor.cpp
+        src/systemtask/WakeLock.cpp
+        src/drivers/TwiMaster.cpp
+        src/components/rle/RleDecoder.cpp
+        src/components/heartrate/HeartRateController.cpp
+        src/heartratetask/HeartRateTask.cpp
+        src/components/heartrate/Ppg.cpp
+        src/components/motor/MotorController.cpp
+        src/components/fs/FS.cpp
+        src/buttonhandler/ButtonHandler.cpp
+        src/touchhandler/TouchHandler.cpp
+        src/utility/Math.cpp
         )
 
 list(APPEND RECOVERYLOADER_SOURCE_FILES
-        stdlib.c
-        FreeRTOS/heap_4_infinitime.c
-        FreeRTOS/port.c
-        FreeRTOS/port_cmsis_systick.c
-        FreeRTOS/port_cmsis.c
-        drivers/SpiNorFlash.cpp
-        drivers/SpiMaster.cpp
-        drivers/Spi.cpp
-        logging/NrfLogger.cpp
-        components/rle/RleDecoder.cpp
-        drivers/St7789.cpp
-        components/brightness/BrightnessController.cpp
-        recoveryLoader.cpp
+        src/stdlib.c
+        src/FreeRTOS/heap_4_infinitime.c
+        src/FreeRTOS/port.c
+        src/FreeRTOS/port_cmsis_systick.c
+        src/FreeRTOS/port_cmsis.c
+        src/drivers/SpiNorFlash.cpp
+        src/drivers/SpiMaster.cpp
+        src/drivers/Spi.cpp
+        src/logging/NrfLogger.cpp
+        src/components/rle/RleDecoder.cpp
+        src/drivers/St7789.cpp
+        src/components/brightness/BrightnessController.cpp
+        src/recoveryLoader.cpp
         )
 
 set(INCLUDE_FILES
         ${CMAKE_CURRENT_BINARY_DIR}/src/Version.h
-        BootloaderVersion.h
-        logging/Logger.h
-        logging/NrfLogger.h
-        displayapp/DisplayApp.h
-        displayapp/Messages.h
-        displayapp/TouchEvents.h
-        displayapp/screens/Screen.h
-        displayapp/screens/Tile.h
-        displayapp/screens/InfiniPaint.h
-        displayapp/screens/StopWatch.h
-        displayapp/screens/Paddle.h
-        displayapp/screens/BatteryIcon.h
-        displayapp/screens/BleIcon.h
-        displayapp/screens/NotificationIcon.h
-        displayapp/screens/SystemInfo.h
-        displayapp/screens/ScreenList.h
-        displayapp/screens/Label.h
-        displayapp/screens/FirmwareUpdate.h
-        displayapp/screens/FirmwareValidation.h
-        displayapp/screens/ApplicationList.h
-        displayapp/screens/CheckboxList.h
-        displayapp/Apps.h
-        displayapp/screens/Notifications.h
-        displayapp/screens/HeartRate.h
-        displayapp/screens/Metronome.h
-        displayapp/screens/Motion.h
-        displayapp/screens/Timer.h
-        displayapp/screens/Dice.h
-        displayapp/screens/Alarm.h
-        displayapp/Colors.h
-        displayapp/widgets/Counter.h
-        displayapp/widgets/PageIndicator.h
-        displayapp/widgets/DotIndicator.h
-        displayapp/widgets/StatusIcons.h
-        displayapp/screens/WatchFacePraxiomHealth.h
-        components/praxiom/BioAgeCalculator.h
+        src/BootloaderVersion.h
+        src/logging/Logger.h
+        src/logging/NrfLogger.h
+        src/displayapp/DisplayApp.h
+        src/displayapp/Messages.h
+        src/displayapp/TouchEvents.h
+        src/displayapp/screens/Screen.h
+        src/displayapp/screens/Tile.h
+        src/displayapp/screens/InfiniPaint.h
+        src/displayapp/screens/StopWatch.h
+        src/displayapp/screens/Paddle.h
+        src/displayapp/screens/BatteryIcon.h
+        src/displayapp/screens/BleIcon.h
+        src/displayapp/screens/NotificationIcon.h
+        src/displayapp/screens/SystemInfo.h
+        src/displayapp/screens/ScreenList.h
+        src/displayapp/screens/Label.h
+        src/displayapp/screens/FirmwareUpdate.h
+        src/displayapp/screens/FirmwareValidation.h
+        src/displayapp/screens/ApplicationList.h
+        src/displayapp/screens/CheckboxList.h
+        src/displayapp/Apps.h
+        src/displayapp/screens/Notifications.h
+        src/displayapp/screens/HeartRate.h
+        src/displayapp/screens/Metronome.h
+        src/displayapp/screens/Motion.h
+        src/displayapp/screens/Timer.h
+        src/displayapp/screens/Dice.h
+        src/displayapp/screens/Alarm.h
+        src/displayapp/Colors.h
+        src/displayapp/widgets/Counter.h
+        src/displayapp/widgets/PageIndicator.h
+        src/displayapp/widgets/DotIndicator.h
+        src/displayapp/widgets/StatusIcons.h
+        src/displayapp/screens/WatchFacePraxiomHealth.h
+        src/components/praxiom/BioAgeCalculator.h
 
-        drivers/St7789.h
-        drivers/SpiNorFlash.h
-        drivers/SpiMaster.h
-        drivers/Spi.h
-        drivers/Watchdog.h
-        drivers/InternalFlash.h
-        drivers/Hrs3300.h
-        drivers/PinMap.h
-        drivers/Bma421.h
-        drivers/Bma421_C/bma4.c
-        drivers/Bma421_C/bma423.c
+        src/drivers/St7789.h
+        src/drivers/SpiNorFlash.h
+        src/drivers/SpiMaster.h
+        src/drivers/Spi.h
+        src/drivers/Watchdog.h
+        src/drivers/InternalFlash.h
+        src/drivers/Hrs3300.h
+        src/drivers/PinMap.h
+        src/drivers/Bma421.h
+        src/drivers/Bma421_C/bma4.c
+        src/drivers/Bma421_C/bma423.c
 
-        components/battery/BatteryController.h
-        components/ble/BleController.h
-        components/ble/NotificationManager.h
-        components/datetime/DateTimeController.h
-        components/brightness/BrightnessController.h
-        components/motion/MotionController.h
-        components/firmwarevalidator/FirmwareValidator.h
-        components/ble/BleController.h
-        components/ble/NotificationManager.h
-        components/ble/NimbleController.h
-        components/ble/DeviceInformationService.h
-        components/ble/CurrentTimeClient.h
-        components/ble/AlertNotificationClient.h
-        components/ble/DfuService.h
-        components/firmwarevalidator/FirmwareValidator.h
-        components/ble/BatteryInformationService.h
-        components/ble/FSService.h
-        components/ble/ImmediateAlertService.h
-        components/ble/ServiceDiscovery.h
-        components/ble/BleClient.h
-        components/ble/HeartRateService.h
-        components/ble/MotionService.h
-        components/ble/SimpleWeatherService.h
-        components/settings/Settings.h
-        components/timer/Timer.h
-        components/alarm/AlarmController.h
+        src/components/battery/BatteryController.h
+        src/components/ble/BleController.h
+        src/components/ble/NotificationManager.h
+        src/components/datetime/DateTimeController.h
+        src/components/brightness/BrightnessController.h
+        src/components/motion/MotionController.h
+        src/components/firmwarevalidator/FirmwareValidator.h
+        src/components/ble/BleController.h
+        src/components/ble/NotificationManager.h
+        src/components/ble/NimbleController.h
+        src/components/ble/DeviceInformationService.h
+        src/components/ble/CurrentTimeClient.h
+        src/components/ble/AlertNotificationClient.h
+        src/components/ble/DfuService.h
+        src/components/firmwarevalidator/FirmwareValidator.h
+        src/components/ble/BatteryInformationService.h
+        src/components/ble/FSService.h
+        src/components/ble/ImmediateAlertService.h
+        src/components/ble/ServiceDiscovery.h
+        src/components/ble/BleClient.h
+        src/components/ble/HeartRateService.h
+        src/components/ble/MotionService.h
+        src/components/ble/SimpleWeatherService.h
+        src/components/settings/Settings.h
+        src/components/timer/Timer.h
+        src/components/alarm/AlarmController.h
 
-        drivers/Cst816s.h
-        FreeRTOS/portmacro.h
-        FreeRTOS/portmacro_cmsis.h
-        displayapp/LittleVgl.h
-        displayapp/InfiniTimeTheme.h
-        systemtask/SystemTask.h
-        systemtask/SystemMonitor.h
-        systemtask/WakeLock.h
-        displayapp/screens/Symbols.h
-        drivers/TwiMaster.h
-        heartratetask/HeartRateTask.h
-        components/heartrate/Ppg.h
-        components/heartrate/HeartRateController.h
-        libs/arduinoFFT/src/arduinoFFT.h
-        libs/arduinoFFT/src/defs.h
-        libs/arduinoFFT/src/types.h
-        components/motor/MotorController.h
-        buttonhandler/ButtonHandler.h
-        touchhandler/TouchHandler.h
-        utility/Math.h
+        src/drivers/Cst816s.h
+        src/FreeRTOS/portmacro.h
+        src/FreeRTOS/portmacro_cmsis.h
+        src/displayapp/LittleVgl.h
+        src/displayapp/InfiniTimeTheme.h
+        src/systemtask/SystemTask.h
+        src/systemtask/SystemMonitor.h
+        src/systemtask/WakeLock.h
+        src/displayapp/screens/Symbols.h
+        src/drivers/TwiMaster.h
+        src/heartratetask/HeartRateTask.h
+        src/components/heartrate/Ppg.h
+        src/components/heartrate/HeartRateController.h
+        src/libs/arduinoFFT/src/arduinoFFT.h
+        src/libs/arduinoFFT/src/defs.h
+        src/libs/arduinoFFT/src/types.h
+        src/components/motor/MotorController.h
+        src/buttonhandler/ButtonHandler.h
+        src/touchhandler/TouchHandler.h
+        src/utility/Math.h
         
         # Praxiom Health Headers
-        components/praxiom/BioAgeCalculator.h
+        src/components/praxiom/BioAgeCalculator.h
         )
 
 include_directories(
         ${CMAKE_BINARY_DIR}/src # generated files like Version.h
+        src
         .
-        ..
         )
 
 include_directories(SYSTEM PUBLIC
-        libs
-        FreeRTOS
+        src/libs
+        src/FreeRTOS
         src/components/praxiom
-        libs/mynewt-nimble/porting/npl/freertos/include
-        libs/mynewt-nimble/nimble/include
-        libs/mynewt-nimble/porting/nimble/include
-        libs/mynewt-nimble/nimble/host/include
-        libs/mynewt-nimble/nimble/controller/include
-        libs/mynewt-nimble/nimble/transport/ram/include
-        libs/mynewt-nimble/nimble/drivers/nrf52/include
-        libs/mynewt-nimble/ext/tinycrypt/include
-        libs/mynewt-nimble/nimble/host/services/gap/include
-        libs/mynewt-nimble/nimble/host/services/gatt/include
-        libs/mynewt-nimble/nimble/host/util/include
-        libs/mynewt-nimble/nimble/host/store/ram/include
+        src/libs/mynewt-nimble/porting/npl/freertos/include
+        src/libs/mynewt-nimble/nimble/include
+        src/libs/mynewt-nimble/porting/nimble/include
+        src/libs/mynewt-nimble/nimble/host/include
+        src/libs/mynewt-nimble/nimble/controller/include
+        src/libs/mynewt-nimble/nimble/transport/ram/include
+        src/libs/mynewt-nimble/nimble/drivers/nrf52/include
+        src/libs/mynewt-nimble/ext/tinycrypt/include
+        src/libs/mynewt-nimble/nimble/host/services/gap/include
+        src/libs/mynewt-nimble/nimble/host/services/gatt/include
+        src/libs/mynewt-nimble/nimble/host/util/include
+        src/libs/mynewt-nimble/nimble/host/store/ram/include
 
         ${NRF5_SDK_PATH}/components/drivers_nrf/nrf_soc_nosd
         ${NRF5_SDK_PATH}/components
@@ -626,7 +623,7 @@ add_definitions(-DFREERTOS)
 add_definitions(-DSTACK_SIZE=1024)
 add_definitions(-DHEAP_SIZE=0)
 add_definitions(-DMYNEWT_VAL_BLE_LL_RFMGMT_ENABLE_TIME=1500)
-add_definitions(-DLFS_CONFIG=libs/lfs_config.h)
+add_definitions(-DLFS_CONFIG=src/libs/lfs_config.h)
 
 add_link_options(-Wl,--wrap,malloc -Wl,--wrap,free -Wl,--wrap,calloc -Wl,--wrap,realloc -Wl,--wrap,malloc_r -Wl,--wrap,sbrk)
 # sbrk is purposefully not implemented so that builds fail when it is used
@@ -669,7 +666,7 @@ add_definitions(-DNRF_LOG_ENABLED=1)
 # NRF SDK Logging...
 
 add_library(nrf-sdk STATIC ${SDK_SOURCE_FILES})
-target_include_directories(nrf-sdk SYSTEM PUBLIC . ..)
+target_include_directories(nrf-sdk SYSTEM PUBLIC src .)
 target_include_directories(nrf-sdk SYSTEM PUBLIC ${INCLUDES_FROM_LIBS})
 target_compile_options(nrf-sdk PRIVATE
         ${COMMON_FLAGS}
@@ -684,7 +681,8 @@ target_compile_options(nrf-sdk PRIVATE
 set(EXECUTABLE_RECOVERY_NAME pinetime-recovery)
 set(EXECUTABLE_RECOVERY_FILE_NAME ${EXECUTABLE_RECOVERY_NAME}-${pinetime_VERSION_MAJOR}.${pinetime_VERSION_MINOR}.${pinetime_VERSION_PATCH})
 add_executable(${EXECUTABLE_RECOVERY_NAME} ${RECOVERY_SOURCE_FILES})
-target_link_libraries(${EXECUTABLE_RECOVERY_NAME} nimble nrf-sdk littlefs infinitetime_fonts infinitetime_apps)
+set(NRF5_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/gcc_nrf52.ld)
+target_link_libraries(${EXECUTABLE_RECOVERY_NAME} nimble nrf-sdk littlefs)
 set_target_properties(${EXECUTABLE_RECOVERY_NAME} PROPERTIES OUTPUT_NAME ${EXECUTABLE_RECOVERY_FILE_NAME})
 target_compile_definitions(${EXECUTABLE_RECOVERY_NAME} PUBLIC PINETIME_IS_RECOVERY)
 target_compile_options(${EXECUTABLE_RECOVERY_NAME} PUBLIC
@@ -711,7 +709,7 @@ add_custom_command(TARGET ${EXECUTABLE_RECOVERY_NAME}
 # InfiniTime recovery firmware (autonomous)...
 
 add_library(nimble STATIC ${NIMBLE_SRC} ${TINYCRYPT_SRC})
-target_include_directories(nimble SYSTEM PUBLIC . ..)
+target_include_directories(nimble SYSTEM PUBLIC src .)
 target_include_directories(nimble SYSTEM PUBLIC ${INCLUDES_FROM_LIBS})
 target_compile_options(nimble PRIVATE
         ${COMMON_FLAGS}
@@ -726,7 +724,7 @@ target_compile_options(nimble PRIVATE
 set(EXECUTABLE_RECOVERY_LOADER_NAME pinetime-recovery-loader)
 set(EXECUTABLE_RECOVERY_LOADER_FILE_NAME ${EXECUTABLE_RECOVERY_LOADER_NAME}-${pinetime_VERSION_MAJOR}.${pinetime_VERSION_MINOR}.${pinetime_VERSION_PATCH})
 add_executable(${EXECUTABLE_RECOVERY_LOADER_NAME} ${RECOVERYLOADER_SOURCE_FILES})
-target_link_libraries(${EXECUTABLE_RECOVERY_LOADER_NAME} nrf-sdk infinitetime_fonts infinitetime_apps)
+target_link_libraries(${EXECUTABLE_RECOVERY_LOADER_NAME} nrf-sdk)
 set_target_properties(${EXECUTABLE_RECOVERY_LOADER_NAME} PROPERTIES OUTPUT_NAME ${EXECUTABLE_RECOVERY_LOADER_FILE_NAME})
 target_compile_options(${EXECUTABLE_RECOVERY_LOADER_NAME} PUBLIC
         ${COMMON_FLAGS}
@@ -737,10 +735,7 @@ target_compile_options(${EXECUTABLE_RECOVERY_LOADER_NAME} PUBLIC
         $<$<COMPILE_LANGUAGE:ASM>:${ASM_FLAGS}>
         )
 
-target_include_directories(${EXECUTABLE_RECOVERY_LOADER_NAME} PUBLIC ${BUILD_INTERFACE}${CMAKE_BINARY_DIR}/src)
-
-# FIXED: Commented out the premature add_dependencies call - it will be added after the target is created
-# add_dependencies(${EXECUTABLE_RECOVERY_LOADER_NAME} ${EXECUTABLE_RECOVERY_MCUBOOT_NAME})
+target_include_directories(${EXECUTABLE_RECOVERY_LOADER_NAME} PUBLIC ${CMAKE_BINARY_DIR}/src)
 
 set_target_properties(${EXECUTABLE_RECOVERY_LOADER_NAME} PROPERTIES
         SUFFIX ".out"
@@ -757,7 +752,7 @@ add_custom_command(TARGET ${EXECUTABLE_RECOVERY_LOADER_NAME}
 # Build binary that writes the recovery image into the SPI flash memory...
 
 add_library(littlefs STATIC ${LITTLEFS_SRC})
-target_include_directories(littlefs SYSTEM PUBLIC . ..)
+target_include_directories(littlefs SYSTEM PUBLIC src .)
 target_include_directories(littlefs SYSTEM PUBLIC ${INCLUDES_FROM_LIBS})
 target_compile_options(littlefs PRIVATE
         ${COMMON_FLAGS}
@@ -771,10 +766,9 @@ target_compile_options(littlefs PRIVATE
 
 set(EXECUTABLE_NAME pinetime-app)
 set(EXECUTABLE_FILE_NAME ${EXECUTABLE_NAME}-${pinetime_VERSION_MAJOR}.${pinetime_VERSION_MINOR}.${pinetime_VERSION_PATCH})
-set(NRF5_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/gcc_nrf52.ld)
 add_executable(${EXECUTABLE_NAME} ${SOURCE_FILES})
 set_target_properties(${EXECUTABLE_NAME} PROPERTIES OUTPUT_NAME ${EXECUTABLE_FILE_NAME})
-target_link_libraries(${EXECUTABLE_NAME} nimble nrf-sdk lvgl littlefs infinitetime_fonts infinitetime_apps)
+target_link_libraries(${EXECUTABLE_NAME} nimble nrf-sdk lvgl littlefs)
 target_compile_options(${EXECUTABLE_NAME} PUBLIC
         ${COMMON_FLAGS}
         ${WARNING_FLAGS}
@@ -797,42 +791,13 @@ add_custom_command(TARGET ${EXECUTABLE_NAME}
         COMMENT "post build steps for ${EXECUTABLE_FILE_NAME}")
 
 if (BUILD_RESOURCES)
-    add_dependencies(${EXECUTABLE_NAME} GenerateResources)
+    # add_dependencies(${EXECUTABLE_NAME} GenerateResources)
 endif ()
 
 # Build autonomous binary without support for bootloader...
 
-set(EXECUTABLE_RECOVERY_MCUBOOT_NAME pinetime-mcuboot-recovery)
-set(EXECUTABLE_RECOVERY_MCUBOOT_FILE_NAME ${EXECUTABLE_RECOVERY_MCUBOOT_NAME}-${pinetime_VERSION_MAJOR}.${pinetime_VERSION_MINOR}.${pinetime_VERSION_PATCH})
-set(IMAGE_RECOVERY_MCUBOOT_FILE_NAME ${EXECUTABLE_RECOVERY_MCUBOOT_NAME}-image-${pinetime_VERSION_MAJOR}.${pinetime_VERSION_MINOR}.${pinetime_VERSION_PATCH})
-set(IMAGE_RECOVERY_MCUBOOT_FILE_NAME_HEX ${IMAGE_RECOVERY_MCUBOOT_FILE_NAME}.hex)
-set(DFU_RECOVERY_MCUBOOT_FILE_NAME ${EXECUTABLE_RECOVERY_MCUBOOT_NAME}-dfu-${pinetime_VERSION_MAJOR}.${pinetime_VERSION_MINOR}.${pinetime_VERSION_PATCH}.zip)
-add_executable(${EXECUTABLE_RECOVERY_MCUBOOT_NAME} ${RECOVERY_SOURCE_FILES})
-target_link_libraries(${EXECUTABLE_RECOVERY_MCUBOOT_NAME} nimble nrf-sdk littlefs infinitetime_fonts infinitetime_apps)
-set_target_properties(${EXECUTABLE_RECOVERY_MCUBOOT_NAME} PROPERTIES OUTPUT_NAME ${EXECUTABLE_RECOVERY_MCUBOOT_FILE_NAME})
-target_compile_definitions(${EXECUTABLE_RECOVERY_MCUBOOT_NAME} PUBLIC PINETIME_IS_RECOVERY)
-
-# FIXED: Added the add_dependencies call AFTER the target is created
-add_dependencies(${EXECUTABLE_RECOVERY_LOADER_NAME} ${EXECUTABLE_RECOVERY_MCUBOOT_NAME})
-
-target_compile_options(${EXECUTABLE_RECOVERY_MCUBOOT_NAME} PUBLIC
-        ${COMMON_FLAGS}
-        ${WARNING_FLAGS}
-        $<$<CONFIG:Debug>:${DEBUG_FLAGS}>
-        $<$<CONFIG:Release>:${RELEASE_FLAGS}>
-        $<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS}>
-        $<$<COMPILE_LANGUAGE:ASM>:${ASM_FLAGS}>
-        )
-
-set_target_properties(${EXECUTABLE_RECOVERY_MCUBOOT_NAME} PROPERTIES
-        SUFFIX ".out"
-        LINK_FLAGS "-mthumb -mabi=aapcs -L ${NRF5_SDK_PATH}/modules/nrfx/mdk -T${NRF5_LINKER_SCRIPT_MCUBOOT} -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -Wl,--gc-sections -Wl,--print-memory-usage --specs=nano.specs -lc -lnosys -lm -Wl,-Map=${EXECUTABLE_GRAPHICS_FILE_NAME}.map"
-        )
-
-# InfiniTime recovery firmware (mcuboot)...
-
 add_library(lvgl STATIC ${LVGL_SRC})
-target_include_directories(lvgl SYSTEM PUBLIC . ..)
+target_include_directories(lvgl SYSTEM PUBLIC src .)
 target_include_directories(lvgl SYSTEM PUBLIC ${INCLUDES_FROM_LIBS})
 target_compile_options(lvgl PRIVATE
         ${COMMON_FLAGS}
@@ -844,33 +809,6 @@ target_compile_options(lvgl PRIVATE
 
 # lvgl...
 
-set(EXECUTABLE_MCUBOOT_RECOVERY_LOADER_NAME pinetime-mcuboot-recovery-loader)
-set(EXECUTABLE_MCUBOOT_RECOVERY_LOADER_FILE_NAME ${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_NAME}-${pinetime_VERSION_MAJOR}.${pinetime_VERSION_MINOR}.${pinetime_VERSION_PATCH})
-set(IMAGE_MCUBOOT_RECOVERY_LOADER_FILE_NAME ${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_NAME}-image-${pinetime_VERSION_MAJOR}.${pinetime_VERSION_MINOR}.${pinetime_VERSION_PATCH})
-set(IMAGE_MCUBOOT_RECOVERY_LOADER_FILE_NAME_HEX ${IMAGE_MCUBOOT_RECOVERY_LOADER_FILE_NAME}.hex)
-set(DFU_MCUBOOT_RECOVERY_LOADER_FILE_NAME ${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_NAME}-dfu-${pinetime_VERSION_MAJOR}.${pinetime_VERSION_MINOR}.${pinetime_VERSION_PATCH}.zip)
-add_executable(${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_NAME} ${RECOVERYLOADER_SOURCE_FILES})
-target_link_libraries(${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_NAME} nrf-sdk infinitetime_fonts infinitetime_apps)
-set_target_properties(${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_NAME} PROPERTIES OUTPUT_NAME ${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_FILE_NAME})
-target_compile_options(${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_NAME} PUBLIC
-        ${COMMON_FLAGS}
-        ${WARNING_FLAGS}
-        $<$<CONFIG:Debug>:${DEBUG_FLAGS}>
-        $<$<CONFIG:Release>:${RELEASE_FLAGS}>
-        $<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS}>
-        $<$<COMPILE_LANGUAGE:ASM>:${ASM_FLAGS}>
-        )
-target_include_directories(${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_NAME} PUBLIC ${BUILD_INTERFACE}${CMAKE_BINARY_DIR}/src)
-
-add_dependencies(${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_NAME} ${EXECUTABLE_RECOVERY_MCUBOOT_NAME})
-
-set_target_properties(${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_NAME} PROPERTIES
-        SUFFIX ".out"
-        LINK_FLAGS "-mthumb -mabi=aapcs -std=gnu98 -std=c99 -L ${NRF5_SDK_PATH}/modules/nrfx/mdk -T${NRF5_LINKER_SCRIPT_MCUBOOT} -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -Wl,--gc-sections -Wl,--print-memory-usage --specs=nano.specs -lc -lnosys -lm -Wl,-Map=${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_FILE_NAME}.map"
-        )
-
-# Build binary that writes the recovery image (MCUBoot version)...
-
 set(EXECUTABLE_MCUBOOT_NAME pinetime-mcuboot-app)
 set(EXECUTABLE_MCUBOOT_FILE_NAME ${EXECUTABLE_MCUBOOT_NAME}-${pinetime_VERSION_MAJOR}.${pinetime_VERSION_MINOR}.${pinetime_VERSION_PATCH})
 set(IMAGE_MCUBOOT_FILE_NAME_HEX ${EXECUTABLE_MCUBOOT_NAME}-image-${pinetime_VERSION_MAJOR}.${pinetime_VERSION_MINOR}.${pinetime_VERSION_PATCH}.hex)
@@ -878,7 +816,7 @@ set(IMAGE_MCUBOOT_FILE_NAME_BIN ${EXECUTABLE_MCUBOOT_NAME}-image-${pinetime_VERS
 set(DFU_MCUBOOT_FILE_NAME ${EXECUTABLE_MCUBOOT_NAME}-dfu-${pinetime_VERSION_MAJOR}.${pinetime_VERSION_MINOR}.${pinetime_VERSION_PATCH}.zip)
 set(NRF5_LINKER_SCRIPT_MCUBOOT ${CMAKE_SOURCE_DIR}/gcc_nrf52-mcuboot.ld)
 add_executable(${EXECUTABLE_MCUBOOT_NAME} ${SOURCE_FILES})
-target_link_libraries(${EXECUTABLE_MCUBOOT_NAME} nimble nrf-sdk lvgl littlefs infinitetime_fonts infinitetime_apps)
+target_link_libraries(${EXECUTABLE_MCUBOOT_NAME} nimble nrf-sdk lvgl littlefs)
 set_target_properties(${EXECUTABLE_MCUBOOT_NAME} PROPERTIES OUTPUT_NAME ${EXECUTABLE_MCUBOOT_FILE_NAME})
 target_compile_options(${EXECUTABLE_MCUBOOT_NAME} PUBLIC
         ${COMMON_FLAGS}
@@ -906,7 +844,7 @@ add_custom_command(TARGET ${EXECUTABLE_MCUBOOT_NAME}
         COMMENT "post build steps for ${EXECUTABLE_MCUBOOT_FILE_NAME}")
 
 if (BUILD_RESOURCES)
-    add_dependencies(${EXECUTABLE_MCUBOOT_NAME} GenerateResources)
+    # add_dependencies(${EXECUTABLE_MCUBOOT_NAME} GenerateResources)
 endif ()
 
 if (BUILD_DFU)
@@ -918,65 +856,11 @@ endif ()
 
 # Build binary intended to be used by bootloader...
 
-# FIXED: Protected add_subdirectory calls with if(EXISTS) checks
-if(EXISTS ${CMAKE_SOURCE_DIR}/src/displayapp/fonts)
-#    add_subdirectory(displayapp/fonts)
-#     target_compile_options(infinitetime_fonts PUBLIC
-#            ${COMMON_FLAGS}
-#            $<$<CONFIG:Debug>:${DEBUG_FLAGS}>
-#            $<$<CONFIG:Release>:${RELEASE_FLAGS}>
-#            $<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS}>
-#            $<$<COMPILE_LANGUAGE:ASM>:${ASM_FLAGS}>
-#             )
-endif()
-
-if(EXISTS ${CMAKE_SOURCE_DIR}/src/displayapp/apps)
-#    add_subdirectory(displayapp/apps)
-endif()
+# FIXED: Comment out missing directory references
+# add_subdirectory(displayapp/fonts)
+# add_subdirectory(displayapp/apps)
+# add_subdirectory(resources)
 
 add_definitions(-DMYNEWT_VAL_BLE_HS_LOG_LVL=0)
-
-add_custom_command(TARGET ${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_NAME}
-        POST_BUILD
-        COMMAND ${CMAKE_SIZE_UTIL} ${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_FILE_NAME}.out
-        COMMAND ${CMAKE_OBJCOPY} -O binary ${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_FILE_NAME}.out "${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_FILE_NAME}.bin"
-        COMMAND ${CMAKE_OBJCOPY} -O ihex ${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_FILE_NAME}.out "${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_FILE_NAME}.hex"
-        COMMAND ${CMAKE_SOURCE_DIR}/tools/mcuboot/imgtool.py create --align 1 --version 1.0.0 --header-size 32 --slot-size 475136 --pad-header "${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_FILE_NAME}.hex" "${IMAGE_MCUBOOT_RECOVERY_LOADER_FILE_NAME_HEX}"
-        COMMAND ${CMAKE_OBJCOPY} -I ihex -O binary "${IMAGE_MCUBOOT_RECOVERY_LOADER_FILE_NAME_HEX}" "${IMAGE_MCUBOOT_RECOVERY_LOADER_FILE_NAME}.bin"
-        COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/bin2c.py "${IMAGE_MCUBOOT_RECOVERY_LOADER_FILE_NAME}.bin" recoveryLoaderImage recoveryLoaderImage.h
-        COMMENT "post build steps for ${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_FILE_NAME}")
-
-if (BUILD_DFU)
-    add_custom_command(TARGET ${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_NAME}
-            POST_BUILD
-            COMMAND adafruit-nrfutil dfu genpkg --dev-type 0x0052 --application "${IMAGE_MCUBOOT_RECOVERY_LOADER_FILE_NAME_HEX}" "${DFU_MCUBOOT_RECOVERY_LOADER_FILE_NAME}"
-            COMMENT "post build DFU steps for ${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_FILE_NAME}")
-endif ()
-
-if (BUILD_RESOURCES)
-#    add_subdirectory(resources)
-endif ()
-
-# Build binary that writes the recovery image (MCUBoot version)...
-
-add_custom_command(TARGET ${EXECUTABLE_RECOVERY_MCUBOOT_NAME}
-        POST_BUILD
-        COMMAND ${CMAKE_SIZE_UTIL} ${EXECUTABLE_RECOVERY_MCUBOOT_FILE_NAME}.out
-        COMMAND ${CMAKE_OBJCOPY} -O binary ${EXECUTABLE_RECOVERY_MCUBOOT_FILE_NAME}.out "${EXECUTABLE_RECOVERY_MCUBOOT_FILE_NAME}.bin"
-        COMMAND ${CMAKE_OBJCOPY} -O ihex ${EXECUTABLE_RECOVERY_MCUBOOT_FILE_NAME}.out "${EXECUTABLE_RECOVERY_MCUBOOT_FILE_NAME}.hex"
-        COMMAND ${CMAKE_SOURCE_DIR}/tools/mcuboot/imgtool.py create --align 1 --version 1.0.0 --header-size 32 --slot-size 475136 --pad-header "${EXECUTABLE_RECOVERY_MCUBOOT_FILE_NAME}.hex" "${IMAGE_RECOVERY_MCUBOOT_FILE_NAME_HEX}"
-        COMMAND ${CMAKE_OBJCOPY} -I ihex -O binary "${IMAGE_RECOVERY_MCUBOOT_FILE_NAME_HEX}" "${IMAGE_RECOVERY_MCUBOOT_FILE_NAME}.bin"
-        COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/bin2c.py "${IMAGE_RECOVERY_MCUBOOT_FILE_NAME}.bin" recoveryImage recoveryImage.h
-        COMMENT "post build steps for ${EXECUTABLE_RECOVERY_MCUBOOT_FILE_NAME}")
-
-if (BUILD_DFU)
-    add_custom_command(TARGET ${EXECUTABLE_RECOVERY_MCUBOOT_NAME}
-            POST_BUILD
-            COMMAND adafruit-nrfutil dfu genpkg --dev-type 0x0052 --application "${IMAGE_RECOVERY_MCUBOOT_FILE_NAME_HEX}" "${DFU_RECOVERY_MCUBOOT_FILE_NAME}"
-            COMMENT "post build DFU steps for ${EXECUTABLE_RECOVERY_MCUBOOT_FILE_NAME}")
-endif ()
-
-# InfiniTime recovery firmware (mcuboot)...
-
 add_definitions(-DMYNEWT_VAL_NEWT_FEATURE_LOGCFG=1)
 # Nimble Logging
