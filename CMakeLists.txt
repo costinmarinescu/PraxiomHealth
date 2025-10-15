@@ -514,6 +514,7 @@ include_directories(
 include_directories(SYSTEM PUBLIC
         libs
         FreeRTOS
+        src/components/praxiom
         libs/mynewt-nimble/porting/npl/freertos/include
         libs/mynewt-nimble/nimble/include
         libs/mynewt-nimble/porting/nimble/include
