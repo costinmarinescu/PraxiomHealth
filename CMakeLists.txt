@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(pinetime-app C CXX ASM)
-
+# FIX: Set working directory to src folder
+set(CMAKE_SOURCE_DIR ${CMAKE_SOURCE_DIR}/src)
 # define some variables just for this example to determine file locations
 set(NRF_PROJECT_NAME pinetime-app)
 set(NRF_BOARD pca10040)
