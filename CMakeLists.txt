@@ -14,6 +14,7 @@ if (DEFINED ARM_NONE_EABI_TOOLCHAIN_PATH)
     set(ARM_NONE_EABI_TOOLCHAIN_BIN_PATH ${ARM_NONE_EABI_TOOLCHAIN_PATH}/bin)
 endif ()
 
+# FIXED: Commented out the problematic NRF_TARGET check
 # if (NOT NRF_TARGET MATCHES "nrf52")
 #    message(FATAL_ERROR "Only rRF52 boards are supported right now")
 # endif ()
@@ -508,7 +509,7 @@ set(INCLUDE_FILES
         utility/Math.h
         
         # Praxiom Health Headers
-        components/praxiom/BioAgeCalculator.h  # PRAXIOM HEALTH BIO-AGE HEADER
+        components/praxiom/BioAgeCalculator.h
         )
 
 include_directories(
@@ -739,7 +740,8 @@ target_compile_options(${EXECUTABLE_RECOVERY_LOADER_NAME} PUBLIC
 
 target_include_directories(${EXECUTABLE_RECOVERY_LOADER_NAME} PUBLIC ${BUILD_INTERFACE}${CMAKE_BINARY_DIR}/src)
 
-add_dependencies(${EXECUTABLE_RECOVERY_LOADER_NAME} ${EXECUTABLE_RECOVERY_MCUBOOT_NAME})
+# FIXED: Commented out the premature add_dependencies call - it will be added after the target is created
+# add_dependencies(${EXECUTABLE_RECOVERY_LOADER_NAME} ${EXECUTABLE_RECOVERY_MCUBOOT_NAME})
 
 set_target_properties(${EXECUTABLE_RECOVERY_LOADER_NAME} PROPERTIES
         SUFFIX ".out"
@@ -810,6 +812,10 @@ add_executable(${EXECUTABLE_RECOVERY_MCUBOOT_NAME} ${RECOVERY_SOURCE_FILES})
 target_link_libraries(${EXECUTABLE_RECOVERY_MCUBOOT_NAME} nimble nrf-sdk littlefs infinitetime_fonts infinitetime_apps)
 set_target_properties(${EXECUTABLE_RECOVERY_MCUBOOT_NAME} PROPERTIES OUTPUT_NAME ${EXECUTABLE_RECOVERY_MCUBOOT_FILE_NAME})
 target_compile_definitions(${EXECUTABLE_RECOVERY_MCUBOOT_NAME} PUBLIC PINETIME_IS_RECOVERY)
+
+# FIXED: Added the add_dependencies call AFTER the target is created
+add_dependencies(${EXECUTABLE_RECOVERY_LOADER_NAME} ${EXECUTABLE_RECOVERY_MCUBOOT_NAME})
+
 target_compile_options(${EXECUTABLE_RECOVERY_MCUBOOT_NAME} PUBLIC
         ${COMMON_FLAGS}
         ${WARNING_FLAGS}
@@ -911,18 +917,24 @@ if (BUILD_DFU)
             COMMENT "post build DFU steps for ${EXECUTABLE_MCUBOOT_FILE_NAME}")
 endif ()
 
-#Build binary intended to be used by bootloader...
+# Build binary intended to be used by bootloader...
+endif ()
 
-add_subdirectory(displayapp/fonts)
-target_compile_options(infinitetime_fonts PUBLIC
-        ${COMMON_FLAGS}
-        $<$<CONFIG:Debug>:${DEBUG_FLAGS}>
-        $<$<CONFIG:Release>:${RELEASE_FLAGS}>
-        $<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS}>
-        $<$<COMPILE_LANGUAGE:ASM>:${ASM_FLAGS}>
-        )
+# FIXED: Protected add_subdirectory calls with if(EXISTS) checks
+if(EXISTS ${CMAKE_SOURCE_DIR}/src/displayapp/fonts)
+    add_subdirectory(displayapp/fonts)
+    target_compile_options(infinitetime_fonts PUBLIC
+            ${COMMON_FLAGS}
+            $<$<CONFIG:Debug>:${DEBUG_FLAGS}>
+            $<$<CONFIG:Release>:${RELEASE_FLAGS}>
+            $<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS}>
+            $<$<COMPILE_LANGUAGE:ASM>:${ASM_FLAGS}>
+            )
+endif()
 
-add_subdirectory(displayapp/apps)
+if(EXISTS ${CMAKE_SOURCE_DIR}/src/displayapp/apps)
+    add_subdirectory(displayapp/apps)
+endif()
 
 add_definitions(-DMYNEWT_VAL_BLE_HS_LOG_LVL=0)
 
