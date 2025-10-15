@@ -260,10 +260,10 @@ list(APPEND SOURCE_FILES
         displayapp/screens/WatchFacePineTimeStyle.cpp
         displayapp/screens/WatchFaceCasioStyleG7710.cpp
         displayapp/screens/WatchFacePrideFlag.cpp
-        displayapp/screens/WatchFacePraxiomHealth.cpp  # PRAXIOM HEALTH WATCH FACE
+        displayapp/screens/WatchFacePraxiomHealth.cpp
         
         # Praxiom Health Bio-Age Components
-        components/praxiom/BioAgeCalculator.cpp  # PRAXIOM HEALTH BIO-AGE ENGINE
+        components/praxiom/BioAgeCalculator.cpp
 
         main.cpp
         drivers/St7789.cpp
