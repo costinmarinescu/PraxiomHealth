@@ -1,0 +1,59 @@
+cmake_minimum_required(VERSION 3.10)
+project(PraxiomFirmware)
+
+# Board settings
+set(BOARD pinetime_nrf52832)
+
+# Set FreeRTOS directory (using committed local copy)
+set(FREERTOS_DIR ${PROJECT_SOURCE_DIR}/src/libs/FreeRTOS)
+
+# FreeRTOS sources verified for V10.5.1 structure
+set(FREERTOS_SOURCES
+    ${FREERTOS_DIR}/croutine.c
+    ${FREERTOS_DIR}/event_groups.c
+    ${FREERTOS_DIR}/list.c
+    ${FREERTOS_DIR}/queue.c
+    ${FREERTOS_DIR}/stream_buffer.c
+    ${FREERTOS_DIR}/tasks.c
+    ${FREERTOS_DIR}/timers.c
+    ${FREERTOS_DIR}/portable/MemMang/heap_4.c
+    ${FREERTOS_DIR}/portable/GCC/ARM_CM4F/port.c
+)
+
+# Add FreeRTOS library
+add_library(freertos STATIC ${FREERTOS_SOURCES})
+
+# Include directories for FreeRTOS
+target_include_directories(freertos PUBLIC
+    ${FREERTOS_DIR}/include
+    ${FREERTOS_DIR}/portable/GCC/ARM_CM4F
+)
+
+# Add main executable
+add_executable(praxiom
+    src/main.cpp
+    # Add Praxiom Health Watch Face
+    src/displayapp/screens/WatchFacePraxiomHealth.cpp
+    # Add Praxiom Health Bio-Age Calculator
+    src/components/praxiom/BioAgeCalculator.cpp
+)
+
+target_link_libraries(praxiom freertos)
+
+# Board-specific settings
+if(NOT BOARD MATCHES "nrf52")
+    message(FATAL_ERROR "Only nRF52 boards are supported right now")
+endif()
+
+# nRF5 SDK path check
+if(NOT NRF5_SDK_PATH)
+    message(FATAL_ERROR "The path to the nRF5 SDK (NRF5_SDK_PATH) must be set.")
+endif()
+
+# Include nRF5 SDK headers
+target_include_directories(praxiom PRIVATE
+    ${NRF5_SDK_PATH}/components/boards
+    # Add Praxiom Health include paths
+    src/components/praxiom
+    src/displayapp/screens
+)
