@@ -14,9 +14,13 @@ if (DEFINED ARM_NONE_EABI_TOOLCHAIN_PATH)
     set(ARM_NONE_EABI_TOOLCHAIN_BIN_PATH ${ARM_NONE_EABI_TOOLCHAIN_PATH}/bin)
 endif ()
 
-if (NOT NRF_TARGET MATCHES "nrf52")
-    message(FATAL_ERROR "Only rRF52 boards are supported right now")
-endif ()
+# if (NOT NRF_TARGET MATCHES "nrf52")
+#    message(FATAL_ERROR "Only rRF52 boards are supported right now")
+# endif ()
+
+if(NOT DEFINED TARGET_DEVICE)
+    set(TARGET_DEVICE "PINETIME")
+endif()
 
 # Setup toolchain
 include(${CMAKE_SOURCE_DIR}/cmake-nRF5x/arm-gcc-toolchain.cmake)
