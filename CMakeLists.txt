@@ -440,6 +440,8 @@ set(INCLUDE_FILES
         displayapp/widgets/PageIndicator.h
         displayapp/widgets/DotIndicator.h
         displayapp/widgets/StatusIcons.h
+        displayapp/screens/WatchFacePraxiomHealth.h
+        components/praxiom/BioAgeCalculator.h
 
         drivers/St7789.h
         drivers/SpiNorFlash.h
