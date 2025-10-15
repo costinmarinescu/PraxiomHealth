@@ -429,6 +429,7 @@ list(APPEND SOURCE_FILES
         displayapp/screens/WatchFacePineTimeStyle.cpp
         displayapp/screens/WatchFaceCasioStyleG7710.cpp
         displayapp/screens/WatchFacePrideFlag.cpp
+        displayapp/screens/WatchFacePraxiomHealth.cpp
 
         ##
 
@@ -470,6 +471,7 @@ list(APPEND SOURCE_FILES
         components/settings/Settings.cpp
         components/timer/Timer.cpp
         components/alarm/AlarmController.cpp
+        components/praxiom/BioAgeCalculator.cpp
         components/fs/FS.cpp
         drivers/Cst816s.cpp
         FreeRTOS/port.c
@@ -621,6 +623,8 @@ set(INCLUDE_FILES
         displayapp/widgets/PageIndicator.h
         displayapp/widgets/DotIndicator.h
         displayapp/widgets/StatusIcons.h
+        displayapp/screens/WatchFacePraxiomHealth.h
+        components/praxiom/BioAgeCalculator.h
         drivers/St7789.h
         drivers/SpiNorFlash.h
         drivers/SpiMaster.h
@@ -688,6 +692,7 @@ include_directories(
 include_directories(SYSTEM
         libs/
         FreeRTOS/
+        src/components/praxiom
         libs/mynewt-nimble/porting/npl/freertos/include
         libs/mynewt-nimble/nimble/include
         libs/mynewt-nimble/porting/nimble/include
