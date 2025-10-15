@@ -921,18 +921,18 @@ endif ()
 
 # FIXED: Protected add_subdirectory calls with if(EXISTS) checks
 if(EXISTS ${CMAKE_SOURCE_DIR}/src/displayapp/fonts)
-    add_subdirectory(displayapp/fonts)
-    target_compile_options(infinitetime_fonts PUBLIC
-            ${COMMON_FLAGS}
-            $<$<CONFIG:Debug>:${DEBUG_FLAGS}>
-            $<$<CONFIG:Release>:${RELEASE_FLAGS}>
-            $<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS}>
-            $<$<COMPILE_LANGUAGE:ASM>:${ASM_FLAGS}>
-            )
+#    add_subdirectory(displayapp/fonts)
+#     target_compile_options(infinitetime_fonts PUBLIC
+#            ${COMMON_FLAGS}
+#            $<$<CONFIG:Debug>:${DEBUG_FLAGS}>
+#            $<$<CONFIG:Release>:${RELEASE_FLAGS}>
+#            $<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS}>
+#            $<$<COMPILE_LANGUAGE:ASM>:${ASM_FLAGS}>
+#             )
 endif()
 
 if(EXISTS ${CMAKE_SOURCE_DIR}/src/displayapp/apps)
-    add_subdirectory(displayapp/apps)
+#    add_subdirectory(displayapp/apps)
 endif()
 
 add_definitions(-DMYNEWT_VAL_BLE_HS_LOG_LVL=0)
@@ -955,7 +955,7 @@ if (BUILD_DFU)
 endif ()
 
 if (BUILD_RESOURCES)
-    add_subdirectory(resources)
+#    add_subdirectory(resources)
 endif ()
 
 # Build binary that writes the recovery image (MCUBoot version)...
