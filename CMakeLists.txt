@@ -907,8 +907,7 @@ if (BUILD_DFU)
             COMMENT "post build DFU steps for ${EXECUTABLE_MCUBOOT_FILE_NAME}")
 endif ()
 
-# Build binary intended to be used by bootloader...
-endif ()
+#Build binary intended to be used by bootloader...
 
 add_subdirectory(displayapp/fonts)
 target_compile_options(infinitetime_fonts PUBLIC
