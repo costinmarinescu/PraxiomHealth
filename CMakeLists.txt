@@ -135,7 +135,6 @@ set(NIMBLE_SRC
         libs/mynewt-nimble/nimble/host/src/ble_att_svr.c
         libs/mynewt-nimble/nimble/host/src/ble_att_cmd.c
         libs/mynewt-nimble/nimble/host/src/ble_hs_atomic.c
-
         libs/mynewt-nimble/nimble/host/src/ble_hs_adv.c
         libs/mynewt-nimble/nimble/host/src/ble_hs_flow.c
         libs/mynewt-nimble/nimble/host/src/ble_hs_mqueue.c
