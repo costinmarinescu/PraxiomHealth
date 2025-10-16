@@ -31,7 +31,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "")
 set(SDK_SOURCE_FILES
   # Startup
   ${NRF5_SDK_PATH}/modules/nrfx/mdk/system_nrf52.c
-  ${NRF5_SDK_PATH}/modules/nrfx/mdk/gcc/startup_nrf52.S
+  ${NRF5_SDK_PATH}/modules/nrfx/mdk/gcc/gcc_startup_nrf52.S
   
   # Base SDK
   ${NRF5_SDK_PATH}/components/boards/boards.c
