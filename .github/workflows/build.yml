@@ -38,19 +38,18 @@ jobs:
     - name: Install Python Dependencies
       run: |
         pip3 install adafruit-nrfutil
-        pip3 install -r src/requirements.txt || true
         
     - name: CMake Configure
       run: |
-        - name: CMake Configure
-          run: |
-            cmake -G 'Unix Makefiles' -S src -B ./build ...
+        cmake -G 'Unix Makefiles' \
+          -S src \
+          -B ./build \
           -DCMAKE_BUILD_TYPE=Release \
           -DARM_NONE_EABI_TOOLCHAIN_PATH=/opt/gcc-arm-none-eabi-10.3-2021.10 \
           -DNRF5_SDK_PATH=/opt/nRF5_SDK_15.3.0_59ac345 \
           -DBUILD_DFU=1 \
           -DBUILD_RESOURCES=1
-          
+
     - name: Build
       run: |
         cmake --build ./build --parallel $(nproc)
