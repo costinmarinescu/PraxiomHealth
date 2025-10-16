@@ -1,60 +1,66 @@
-name: Build Firmware
+# IMPORTANT: This is the corrected GitHub Actions workflow file
+# Upload this to: .github/workflows/build.yml
+
+name: Build InfiniTime
 
 on:
   push:
-    branches: [ develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ develop ]
+    branches: [ main ]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-
+    runs-on: ubuntu-22.04
+    
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v3
       with:
-        submodules: recursive  # Fetch remaining submodules
-
-    - name: Initialize Submodules
+        submodules: recursive
+    
+    - name: Install Dependencies
       run: |
-        git submodule sync --recursive
-        git submodule update --init --force --depth=1 --recursive
-        # Validate other submodules (skip FreeRTOS, as it's local)
-        for dir in src/libs/arduinoFFT src/libs/littlefs src/libs/lvgl; do
-          if [ ! -d "$dir" ] || [ ! -f "$dir/.git" ]; then
-            echo "Submodule $dir missing or not initialized"
-            exit 1
-          fi
-        done
-        # Validate local FreeRTOS copy
-        if [ ! -f "src/libs/FreeRTOS/portable/MemMang/heap_4.c" ]; then
-          echo "Local FreeRTOS copy missing; ensure it's committed"
-          exit 1
-        fi
-
-    - name: Install Arm GCC Toolchain
-      uses: carlosperate/arm-none-eabi-gcc-action@v1
-      id: arm-toolchain
-      with:
-        release: '10.3-2021.10'  # Match observed version
-
-    - name: Install Ninja
-      run: sudo apt-get update && sudo apt-get install -y ninja-build
-
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build python3-pip
+        
+    - name: Install ARM Toolchain
+      run: |
+        wget -q https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
+        tar -xjf gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
+        sudo mv gcc-arm-none-eabi-10.3-2021.10 /opt/
+        
     - name: Download nRF5 SDK
       run: |
-        wget -q --show-progress https://nsscprodmedia.blob.core.windows.net/prod/software-and-other-downloads/sdks/nrf5/binaries/nrf5_sdk_17.1.0_ddde560.zip || { echo "Download failed, using fallback"; exit 1; }
-        unzip -q nrf5_sdk_17.1.0_ddde560.zip -d . || { echo "Unzip failed"; exit 1; }
-        echo "NRF5_SDK_PATH=$(pwd)/nRF5_SDK_v17.1.0" >> $GITHUB_ENV
-
-    - name: Configure CMake
-      run: cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=src/toolchain.cmake -DCMAKE_C_COMPILER=${{ steps.arm-toolchain.outputs.path }}/bin/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=${{ steps.arm-toolchain.outputs.path }}/bin/arm-none-eabi-g++ -CMAKE_ASM_COMPILER=${{ steps.arm-toolchain.outputs.path }}/bin/arm-none-eabi-gcc -DCMAKE_MAKE_PROGRAM=/usr/bin/ninja -DNRF5_SDK_PATH=$NRF5_SDK_PATH -DBOARD=pine_time_nrf52832 -DBUILD_DFU=1 -BUILD_RESOURCES=1
-
+        wget -q https://developer.nordicsemi.com/nRF5_SDK/nRF5_SDK_v15.x.x/nRF5_SDK_15.3.0_59ac345.zip
+        unzip -q nRF5_SDK_15.3.0_59ac345.zip
+        sudo mv nRF5_SDK_15.3.0_59ac345 /opt/
+        
+    - name: Install Python Dependencies
+      run: |
+        pip3 install adafruit-nrfutil
+        pip3 install -r src/requirements.txt || true
+        
+    - name: CMake Configure
+      run: |
+        cmake -G 'Unix Makefiles' \
+          -S ./src \
+          -B ./build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DARM_NONE_EABI_TOOLCHAIN_PATH=/opt/gcc-arm-none-eabi-10.3-2021.10 \
+          -DNRF5_SDK_PATH=/opt/nRF5_SDK_15.3.0_59ac345 \
+          -DBUILD_DFU=1 \
+          -DBUILD_RESOURCES=1
+          
     - name: Build
-      run: ninja -C build
-
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
+      run: |
+        cmake --build ./build --parallel $(nproc)
+        
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v3
       with:
-        name: praxiom
-        path: build/praxiom.hex
+        name: InfiniTime-Firmware
+        path: |
+          build/src/*.bin
+          build/src/*.hex
+          build/src/*.zip
+        if-no-files-found: error
