@@ -42,9 +42,9 @@ jobs:
         
     - name: CMake Configure
       run: |
-        cmake -G 'Unix Makefiles' \
-          -S ./src \
-          -B ./build \
+        - name: CMake Configure
+          run: |
+            cmake -G 'Unix Makefiles' -S ./src -B ./build ...
           -DCMAKE_BUILD_TYPE=Release \
           -DARM_NONE_EABI_TOOLCHAIN_PATH=/opt/gcc-arm-none-eabi-10.3-2021.10 \
           -DNRF5_SDK_PATH=/opt/nRF5_SDK_15.3.0_59ac345 \
