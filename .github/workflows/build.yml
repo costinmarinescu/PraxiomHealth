@@ -1,81 +1,74 @@
-name: Build Praxiom Health Firmware
+name: Build PraxiomHealth Firmware
 
 on:
   push:
     branches: [ main, master, develop ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, develop ]
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    
+
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-        fetch-depth: 0
-    
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y cmake ninja-build python3-pip wget unzip
-        
-    - name: Install Python Dependencies
-      run: |
-        pip3 install adafruit-nrfutil
-        pip3 install pillow cbor lz4 cryptography intelhex
-        
-    - name: Install ARM Toolchain
-      run: |
-        wget -q https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
-        tar -xjf gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
-        sudo mv gcc-arm-none-eabi-10.3-2021.10 /opt/
-        
-    - name: Download nRF5 SDK
-      run: |
-        wget -q https://developer.nordicsemi.com/nRF5_SDK/nRF5_SDK_v15.x.x/nRF5_SDK_15.3.0_59ac345.zip
-        unzip -q nRF5_SDK_15.3.0_59ac345.zip
-        sudo mv nRF5_SDK_15.3.0_59ac345 /opt/
-        
-    - name: CMake Configure
-      run: |
-        cmake -G 'Unix Makefiles' \
-          -S src \
-          -B ./build \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DARM_NONE_EABI_TOOLCHAIN_PATH=/opt/gcc-arm-none-eabi-10.3-2021.10 \
-          -DNRF5_SDK_PATH=/opt/nRF5_SDK_15.3.0_59ac345 \
-          -DBUILD_DFU=1 \
-          -DBUILD_RESOURCES=0
-          
-    - name: Build Firmware
-      run: |
-        cmake --build ./build --parallel $(nproc)
-        
-    - name: List Build Artifacts
-      run: |
-        echo "Build artifacts:"
-        find ./build -name "*.bin" -o -name "*.hex" -o -name "*.zip" -o -name "*.out"
-        
-    - name: Upload Firmware Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: PraxiomHealth-Firmware
-        path: |
-          build/**/*.bin
-          build/**/*.hex
-          build/**/*.zip
-          build/**/*.out
-        if-no-files-found: warn
-        
-    - name: Upload Build Logs
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-logs
-        path: |
-          build/**/*.log
-          build/**/*.map
-        if-no-files-found: ignore
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build python3-pip wget unzip
+
+      - name: Install Python packages
+        run: |
+          pip3 install adafruit-nrfutil pillow cbor lz4 cryptography intelhex
+
+      - name: Install ARM GCC toolchain
+        run: |
+          wget -q https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
+          tar -xjf gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
+          sudo mv gcc-arm-none-eabi-10.3-2021.10 /opt/
+
+      - name: Download nRF5 SDK
+        run: |
+          wget -q https://developer.nordicsemi.com/nRF5_SDK/nRF5_SDK_v15.x.x/nRF5_SDK_15.3.0_59ac345.zip
+          unzip -q nRF5_SDK_15.3.0_59ac345.zip
+          sudo mv nRF5_SDK_15.3.0_59ac345 /opt/
+
+      - name: Configure CMake
+        run: |
+          cmake -G "Unix Makefiles" \
+            -S src \
+            -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DARM_NONE_EABI_TOOLCHAIN_PATH=/opt/gcc-arm-none-eabi-10.3-2021.10 \
+            -DNRF5_SDK_PATH=/opt/nRF5_SDK_15.3.0_59ac345 \
+            -DBUILD_DFU=1 \
+            -DBUILD_RESOURCES=0
+
+      - name: Build firmware
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PraxiomHealth-Firmware
+          path: |
+            build/**/*.bin
+            build/**/*.hex
+            build/**/*.zip
+            build/**/*.out
+          if-no-files-found: warn
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build/**/*.log
+            build/**/*.map
+          if-no-files-found: ignore
