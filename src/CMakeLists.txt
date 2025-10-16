@@ -916,15 +916,7 @@ endif ()
 #Build binary intended to be used by bootloader...
 
 add_subdirectory(displayapp/fonts)
-if(TARGET infinitetime_fonts)
-    target_compile_options(infinitetime_fonts PUBLIC
-            ${COMMON_FLAGS}
-            $<$<CONFIG:Debug>:${DEBUG_FLAGS}>
-            $<$<CONFIG:Release>:${RELEASE_FLAGS}>
-            $<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS}>
-            $<$<COMPILE_LANGUAGE:ASM>:${ASM_FLAGS}>
-    )
-endif()
+
 add_subdirectory(displayapp/apps)
 
 add_definitions(-DMYNEWT_VAL_BLE_HS_LOG_LVL=0)
