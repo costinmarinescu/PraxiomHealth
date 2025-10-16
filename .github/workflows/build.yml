@@ -1,65 +1,72 @@
-# IMPORTANT: This is the corrected GitHub Actions workflow file
-# Upload this to: .github/workflows/build.yml
+#!/bin/bash
+# Corrected InfiniTime build script for Docker/GitHub Actions
 
-name: Build InfiniTime
+set -x
+set -e
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+export GCC_ARM_PATH=gcc-arm-none-eabi-10.3-2021.10
 
-jobs:
-  build:
-    runs-on: ubuntu-22.04
-    
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        submodules: recursive
-    
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y cmake ninja-build python3-pip
-        
-    - name: Install ARM Toolchain
-      run: |
-        wget -q https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
-        tar -xjf gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
-        sudo mv gcc-arm-none-eabi-10.3-2021.10 /opt/
-        
-    - name: Download nRF5 SDK
-      run: |
-        wget -q https://developer.nordicsemi.com/nRF5_SDK/nRF5_SDK_v15.x.x/nRF5_SDK_15.3.0_59ac345.zip
-        unzip -q nRF5_SDK_15.3.0_59ac345.zip
-        sudo mv nRF5_SDK_15.3.0_59ac345 /opt/
-        
-    - name: Install Python Dependencies
-      run: |
-        pip3 install adafruit-nrfutil
-        
-    - name: CMake Configure
-      run: |
-        cmake -G 'Unix Makefiles' \
-          -S src \
-          -B ./build \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DARM_NONE_EABI_TOOLCHAIN_PATH=/opt/gcc-arm-none-eabi-10.3-2021.10 \
-          -DNRF5_SDK_PATH=/opt/nRF5_SDK_15.3.0_59ac345 \
-          -DBUILD_DFU=1 \
-          -DBUILD_RESOURCES=1
+main() {
+  local target=${1}
 
-    - name: Build
-      run: |
-        cmake --build ./build --parallel $(nproc)
-        
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: InfiniTime-Firmware
-        path: |
-          build/src/*.bin
-          build/src/*.hex
-          build/src/*.zip
-        if-no-files-found: error
+  mkdir -p /opt
+
+  [[ ! -d /opt/${GCC_ARM_PATH} ]] && GetGcc
+  [[ ! -d /opt/nRF5_SDK_15.3.0_59ac345 ]] && GetNrfSdk
+  [[ ! -d /opt/mcuboot ]] && GetMcuBoot
+
+  mkdir -p ./build
+
+  CmakeGenerate
+  CmakeBuild ${target}
+
+  if [ "$BUILD_DFU" == "1" ]; then
+    CreateDfu
+  fi
+}
+
+GetGcc() {
+  wget -q https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
+  tar -xjf gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2 -C /opt
+}
+
+GetNrfSdk() {
+  wget -q "https://developer.nordicsemi.com/nRF5_SDK/nRF5_SDK_v15.x.x/nRF5_SDK_15.3.0_59ac345.zip"
+  unzip -q nRF5_SDK_15.3.0_59ac345.zip -d /opt
+}
+
+GetMcuBoot() {
+  git clone https://github.com/mcu-tools/mcuboot.git /opt/mcuboot
+  pip3 install -r /opt/mcuboot/scripts/requirements.txt
+}
+
+CmakeGenerate() {
+  # FIXED: Changed -S . to -S src to use src/CMakeLists.txt
+  cmake -G 'Unix Makefiles' \
+    -S src \
+    -B ./build \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DARM_NONE_EABI_TOOLCHAIN_PATH=/opt/${GCC_ARM_PATH} \
+    -DNRF5_SDK_PATH=/opt/nRF5_SDK_15.3.0_59ac345 \
+    -DBUILD_DFU=${BUILD_DFU:-1} \
+    -DBUILD_RESOURCES=${BUILD_RESOURCES:-1}
+}
+
+CmakeBuild() {
+  local target=${1}
+  if [ -z "${target}" ]; then
+    target="all"
+  fi
+  cmake --build ./build --target ${target} -- -j$(nproc)
+}
+
+CreateDfu() {
+  adafruit-nrfutil dfu genpkg \
+    --dev-type 0x0052 \
+    --application ./build/src/pinetime-mcuboot-app-image-*.hex \
+    ./build/src/pinetime-mcuboot-app-dfu-*.zip
+}
+
+main "$@"
