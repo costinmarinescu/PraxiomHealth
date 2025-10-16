@@ -20,11 +20,15 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build python3-pip wget unzip
+          sudo apt-get install -y cmake ninja-build python3-pip wget unzip nodejs npm
 
       - name: Install Python packages
         run: |
           pip3 install adafruit-nrfutil pillow cbor lz4 cryptography intelhex
+
+      - name: Install lv_font_conv
+        run: |
+          sudo npm install -g lv_font_conv
 
       - name: Install ARM GCC toolchain
         run: |
@@ -50,7 +54,7 @@ jobs:
             -DARM_NONE_EABI_TOOLCHAIN_PATH=/opt/gcc-arm-none-eabi-10.3-2021.10 \
             -DNRF5_SDK_PATH=/opt/nRF5_SDK_15.3.0_59ac345 \
             -DBUILD_DFU=1 \
-            -DBUILD_RESOURCES=0
+            -DBUILD_RESOURCES=1
 
       - name: Build firmware
         run: cmake --build build --parallel $(nproc)
