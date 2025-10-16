@@ -38,7 +38,7 @@ jobs:
           unzip -q nRF5_SDK_15.3.0_59ac345.zip
           sudo mv nRF5_SDK_15.3.0_59ac345 /opt/
 
-      - name: Configure CMake
+      - name: CMake Configure
         run: |
           cmake -G "Unix Makefiles" \
             -S src \
