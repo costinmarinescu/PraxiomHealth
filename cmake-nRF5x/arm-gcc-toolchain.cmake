@@ -1,52 +1,42 @@
-# check if already run. Changing the compiler var can cause reconfigure so don't want to do it again
-if(DEFINED ARM_GCC_TOOLCHAIN)
-    return()
-endif()
-set(ARM_GCC_TOOLCHAIN TRUE)
+# ARM GCC Toolchain Configuration for nRF52
+# This file sets up the ARM GCC toolchain for building InfiniTime/PraxiomHealth firmware
 
+if(NOT ARM_NONE_EABI_TOOLCHAIN_PATH)
+  message(FATAL_ERROR "ARM_NONE_EABI_TOOLCHAIN_PATH must be set")
+endif()
+
+# Set toolchain paths
+set(ARM_NONE_EABI_TOOLCHAIN_BIN_PATH "${ARM_NONE_EABI_TOOLCHAIN_PATH}/bin")
+
+# Set compiler
+set(CMAKE_C_COMPILER "${ARM_NONE_EABI_TOOLCHAIN_BIN_PATH}/arm-none-eabi-gcc" CACHE INTERNAL "C Compiler")
+set(CMAKE_CXX_COMPILER "${ARM_NONE_EABI_TOOLCHAIN_BIN_PATH}/arm-none-eabi-g++" CACHE INTERNAL "C++ Compiler")
+set(CMAKE_ASM_COMPILER "${ARM_NONE_EABI_TOOLCHAIN_BIN_PATH}/arm-none-eabi-gcc" CACHE INTERNAL "ASM Compiler")
+
+# Set utilities
+set(CMAKE_AR "${ARM_NONE_EABI_TOOLCHAIN_BIN_PATH}/arm-none-eabi-ar" CACHE INTERNAL "Archiver")
+set(CMAKE_OBJCOPY "${ARM_NONE_EABI_TOOLCHAIN_BIN_PATH}/arm-none-eabi-objcopy" CACHE INTERNAL "Objcopy")
+set(CMAKE_OBJDUMP "${ARM_NONE_EABI_TOOLCHAIN_BIN_PATH}/arm-none-eabi-objdump" CACHE INTERNAL "Objdump")
+set(CMAKE_SIZE_UTIL "${ARM_NONE_EABI_TOOLCHAIN_BIN_PATH}/arm-none-eabi-size" CACHE INTERNAL "Size utility")
+set(CMAKE_RANLIB "${ARM_NONE_EABI_TOOLCHAIN_BIN_PATH}/arm-none-eabi-ranlib" CACHE INTERNAL "Ranlib")
+
+# System processor and platform
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR ARM)
 
-set(TOOLCHAIN_PREFIX arm-none-eabi-)
+# Compiler flags
+set(CMAKE_C_FLAGS_INIT "-fno-common -ffunction-sections -fdata-sections")
+set(CMAKE_CXX_FLAGS_INIT "-fno-common -ffunction-sections -fdata-sections -fno-exceptions -fno-rtti")
+set(CMAKE_ASM_FLAGS_INIT "-x assembler-with-cpp")
 
-if (NOT DEFINED ARM_NONE_EABI_TOOLCHAIN_BIN_PATH)
-    if(MINGW OR CYGWIN OR WIN32)
-        set(UTIL_SEARCH_CMD where)
-    elseif(UNIX OR APPLE)
-        set(UTIL_SEARCH_CMD which)
-    endif()
-    execute_process(
-            COMMAND ${UTIL_SEARCH_CMD} ${TOOLCHAIN_PREFIX}gcc
-            OUTPUT_VARIABLE BINUTILS_PATH
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
+# Linker flags
+set(CMAKE_EXE_LINKER_FLAGS_INIT "-Wl,--gc-sections --specs=nano.specs -lc -lnosys -lm")
 
-    get_filename_component(ARM_NONE_EABI_TOOLCHAIN_BIN_PATH ${BINUTILS_PATH} DIRECTORY)
-endif ()
-
-# Without that flag CMake is not able to pass test compilation check
-if (${CMAKE_VERSION} VERSION_EQUAL "3.6.0" OR ${CMAKE_VERSION} VERSION_GREATER "3.6")
-    set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
-else()
-    set(CMAKE_EXE_LINKER_FLAGS_INIT "--specs=nosys.specs")
-endif()
-
-set(TOOLCHAIN_PATH_AND_PREFIX ${ARM_NONE_EABI_TOOLCHAIN_BIN_PATH}/${TOOLCHAIN_PREFIX})
-
-set(CMAKE_C_COMPILER ${TOOLCHAIN_PATH_AND_PREFIX}gcc)
-
-set(CMAKE_ASM_COMPILER ${CMAKE_C_COMPILER})
-
-set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PATH_AND_PREFIX}c++)
-
-set(CMAKE_AR ${TOOLCHAIN_PATH_AND_PREFIX}ar)
-set(CMAKE_RANLIB ${TOOLCHAIN_PATH_AND_PREFIX}ranlib)
-
-set(CMAKE_OBJCOPY ${TOOLCHAIN_PATH_AND_PREFIX}objcopy CACHE INTERNAL "objcopy tool")
-set(CMAKE_SIZE_UTIL ${TOOLCHAIN_PATH_AND_PREFIX}size CACHE INTERNAL "size tool")
-
-set(CMAKE_SYSROOT ${ARM_NONE_EABI_TOOLCHAIN_BIN_PATH})
-set(CMAKE_FIND_ROOT_PATH ${ARM_NONE_EABI_TOOLCHAIN_BIN_PATH})
+# Don't look for programs in the build host's directories
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+
+# Set the toolchain as ready
+set(ARM_GCC_TOOLCHAIN TRUE)
