@@ -49,6 +49,9 @@ jobs:
           echo "Looking for startup files:"
           find /opt/nRF5_SDK_15.3.0_59ac345 -name "*startup*.S" -o -name "*startup*.s"
 
+      - name: Clean build cache
+          run: rm -rf build
+          
       - name: Configure CMake
         run: |
           cmake -G "Unix Makefiles" \
