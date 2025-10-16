@@ -20,7 +20,7 @@ if(NOT DEFINED TARGET_DEVICE)
 endif()
 
 # Setup toolchain
-include(${CMAKE_SOURCE_DIR}/cmake-nRF5x/arm-gcc-toolchain.cmake)
+include(${CMAKE_SOURCE_DIR}/../cmake-nRF5x/arm-gcc-toolchain.cmake)
 if (NOT DEFINED ARM_GCC_TOOLCHAIN)
   message(FATAL_ERROR "The toolchain must be set up before calling this macro")
 endif ()
