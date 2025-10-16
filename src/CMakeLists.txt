@@ -770,6 +770,7 @@ include_directories(SYSTEM
         "${NRF5_SDK_PATH}/components/libraries/usbd/class/hid/mouse"
         "${NRF5_SDK_PATH}/components/libraries/usbd/class/msc"
         "${NRF5_SDK_PATH}/components/libraries/util"
+        "${NRF5_SDK_PATH}/components/praxiom
         "${NRF5_SDK_PATH}/external/segger_rtt/"
         "${NRF5_SDK_PATH}/external/fprintf/"
         "${NRF5_SDK_PATH}/external/thedotfactory_fonts"
