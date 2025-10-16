@@ -38,20 +38,9 @@ jobs:
           unzip -q nRF5_SDK_15.3.0_59ac345.zip
           sudo mv nRF5_SDK_15.3.0_59ac345 /opt/
 
-      - name: Debug - Check nRF5 SDK Structure
-        run: |
-          echo "Checking nRF5 SDK installation..."
-          ls -la /opt/nRF5_SDK_15.3.0_59ac345/ || echo "SDK root not found"
-          ls -la /opt/nRF5_SDK_15.3.0_59ac345/modules/ || echo "modules/ not found"
-          ls -la /opt/nRF5_SDK_15.3.0_59ac345/modules/nrfx/ || echo "nrfx/ not found"
-          ls -la /opt/nRF5_SDK_15.3.0_59ac345/modules/nrfx/mdk/ || echo "mdk/ not found"
-          ls -la /opt/nRF5_SDK_15.3.0_59ac345/modules/nrfx/mdk/gcc/ || echo "gcc/ not found"
-          echo "Looking for startup files:"
-          find /opt/nRF5_SDK_15.3.0_59ac345 -name "*startup*.S" -o -name "*startup*.s"
-
       - name: Clean build cache
-          run: rm -rf build
-          
+        run: rm -rf build
+
       - name: Configure CMake
         run: |
           cmake -G "Unix Makefiles" \
