@@ -921,12 +921,10 @@ if(TARGET infinitetime_fonts)
             ${COMMON_FLAGS}
             $<$<CONFIG:Debug>:${DEBUG_FLAGS}>
             $<$<CONFIG:Release>:${RELEASE_FLAGS}>
+            $<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS}>
+            $<$<COMPILE_LANGUAGE:ASM>:${ASM_FLAGS}>
     )
 endif()
-        $<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS}>
-        $<$<COMPILE_LANGUAGE:ASM>:${ASM_FLAGS}>
-        )
-
 add_subdirectory(displayapp/apps)
 
 add_definitions(-DMYNEWT_VAL_BLE_HS_LOG_LVL=0)
