@@ -34,7 +34,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "")
 set(SDK_SOURCE_FILES
         # Startup
         ${NRF5_SDK_PATH}/modules/nrfx/mdk/system_nrf52.c
-        ${NRF5_SDK_PATH}/modules/nrfx/mdk/gcc/startup_nrf52.S
+        ${NRF5_SDK_PATH}/modules/nrfx/mdk/gcc_startup_nrf52.S
 
         # Base SDK
         ${NRF5_SDK_PATH}/components/boards/boards.c
@@ -739,9 +739,7 @@ target_compile_options(${EXECUTABLE_RECOVERY_LOADER_NAME} PUBLIC
 
 target_include_directories(${EXECUTABLE_RECOVERY_LOADER_NAME} PUBLIC ${BUILD_INTERFACE}${CMAKE_BINARY_DIR}/src)
 
-if(TARGET ${EXECUTABLE_RECOVERY_MCUBOOT_NAME})
-    add_dependencies(${EXECUTABLE_RECOVERY_LOADER_NAME} ${EXECUTABLE_RECOVERY_MCUBOOT_NAME})
-endif()
+add_dependencies(${EXECUTABLE_RECOVERY_LOADER_NAME} ${EXECUTABLE_RECOVERY_MCUBOOT_NAME})
 
 set_target_properties(${EXECUTABLE_RECOVERY_LOADER_NAME} PROPERTIES
         SUFFIX ".out"
@@ -916,6 +914,13 @@ endif ()
 #Build binary intended to be used by bootloader...
 
 add_subdirectory(displayapp/fonts)
+target_compile_options(infinitetime_fonts PUBLIC
+        ${COMMON_FLAGS}
+        $<$<CONFIG:Debug>:${DEBUG_FLAGS}>
+        $<$<CONFIG:Release>:${RELEASE_FLAGS}>
+        $<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS}>
+        $<$<COMPILE_LANGUAGE:ASM>:${ASM_FLAGS}>
+        )
 
 add_subdirectory(displayapp/apps)
 
