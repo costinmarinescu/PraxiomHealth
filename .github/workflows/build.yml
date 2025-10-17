@@ -5,13 +5,14 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-
+    
     steps:
-    - name: Checkout code with submodules
+    - name: Checkout repository with submodules
       uses: actions/checkout@v4
       with:
         submodules: recursive
@@ -20,29 +21,45 @@ jobs:
     - name: Install build dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake ninja-build python3-pip wget unzip nodejs npm
+        sudo apt-get install -y \
+          cmake \
+          ninja-build \
+          python3 \
+          python3-pip \
+          wget \
+          unzip \
+          nodejs \
+          npm
         sudo npm install -g lv_font_conv@1.5.2
 
-    - name: Download and install ARM GCC toolchain
+    - name: Download ARM GCC toolchain
       run: |
         wget -q https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
         tar -xjf gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
         sudo mv gcc-arm-none-eabi-10.3-2021.10 /opt/
         rm gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
 
-    - name: Download and install nRF5 SDK
+    - name: Download nRF5 SDK
       run: |
         wget -q https://developer.nordicsemi.com/nRF5_SDK/nRF5_SDK_v15.x.x/nRF5_SDK_15.3.0_59ac345.zip
         unzip -q nRF5_SDK_15.3.0_59ac345.zip
         sudo mv nRF5_SDK_15.3.0_59ac345 /opt/
         rm nRF5_SDK_15.3.0_59ac345.zip
 
-    - name: Verify toolchain installation
+    - name: Verify toolchain and SDK installation
       run: |
+        echo "=== ARM GCC Toolchain ==="
         /opt/gcc-arm-none-eabi-10.3-2021.10/bin/arm-none-eabi-gcc --version
-        ls -la /opt/nRF5_SDK_15.3.0_59ac345
+        echo ""
+        echo "=== nRF5 SDK ==="
+        ls -la /opt/nRF5_SDK_15.3.0_59ac345/components/softdevice/
+        echo ""
+        echo "=== Build Tools ==="
+        cmake --version
+        ninja --version
+        lv_font_conv --version
 
-    - name: Configure CMake (generate Ninja build files)
+    - name: Configure CMake with Ninja generator
       run: |
         cmake -G Ninja \
           -S src \
@@ -53,35 +70,48 @@ jobs:
           -DBUILD_DFU=0 \
           -DBUILD_RESOURCES=1
 
-    - name: Build firmware with Ninja
+    - name: Build firmware with Ninja (verbose)
       run: ninja -C build -v
 
-    - name: List build artifacts
+    - name: List generated firmware files
+      if: always()
       run: |
         echo "=== Build Artifacts ==="
-        ls -lh build/*.bin build/*.hex build/*.out 2>/dev/null || true
-        echo "=== Build Directory ==="
-        find build -name "*.bin" -o -name "*.hex" -o -name "*.zip"
+        find build -type f \( -name "*.bin" -o -name "*.hex" -o -name "*.out" -o -name "*.zip" \) -ls
 
-    - name: Upload firmware binaries
+    - name: Upload firmware artifacts
       uses: actions/upload-artifact@v4
       if: success()
       with:
-        name: praxiomhealth-firmware
+        name: praxiomhealth-firmware-${{ github.sha }}
         path: |
           build/src/pinetime-app*.bin
           build/src/pinetime-app*.hex
-          build/src/pinetime-mcuboot*.bin
+          build/src/pinetime-app*.out
+          build/src/pinetime-mcuboot-app*.bin
+          build/src/pinetime-mcuboot-app*.hex
           build/src/*.zip
-        retention-days: 30
+        retention-days: 90
+        if-no-files-found: warn
 
-    - name: Create release assets (on tag push)
+    - name: Upload build logs (on failure)
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: build-logs-${{ github.sha }}
+        path: |
+          build/CMakeFiles/CMakeOutput.log
+          build/CMakeFiles/CMakeError.log
+        retention-days: 30
+        if-no-files-found: ignore
+
+    - name: Create release on tag push
       if: startsWith(github.ref, 'refs/tags/')
       uses: actions/upload-artifact@v4
       with:
-        name: release-firmware-${{ github.ref_name }}
+        name: praxiomhealth-release-${{ github.ref_name }}
         path: |
           build/src/pinetime-app*.bin
           build/src/pinetime-app*.hex
-          build/src/pinetime-mcuboot*.bin
           build/src/*.zip
+        retention-days: 365
