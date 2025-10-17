@@ -185,10 +185,57 @@ set(LITTLEFS_SRC
         libs/littlefs/lfs.c
         )
 
+# ==============================================================================
+# LVGL Source Files - PATCHED FOR PRAXIOMHEALTH
+# ==============================================================================
+# Collect all LVGL C source files (not just headers!)
+file(GLOB_RECURSE LVGL_CORE_SRC 
+    "libs/lvgl/src/core/*.c"
+)
+file(GLOB_RECURSE LVGL_DRAW_SRC 
+    "libs/lvgl/src/draw/*.c"
+    "libs/lvgl/src/draw/sw/*.c"
+)
+file(GLOB_RECURSE LVGL_FONT_SRC 
+    "libs/lvgl/src/font/*.c"
+)
+file(GLOB_RECURSE LVGL_HAL_SRC 
+    "libs/lvgl/src/hal/*.c"
+)
+file(GLOB_RECURSE LVGL_MISC_SRC 
+    "libs/lvgl/src/misc/*.c"
+)
+file(GLOB_RECURSE LVGL_WIDGETS_SRC 
+    "libs/lvgl/src/widgets/*.c"
+)
+file(GLOB_RECURSE LVGL_EXTRA_SRC 
+    "libs/lvgl/src/extra/*.c"
+)
+
+# Combine all LVGL source files
 set(LVGL_SRC
-        libs/lv_conf.h
-        libs/lvgl/lvgl.h
-        )
+    ${LVGL_CORE_SRC}
+    ${LVGL_DRAW_SRC}
+    ${LVGL_FONT_SRC}
+    ${LVGL_HAL_SRC}
+    ${LVGL_MISC_SRC}
+    ${LVGL_WIDGETS_SRC}
+    ${LVGL_EXTRA_SRC}
+)
+
+# Check if we found any source files
+list(LENGTH LVGL_SRC LVGL_SRC_COUNT)
+if(LVGL_SRC_COUNT EQUAL 0)
+    message(WARNING "No LVGL source files found. Using fallback method...")
+    file(GLOB_RECURSE LVGL_SRC "libs/lvgl/src/*.c")
+    list(LENGTH LVGL_SRC LVGL_SRC_COUNT)
+    if(LVGL_SRC_COUNT EQUAL 0)
+        message(FATAL_ERROR "Could not find any LVGL source files. Please check that libs/lvgl is properly initialized.")
+    endif()
+endif()
+
+message(STATUS "Found ${LVGL_SRC_COUNT} LVGL source files")
+# ==============================================================================
 
 list(APPEND IMAGEFILES displayapp/icons/battery/batteryicon.c)
 
@@ -829,17 +876,27 @@ set_target_properties(${EXECUTABLE_RECOVERY_MCUBOOT_NAME} PROPERTIES
 # InfiniTime recovery firmware (mcuboot)...
 
 add_library(lvgl STATIC ${LVGL_SRC})
+
+# Explicitly set linker language to C for LVGL
+set_target_properties(lvgl PROPERTIES 
+    LINKER_LANGUAGE C
+    C_STANDARD 99
+)
+
 target_include_directories(lvgl SYSTEM PUBLIC . ..)
 target_include_directories(lvgl SYSTEM PUBLIC ${INCLUDES_FROM_LIBS})
+target_include_directories(lvgl PUBLIC libs/lvgl libs/lvgl/src)
 target_compile_options(lvgl PRIVATE
         ${COMMON_FLAGS}
         $<$<CONFIG:Debug>:${DEBUG_FLAGS}>
         $<$<CONFIG:Release>:${RELEASE_FLAGS}>
-        $<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS}>
-        $<$<COMPILE_LANGUAGE:ASM>:${ASM_FLAGS}>
+        $<$<COMPILE_LANGUAGE:C>:-std=c99>
         )
 
-# lvgl...
+# Disable LVGL examples and demos for embedded builds
+target_compile_definitions(lvgl PUBLIC LV_CONF_INCLUDE_SIMPLE=1)
+
+# lvgl (PATCHED FOR PRAXIOMHEALTH)...
 
 set(EXECUTABLE_MCUBOOT_RECOVERY_LOADER_NAME pinetime-mcuboot-recovery-loader)
 set(EXECUTABLE_MCUBOOT_RECOVERY_LOADER_FILE_NAME ${EXECUTABLE_MCUBOOT_RECOVERY_LOADER_NAME}-${pinetime_VERSION_MAJOR}.${pinetime_VERSION_MINOR}.${pinetime_VERSION_PATCH})
