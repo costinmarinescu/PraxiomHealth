@@ -54,8 +54,8 @@ jobs:
           -DBUILD_DFU=0 \
           -DBUILD_RESOURCES=1
 
-    - name: Build firmware
-      run: cmake --build build --parallel $(nproc)
+    - name: Build firmware (Ninja)
+      run: ninja -C build -v
 
     - name: List build artifacts
       run: |
