@@ -42,19 +42,18 @@ jobs:
         /opt/gcc-arm-none-eabi-10.3-2021.10/bin/arm-none-eabi-gcc --version
         ls -la /opt/nRF5_SDK_15.3.0_59ac345
 
-    - name: Configure CMake
+    - name: Configure CMake (generate Ninja build files)
       run: |
-        cmake -G "Unix Makefiles" \
+        cmake -G Ninja \
           -S src \
           -B build \
           -DCMAKE_BUILD_TYPE=Release \
           -DARM_NONE_EABI_TOOLCHAIN_PATH=/opt/gcc-arm-none-eabi-10.3-2021.10 \
           -DNRF5_SDK_PATH=/opt/nRF5_SDK_15.3.0_59ac345 \
-          -DUSE_OPENOCD=1 \
           -DBUILD_DFU=0 \
           -DBUILD_RESOURCES=1
 
-    - name: Build firmware (Ninja)
+    - name: Build firmware with Ninja
       run: ninja -C build -v
 
     - name: List build artifacts
