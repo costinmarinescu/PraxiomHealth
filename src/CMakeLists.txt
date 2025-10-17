@@ -739,7 +739,9 @@ target_compile_options(${EXECUTABLE_RECOVERY_LOADER_NAME} PUBLIC
 
 target_include_directories(${EXECUTABLE_RECOVERY_LOADER_NAME} PUBLIC ${BUILD_INTERFACE}${CMAKE_BINARY_DIR}/src)
 
-add_dependencies(${EXECUTABLE_RECOVERY_LOADER_NAME} ${EXECUTABLE_RECOVERY_MCUBOOT_NAME})
+if(TARGET ${EXECUTABLE_RECOVERY_MCUBOOT_NAME})
+    add_dependencies(${EXECUTABLE_RECOVERY_LOADER_NAME} ${EXECUTABLE_RECOVERY_MCUBOOT_NAME})
+endif()
 
 set_target_properties(${EXECUTABLE_RECOVERY_LOADER_NAME} PROPERTIES
         SUFFIX ".out"
@@ -914,13 +916,6 @@ endif ()
 #Build binary intended to be used by bootloader...
 
 add_subdirectory(displayapp/fonts)
-target_compile_options(infinitetime_fonts PUBLIC
-        ${COMMON_FLAGS}
-        $<$<CONFIG:Debug>:${DEBUG_FLAGS}>
-        $<$<CONFIG:Release>:${RELEASE_FLAGS}>
-        $<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS}>
-        $<$<COMPILE_LANGUAGE:ASM>:${ASM_FLAGS}>
-        )
 
 add_subdirectory(displayapp/apps)
 
