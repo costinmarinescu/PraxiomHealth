@@ -9,13 +9,13 @@
 // Fixed: suppress unused-parameter warning
 void vTaskHRV(void *pvParameters) {
   (void)pvParameters;  // suppress unused-parameter warning
-  while (true) { … }
+  while (true)  // Fixed: proper ASCII character
   }
 }
 
 void vApplicationDaemonTaskStartupHook(void) {}
 void vApplicationIdleHook(void) {}
-void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
+void vApplicationStackOverflowHook(TaskHandle_t xTask __attribute__((unused)), char *pcTaskName __attribute__((unused))) {
   NRF_LOG_ERROR("Stack overflow in task %s", pcTaskName);
   APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
 }
