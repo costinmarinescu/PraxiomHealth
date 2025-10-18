@@ -1,11 +1,12 @@
-cmake_minimum_required(VERSION 3.22)
-project(PraxiomHealth LANGUAGES C CXX)
+# src/CMakeLists.txt
+# Build the firmware
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-# Add components, controllers, and displayapp
-add_subdirectory(components)
+# Add component directories only if they contain a CMakeLists.txt
+add_subdirectory(components/praxiom)
+add_subdirectory(components/settings)
 add_subdirectory(controllers)
 add_subdirectory(displayapp)
+
+# Link all targets together (example)
+# add_executable(praxiom src/main.cpp)
+# target_link_libraries(praxiom PRIVATE BioAgeController ...)
