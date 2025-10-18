@@ -4,8 +4,8 @@
 #include <task.h>
 #include <drivers/St7789.h>
 #include <drivers/SpiMaster.h>
-// REMOVED: #include <Components.h> - Does not exist in InfiniTime 1.13+
-// REMOVED: #include "components/gfx/Gfx.h" - No longer exists in InfiniTime 1.13+
+// REMOVED: #include <Components.h> - Does not exist
+// REMOVED: #include "components/gfx/Gfx.h" - Removed in InfiniTime 1.13+
 #include <lvgl/lvgl.h>
 #include "components/battery/BatteryController.h"
 #include "components/ble/BleController.h"
@@ -14,7 +14,7 @@
 #include "components/motor/MotorController.h"
 #include "components/motion/MotionController.h"
 #include "touchhandler/TouchHandler.h"
-#include "Messages.h"
+// REMOVED: #include "Messages.h" - Causes duplicate definition, define locally instead
 
 namespace Pinetime {
   namespace Drivers {
@@ -40,7 +40,8 @@ namespace Pinetime {
   }
 
   namespace Applications {
-    namespace Display {
+    // Define Messages enum locally to avoid conflicts
+    namespace DisplayRecovery {
       enum class Messages : uint8_t {
         GoToSleep,
         GoToRunning,
@@ -76,7 +77,7 @@ namespace Pinetime {
                  Pinetime::Controllers::TouchHandler& touchHandler);
       
       void Start(System::SystemTask* systemTask);
-      void PushMessage(Display::Messages msg);
+      void PushMessage(DisplayRecovery::Messages msg);
       void Register(Pinetime::System::SystemTask* systemTask);
       void Stop();
 
