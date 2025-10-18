@@ -1,29 +1,28 @@
-#include <cstdint>
+#include "Version.h"
+#include "components/settings/Settings.h"
+#include "controllers/BioAgeCalculator.h"
 #include <FreeRTOS.h>
 #include <task.h>
-#include <libraries/log/nrf_log.h>
-#include <nrf_drv_clock.h>
-#include <sys/time.h>
-#include "systemtask/SystemTask.h"
 
-// Fixed: suppress unused-parameter warning
-void vTaskHRV(void *pvParameters) {
-  (void)pvParameters;  // suppress unused-parameter warning
-  while (true)  // Fixed: proper ASCII character
+extern "C" void vApplicationStackOverflowHook(TaskHandle_t xTask __attribute__((unused)), char* pcTaskName __attribute__((unused))) {
+  // Handle stack overflow
+  while (true) {}
+}
+
+int main() {
+  // Initialize settings
+  Pinetime::Controllers::Settings settings;
+  settings.Init();
+
+  // Initialize BioAge engine
+  Pinetime::Controllers::BioAgeCalculator bioAgeCalc;
+
+  // Main loop
+  while (true) {
+    // Collect data & calculate bio-age
+    bioAgeCalc.UpdateMetrics(/* pass controllers here */);
+    auto data = bioAgeCalc.GetBioAgeData();
+    // Render on watchface...
+    vTaskDelay(pdMS_TO_TICKS(1000));
   }
-}
-
-void vApplicationDaemonTaskStartupHook(void) {}
-void vApplicationIdleHook(void) {}
-void vApplicationStackOverflowHook(TaskHandle_t xTask __attribute__((unused)), char *pcTaskName __attribute__((unused))) {
-  NRF_LOG_ERROR("Stack overflow in task %s", pcTaskName);
-  APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
-}
-
-int main(void) {
-  NRF_LOG_INFO("Starting InfiniTime!");
-  static Pinetime::System::SystemTask systemTask;
-  systemTask.Start();
-  vTaskStartScheduler();
-  for (;;) { APP_ERROR_HANDLER(NRF_ERROR_FORBIDDEN); }
 }
