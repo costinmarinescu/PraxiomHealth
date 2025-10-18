@@ -3,6 +3,7 @@
  */
 
 #include "DisplayAppRecovery.h"
+#include "displayapp/apps/Apps.h"
 #include <FreeRTOS.h>
 #include <task.h>
 #include <libraries/log/nrf_log.h>
