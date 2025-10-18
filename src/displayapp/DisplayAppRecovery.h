@@ -1,104 +1,89 @@
 #pragma once
+
 #include <FreeRTOS.h>
 #include <task.h>
 #include <drivers/St7789.h>
 #include <drivers/SpiMaster.h>
+#include <components/gfx/Gfx.h>
 #include <bits/unique_ptr.h>
 #include <queue.h>
-#include "drivers/Cst816s.h"
-#include <drivers/Watchdog.h>
-#include <components/motor/MotorController.h>
-#include "BootErrors.h"
+#include "components/brightness/BrightnessController.h"
+#include "components/motor/MotorController.h"
 #include "displayapp/TouchEvents.h"
-#include "displayapp/apps/Apps.h"
-#include "displayapp/Messages.h"
+// REMOVED: Apps.h is not available in recovery mode
+// #include "displayapp/apps/Apps.h"
 
 namespace Pinetime {
-  namespace Drivers {
-    class St7789;
-    class Cst816S;
-    class Watchdog;
-    class SpiNorFlash;
+  namespace System {
+    class SystemTask;
   }
-
   namespace Controllers {
-    class Settings;
-    class Battery;
     class Ble;
     class DateTime;
     class NotificationManager;
     class HeartRateController;
-    class MotionController;
-    class TouchHandler;
+    class Settings;
     class MotorController;
-    class AlarmController;
     class BrightnessController;
-    class FS;
-    class SimpleWeatherService;
-    class MusicService;
-    class NavigationService;
+    class TouchHandler;
+    class AlarmController;
+    class Ble;
   }
 
-  namespace System {
-    class SystemTask;
-  };
-
   namespace Applications {
-    class DisplayApp {
+    class DisplayAppRecovery {
     public:
-      DisplayApp(Drivers::St7789& lcd,
-                 const Drivers::Cst816S&,
-                 const Controllers::Battery& batteryController,
-                 const Controllers::Ble& bleController,
-                 Controllers::DateTime& dateTimeController,
-                 const Drivers::Watchdog& watchdog,
-                 Pinetime::Controllers::NotificationManager& notificationManager,
-                 Pinetime::Controllers::HeartRateController& heartRateController,
-                 Controllers::Settings& settingsController,
-                 Pinetime::Controllers::MotorController& motorController,
-                 Pinetime::Controllers::MotionController& motionController,
-                 Pinetime::Controllers::AlarmController& alarmController,
-                 Pinetime::Controllers::BrightnessController& brightnessController,
-                 Pinetime::Controllers::TouchHandler& touchHandler,
-                 Pinetime::Controllers::FS& filesystem,
-                 Pinetime::Drivers::SpiNorFlash& spiNorFlash);
+      DisplayAppRecovery(System::SystemTask* systemTask,
+                        Controllers::Ble& bleController,
+                        Controllers::DateTime& dateTimeController,
+                        Controllers::TimerController& timerController,
+                        Controllers::AlarmController& alarmController,
+                        Controllers::BrightnessController& brightnessController,
+                        Controllers::TouchHandler& touchHandler,
+                        Controllers::MotorController& motorController);
       void Start();
+      void PushMessage(Display::Messages msg);
 
-      void Start(Pinetime::System::BootErrors) {
-        Start();
-      };
-
-      void PushMessage(Pinetime::Applications::Display::Messages msg);
-      void Register(Pinetime::System::SystemTask* systemTask);
-      void Register(Pinetime::Controllers::SimpleWeatherService* weatherService);
-      void Register(Pinetime::Controllers::MusicService* musicService);
-      void Register(Pinetime::Controllers::NavigationService* NavigationService);
+      void Register(System::SystemTask* systemTask);
 
     private:
       TaskHandle_t taskHandle;
       static void Process(void* instance);
-      void DisplayLogo(uint16_t color);
-      void DisplayOtaProgress(uint8_t percent, uint16_t color);
       void InitHw();
       void Refresh();
-      Pinetime::Drivers::St7789& lcd;
-      const Controllers::Ble& bleController;
+      
+      System::SystemTask* systemTask = nullptr;
+      Controllers::Ble& bleController;
+      Controllers::DateTime& dateTimeController;
+      Controllers::TimerController& timerController;
+      Controllers::AlarmController& alarmController;
+      Controllers::BrightnessController& brightnessController;
+      Controllers::TouchHandler& touchHandler;
+      Controllers::MotorController& motorController;
+
+      Pinetime::Controllers::Lvgl lvgl;
+      QueueHandle_t msgQueue;
 
       static constexpr uint8_t queueSize = 10;
       static constexpr uint8_t itemSize = 1;
-      QueueHandle_t msgQueue;
-      static constexpr uint8_t displayWidth = 240;
-      static constexpr uint8_t displayHeight = 240;
-      static constexpr uint8_t bytesPerPixel = 2;
 
-      static constexpr uint16_t colorWhite = 0xFFFF;
-      static constexpr uint16_t colorGreen = 0x07E0;
-      static constexpr uint16_t colorGreenSwapped = 0xE007;
-      static constexpr uint16_t colorBlue = 0x0000ff;
-      static constexpr uint16_t colorRed = 0xff00;
-      static constexpr uint16_t colorRedSwapped = 0x00ff;
-      static constexpr uint16_t colorBlack = 0x0000;
-      uint8_t displayBuffer[displayWidth * bytesPerPixel];
+      enum class States { Idle, Running };
+      States state = States::Running;
+      TickType_t lastWakeTime;
+
+      enum class Notifications : uint8_t {
+        GoToSleep,
+        GoToRunning,
+        UpdateDateTime,
+        NewNotification,
+        TimerDone,
+        AlarmTriggered,
+        BleConnected,
+        BleDisconnected,
+        TouchEvent,
+        ButtonEvent
+      };
+      uint32_t notification = 0;
     };
   }
 }
