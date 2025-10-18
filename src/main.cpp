@@ -8,9 +8,8 @@
 
 // Fixed: suppress unused-parameter warning
 void vTaskHRV(void *pvParameters) {
-  (void)pvParameters;  // Mark parameter as intentionally unused
-  while (true) {
-    vTaskDelay(pdMS_TO_TICKS(1000));
+  (void)pvParameters;  // suppress unused-parameter warning
+  while (true) { … }
   }
 }
 
