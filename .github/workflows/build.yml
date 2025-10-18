@@ -1,9 +1,7 @@
 name: Build PraxiomHealth
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  push: { branches: [ main ] }
+  pull_request: { branches: [ main ] }
   workflow_dispatch:
 
 jobs:
@@ -11,25 +9,25 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build python3-pip
-          pip3 install Pillow cbor lz4
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build python3-pip
+        pip3 install Pillow cbor lz4
 
-      - name: Configure CMake
-        run: cmake -G Ninja -S src -B build -DCMAKE_BUILD_TYPE=Release
+    - name: Configure CMake (root)
+      run: cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build firmware
-        run: ninja -C build
+    - name: Build
+      run: ninja -C build
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        if: success()
-        with:
-          name: praxiomhealth-firmware
-          path: build/src/*.bin
+    - name: Upload firmware
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: praxiomhealth-firmware
+        path: build/src/*.bin
