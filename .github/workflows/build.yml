@@ -73,8 +73,10 @@ jobs:
           -DBUILD_DFU=0 \
           -DBUILD_RESOURCES=1
 
-    - name: Build firmware with Ninja
-      run: ninja -C build
+    - name: Build ONLY main firmware (skip recovery)
+      run: |
+        cd build
+        ninja pinetime-app pinetime-mcuboot-app pinetime-mcuboot-app-image
 
     - name: List generated firmware files
       if: always()
