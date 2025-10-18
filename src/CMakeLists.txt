@@ -1,20 +1,17 @@
-cmake_minimum_required(VERSION 3.22)
-project(PraxiomHealth LANGUAGES C CXX)
+# InfiniTime-based build script (PraxiomHealth custom)
 
-# Enable C++17
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+# Load toolchain
+set(CMAKE_TOOLCHAIN_FILE "${ARM_NONE_EABI_TOOLCHAIN_PATH}/arm-none-eabi-gcc.cmake" CACHE STRING "")
 
-# Path to nRF5 SDK (require environment or pipeline variable)
-if(NOT DEFINED NRF5_SDK_PATH)
-  message(FATAL_ERROR "The path to the nRF5 SDK (NRF5_SDK_PATH) must be set.")
-endif()
+# Project options
+option(BUILD_DFU "Build DFU package" ON)
+option(BUILD_RESOURCES "Generate LVGL resources" ON)
 
-# Path to ARM toolchain
-if(NOT DEFINED ARM_NONE_EABI_TOOLCHAIN_PATH)
-  message(FATAL_ERROR "ARM_NONE_EABI_TOOLCHAIN_PATH must be set.")
-endif()
+# nRF5 SDK
+set(NRF5_SDK_ROOT "${NRF5_SDK_PATH}" CACHE STRING "")
 
-# Add the source directory containing the main InfiniTime CMakeLists.txt
-add_subdirectory(src)
+# Include InfiniTime core
+add_subdirectory(InfiniTime)
+
+# Include custom Praxiom modules
+add_subdirectory(components/praxiom)
