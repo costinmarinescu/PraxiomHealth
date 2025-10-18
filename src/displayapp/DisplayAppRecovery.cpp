@@ -7,7 +7,6 @@
 #include <task.h>
 #include <libraries/log/nrf_log.h>
 #include <nrf_font.h>
-#include "displayapp/lv_pinetime_theme.h"
 // REMOVED: Apps.h is not available in recovery mode
 // #include "displayapp/apps/Apps.h"
 #include <cstring>
