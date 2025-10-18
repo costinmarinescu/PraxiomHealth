@@ -7,27 +7,46 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-
+    
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
 
-    - name: Install dependencies
+    - name: Install dependencies  
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake ninja-build python3-pip
+        sudo apt-get install -y cmake ninja-build python3-pip wget unzip nodejs npm
         pip3 install Pillow cbor lz4
-
-    - name: Configure CMake (root)
-      run: cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Release
-
+        sudo npm install -g lv_font_conv@1.5.2
+    
+    - name: Download ARM toolchain
+      run: |
+        wget -q https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
+        tar -xjf gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
+        sudo mv gcc-arm-none-eabi-10.3-2021.10 /opt/
+    
+    - name: Download nRF5 SDK
+      run: |
+        wget -q https://developer.nordicsemi.com/nRF5_SDK/nRF5_SDK_v15.x.x/nRF5_SDK_15.3.0_59ac345.zip
+        unzip -q nRF5_SDK_15.3.0_59ac345.zip
+        sudo mv nRF5_SDK_15.3.0_59ac345 /opt/
+    
+    - name: Configure
+      run: |
+        cmake -G Ninja -S src -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DARM_NONE_EABI_TOOLCHAIN_PATH=/opt/gcc-arm-none-eabi-10.3-2021.10 \
+          -DNRF5_SDK_PATH=/opt/nRF5_SDK_15.3.0_59ac345
+    
     - name: Build
       run: ninja -C build
-
-    - name: Upload firmware
+    
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       if: success()
       with:
-        name: praxiomhealth-firmware
-        path: build/src/*.bin
+        name: firmware
+        path: |
+          build/src/pinetime-app*.bin
+          build/src/pinetime-app*.hex
