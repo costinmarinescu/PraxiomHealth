@@ -2,11 +2,10 @@
 
 namespace Pinetime {
   class Version {
-    public:
-      static constexpr const char* version = "1.0.0";
-      static constexpr const char* gitCommitHash = "praxiomhealth";
-      static constexpr const int major = 1;
-      static constexpr const int minor = 0;
-      static constexpr const int patch = 0;
+  public:
+    static constexpr const char* VersionString = "1.13.0-praxiom";
+    static constexpr int Major = 1;
+    static constexpr int Minor = 13;
+    static constexpr int Patch = 0;
   };
 }
