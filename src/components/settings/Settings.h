@@ -1,386 +1,295 @@
 #pragma once
+
 #include <cstdint>
-#include <bitset>
+#include "components/datetime/DateTimeController.h"
 #include "components/brightness/BrightnessController.h"
-#include "components/fs/FS.h"
-#include "displayapp/apps/Apps.h"
-#include <nrf_log.h>
+// REMOVED for recovery mode: Apps.h is not available
+#ifndef PINETIME_IS_RECOVERY
+// #include "displayapp/apps/Apps.h"
+#endif
 
 namespace Pinetime {
   namespace Controllers {
     class Settings {
     public:
       enum class ClockType : uint8_t { H24, H12 };
-      enum class WeatherFormat : uint8_t { Metric, Imperial };
       enum class Notification : uint8_t { On, Off, Sleep };
       enum class ChimesOption : uint8_t { None, Hours, HalfHours };
-      enum class WakeUpMode : uint8_t { SingleTap = 0, DoubleTap = 1, RaiseWrist = 2, Shake = 3, LowerWrist = 4 };
-      enum class Colors : uint8_t {
-        White,
-        Silver,
-        Gray,
-        Black,
-        Red,
-        Maroon,
-        Yellow,
-        Olive,
-        Lime,
-        Green,
-        Cyan,
-        Teal,
-        Blue,
-        Navy,
-        Magenta,
-        Purple,
-        Orange,
-        Pink
-      };
-      enum class PTSGaugeStyle : uint8_t { Full, Half, Numeric };
-      enum class PTSWeather : uint8_t { On, Off };
-      enum class PrideFlag : uint8_t { Gay, Trans, Bi, Lesbian };
-      enum class DfuAndFsMode : uint8_t { Disabled, Enabled, EnabledTillReboot };
-
-      struct PineTimeStyle {
-        Colors ColorTime = Colors::Teal;
-        Colors ColorBar = Colors::Teal;
-        Colors ColorBG = Colors::Black;
-        PTSGaugeStyle gaugeStyle = PTSGaugeStyle::Full;
-        PTSWeather weatherEnable = PTSWeather::Off;
+      enum class WakeUpMode : uint8_t {
+        None,
+        SingleTap,
+        DoubleTap,
+        RaiseWrist,
+        Shake,
+        LowerWrist
       };
 
-      struct WatchFaceInfineat {
-        bool showSideCover = true;
-        int colorIndex = 0;
-      };
-
-      Settings(Pinetime::Controllers::FS& fs);
-
-      Settings(const Settings&) = delete;
-      Settings& operator=(const Settings&) = delete;
-      Settings(Settings&&) = delete;
-      Settings& operator=(Settings&&) = delete;
+      Settings() = default;
 
       void Init();
       void SaveSettings();
 
-      void SetWatchFace(Pinetime::Applications::WatchFace face) {
-        if (face != settings.watchFace) {
+      void SetClockFace(uint8_t face) {
+        if (face != settings.clockFace) {
+          settings.clockFace = face;
           settingsChanged = true;
         }
-        settings.watchFace = face;
-      };
+      }
 
-      Pinetime::Applications::WatchFace GetWatchFace() const {
-        return settings.watchFace;
-      };
-
-      void SetChimeOption(ChimesOption chimeOption) {
-        if (chimeOption != settings.chimesOption) {
-          settingsChanged = true;
-        }
-        settings.chimesOption = chimeOption;
-      };
-
-      ChimesOption GetChimeOption() const {
-        return settings.chimesOption;
-      };
-
-      void SetPTSColorTime(Colors colorTime) {
-        if (colorTime != settings.PTS.ColorTime)
-          settingsChanged = true;
-        settings.PTS.ColorTime = colorTime;
-      };
-
-      Colors GetPTSColorTime() const {
-        return settings.PTS.ColorTime;
-      };
-
-      void SetPTSColorBar(Colors colorBar) {
-        if (colorBar != settings.PTS.ColorBar)
-          settingsChanged = true;
-        settings.PTS.ColorBar = colorBar;
-      };
-
-      Colors GetPTSColorBar() const {
-        return settings.PTS.ColorBar;
-      };
-
-      void SetPTSColorBG(Colors colorBG) {
-        if (colorBG != settings.PTS.ColorBG)
-          settingsChanged = true;
-        settings.PTS.ColorBG = colorBG;
-      };
-
-      Colors GetPTSColorBG() const {
-        return settings.PTS.ColorBG;
-      };
-
-      void SetInfineatShowSideCover(bool show) {
-        if (show != settings.watchFaceInfineat.showSideCover) {
-          settings.watchFaceInfineat.showSideCover = show;
-          settingsChanged = true;
-        }
-      };
-
-      bool GetInfineatShowSideCover() const {
-        return settings.watchFaceInfineat.showSideCover;
-      };
-
-      void SetInfineatColorIndex(int index) {
-        if (index != settings.watchFaceInfineat.colorIndex) {
-          settings.watchFaceInfineat.colorIndex = index;
-          settingsChanged = true;
-        }
-      };
-
-      int GetInfineatColorIndex() const {
-        return settings.watchFaceInfineat.colorIndex;
-      };
-
-      void SetPTSGaugeStyle(PTSGaugeStyle gaugeStyle) {
-        if (gaugeStyle != settings.PTS.gaugeStyle)
-          settingsChanged = true;
-        settings.PTS.gaugeStyle = gaugeStyle;
-      };
-
-      PTSGaugeStyle GetPTSGaugeStyle() const {
-        return settings.PTS.gaugeStyle;
-      };
-
-      void SetPTSWeather(PTSWeather weatherEnable) {
-        if (weatherEnable != settings.PTS.weatherEnable)
-          settingsChanged = true;
-        settings.PTS.weatherEnable = weatherEnable;
-      };
-
-      PTSWeather GetPTSWeather() const {
-        return settings.PTS.weatherEnable;
-      };
-
-      void SetPrideFlag(PrideFlag prideFlag) {
-        if (prideFlag != settings.prideFlag)
-          settingsChanged = true;
-        settings.prideFlag = prideFlag;
-      };
-
-      PrideFlag GetPrideFlag() const {
-        return settings.prideFlag;
-      };
+      uint8_t GetClockFace() const {
+        return settings.clockFace;
+      }
 
       void SetAppMenu(uint8_t menu) {
-        appMenu = menu;
-      };
+        if (menu != settings.appMenu) {
+          settings.appMenu = menu;
+          settingsChanged = true;
+        }
+      }
 
       uint8_t GetAppMenu() const {
-        return appMenu;
-      };
+        return settings.appMenu;
+      }
 
       void SetSettingsMenu(uint8_t menu) {
-        settingsMenu = menu;
-      };
+        if (menu != settings.settingsMenu) {
+          settings.settingsMenu = menu;
+          settingsChanged = true;
+        }
+      }
 
       uint8_t GetSettingsMenu() const {
-        return settingsMenu;
-      };
+        return settings.settingsMenu;
+      }
 
       void SetClockType(ClockType clocktype) {
         if (clocktype != settings.clockType) {
+          settings.clockType = clocktype;
           settingsChanged = true;
         }
-        settings.clockType = clocktype;
-      };
+      }
 
       ClockType GetClockType() const {
         return settings.clockType;
-      };
-
-      void SetWeatherFormat(WeatherFormat weatherFormat) {
-        if (weatherFormat != settings.weatherFormat) {
-          settingsChanged = true;
-        }
-        settings.weatherFormat = weatherFormat;
-      };
-
-      WeatherFormat GetWeatherFormat() const {
-        return settings.weatherFormat;
-      };
+      }
 
       void SetNotificationStatus(Notification status) {
         if (status != settings.notificationStatus) {
+          settings.notificationStatus = status;
           settingsChanged = true;
         }
-        settings.notificationStatus = status;
-      };
+      }
 
       Notification GetNotificationStatus() const {
         return settings.notificationStatus;
-      };
+      }
+
+      void SetChimeOption(ChimesOption chimeOption) {
+        if (chimeOption != settings.chimesOption) {
+          settings.chimesOption = chimeOption;
+          settingsChanged = true;
+        }
+      }
+
+      ChimesOption GetChimeOption() const {
+        return settings.chimesOption;
+      }
+
+      void SetPTSColorTime(uint32_t colorTime) {
+        if (colorTime != settings.PTS.ColorTime) {
+          settings.PTS.ColorTime = colorTime;
+          settingsChanged = true;
+        }
+      }
+
+      uint32_t GetPTSColorTime() const {
+        return settings.PTS.ColorTime;
+      }
+
+      void SetPTSColorBar(uint32_t colorBar) {
+        if (colorBar != settings.PTS.ColorBar) {
+          settings.PTS.ColorBar = colorBar;
+          settingsChanged = true;
+        }
+      }
+
+      uint32_t GetPTSColorBar() const {
+        return settings.PTS.ColorBar;
+      }
+
+      void SetPTSColorBG(uint32_t colorBG) {
+        if (colorBG != settings.PTS.ColorBG) {
+          settings.PTS.ColorBG = colorBG;
+          settingsChanged = true;
+        }
+      }
+
+      uint32_t GetPTSColorBG() const {
+        return settings.PTS.ColorBG;
+      }
+
+      void SetPTSGaugeStyle(uint8_t gaugeStyle) {
+        if (gaugeStyle != settings.PTS.gaugeStyle) {
+          settings.PTS.gaugeStyle = static_cast<GaugeStyle>(gaugeStyle);
+          settingsChanged = true;
+        }
+      }
+
+      uint8_t GetPTSGaugeStyle() const {
+        return static_cast<uint8_t>(settings.PTS.gaugeStyle);
+      }
+
+      void SetPTSWeather(uint8_t weatherFormat) {
+        if (weatherFormat != settings.PTS.weatherFormat) {
+          settings.PTS.weatherFormat = static_cast<WeatherFormat>(weatherFormat);
+          settingsChanged = true;
+        }
+      }
+
+      uint8_t GetPTSWeather() const {
+        return static_cast<uint8_t>(settings.PTS.weatherFormat);
+      }
+
+      void SetWatchfaceInfineat(uint8_t face, uint8_t colorIndex) {
+        if (face < 4) {
+          settings.watchFaceInfineat[face] = colorIndex;
+          settingsChanged = true;
+        }
+      }
+
+      uint8_t GetWatchfaceInfineat(uint8_t face) const {
+        return face < 4 ? settings.watchFaceInfineat[face] : 0;
+      }
+
+      void SetStepsGoal(uint32_t goal) {
+        if (goal != settings.stepsGoal) {
+          settings.stepsGoal = goal;
+          settingsChanged = true;
+        }
+      }
+
+      uint32_t GetStepsGoal() const {
+        return settings.stepsGoal;
+      }
 
       void SetScreenTimeOut(uint32_t timeout) {
         if (timeout != settings.screenTimeOut) {
+          settings.screenTimeOut = timeout;
           settingsChanged = true;
         }
-        settings.screenTimeOut = timeout;
-      };
+      }
 
       uint32_t GetScreenTimeOut() const {
         return settings.screenTimeOut;
-      };
-
-      bool GetAlwaysOnDisplay() const {
-        return settings.alwaysOnDisplay && GetNotificationStatus() != Notification::Sleep;
-      };
-
-      void SetAlwaysOnDisplaySetting(bool state) {
-        if (state != settings.alwaysOnDisplay) {
-          settingsChanged = true;
-        }
-        settings.alwaysOnDisplay = state;
       }
 
-      bool GetAlwaysOnDisplaySetting() const {
-        return settings.alwaysOnDisplay;
-      }
-
-      void SetShakeThreshold(uint16_t thresh) {
-        if (settings.shakeWakeThreshold != thresh) {
-          settings.shakeWakeThreshold = thresh;
-          settingsChanged = true;
-        }
-      }
-
-      int16_t GetShakeThreshold() const {
-        return settings.shakeWakeThreshold;
-      }
-
-      void setWakeUpMode(WakeUpMode wakeUp, bool enabled) {
+      void SetWakeUpMode(WakeUpMode wakeUp, bool enabled) {
         if (enabled != isWakeUpModeOn(wakeUp)) {
+          uint8_t bit = static_cast<uint8_t>(wakeUp);
+          if (enabled) {
+            settings.wakeUpMode |= (1 << bit);
+          } else {
+            settings.wakeUpMode &= ~(1 << bit);
+          }
           settingsChanged = true;
         }
-        settings.wakeUpMode.set(static_cast<size_t>(wakeUp), enabled);
-        // Handle special behavior
-        if (enabled) {
-          switch (wakeUp) {
-            case WakeUpMode::SingleTap:
-              settings.wakeUpMode.set(static_cast<size_t>(WakeUpMode::DoubleTap), false);
-              break;
-            case WakeUpMode::DoubleTap:
-              settings.wakeUpMode.set(static_cast<size_t>(WakeUpMode::SingleTap), false);
-              break;
-            default:
-              break;
+      }
+
+      WakeUpMode GetWakeUpMode() const {
+        for (uint8_t i = 0; i < 6; i++) {
+          if ((settings.wakeUpMode & (1 << i)) != 0) {
+            return static_cast<WakeUpMode>(i);
           }
         }
-      };
-
-      std::bitset<5> getWakeUpModes() const {
-        return settings.wakeUpMode;
+        return WakeUpMode::None;
       }
 
-      bool isWakeUpModeOn(const WakeUpMode mode) const {
-        return getWakeUpModes()[static_cast<size_t>(mode)];
+      bool isWakeUpModeOn(WakeUpMode mode) const {
+        uint8_t bit = static_cast<uint8_t>(mode);
+        return (settings.wakeUpMode & (1 << bit)) != 0;
       }
 
       void SetBrightness(Controllers::BrightnessController::Levels level) {
         if (level != settings.brightLevel) {
+          settings.brightLevel = level;
           settingsChanged = true;
         }
-        settings.brightLevel = level;
-      };
+      }
 
       Controllers::BrightnessController::Levels GetBrightness() const {
         return settings.brightLevel;
-      };
+      }
 
-      void SetStepsGoal(uint32_t goal) {
-        if (goal != settings.stepsGoal) {
+      void SetStepsPerMM(uint16_t stepsPerMM) {
+        if (stepsPerMM != settings.stepsPerMM) {
+          settings.stepsPerMM = stepsPerMM;
           settingsChanged = true;
         }
-        settings.stepsGoal = goal;
-      };
+      }
 
-      uint32_t GetStepsGoal() const {
-        return settings.stepsGoal;
-      };
+      uint16_t GetStepsPerMM() const {
+        return settings.stepsPerMM;
+      }
 
-      void SetBleRadioEnabled(bool enabled) {
-        bleRadioEnabled = enabled;
-      };
-
-      bool GetBleRadioEnabled() const {
-        return bleRadioEnabled;
-      };
-
-      void SetDfuAndFsMode(DfuAndFsMode mode) {
-        if (mode == GetDfuAndFsMode()) {
-          return;
-        }
-        if (mode == DfuAndFsMode::Enabled || GetDfuAndFsMode() == DfuAndFsMode::Enabled) {
+      void SetAlwaysOnDisplay(bool state) {
+        if (state != settings.alwaysOnDisplay) {
+          settings.alwaysOnDisplay = state;
           settingsChanged = true;
         }
-        settings.dfuAndFsEnabledOnBoot = (mode == DfuAndFsMode::Enabled);
-        dfuAndFsEnabledTillReboot = (mode == DfuAndFsMode::EnabledTillReboot);
-      };
+      }
 
-      DfuAndFsMode GetDfuAndFsMode() {
-        if (dfuAndFsEnabledTillReboot) {
-          if (settings.dfuAndFsEnabledOnBoot) { // ensure both variables are in consistent state
-            settingsChanged = true;
-            settings.dfuAndFsEnabledOnBoot = false;
-            NRF_LOG_ERROR("Settings: DfuAndFsMode data corrupted");
-          }
-          return DfuAndFsMode::EnabledTillReboot;
+      bool GetAlwaysOnDisplay() const {
+        return settings.alwaysOnDisplay;
+      }
+
+      void SetWeatherFormat(uint8_t format) {
+        if (format != settings.PTS.weatherFormat) {
+          settings.PTS.weatherFormat = static_cast<WeatherFormat>(format);
+          settingsChanged = true;
         }
-        return (settings.dfuAndFsEnabledOnBoot ? DfuAndFsMode::Enabled : DfuAndFsMode::Disabled);
-      };
+      }
+
+      uint8_t GetWeatherFormat() const {
+        return static_cast<uint8_t>(settings.PTS.weatherFormat);
+      }
 
     private:
-      Pinetime::Controllers::FS& fs;
+      enum class GaugeStyle : uint8_t { Full, Half, Numeric };
+      enum class WeatherFormat : uint8_t { Celsius, Fahrenheit };
 
-      static constexpr uint32_t settingsVersion = 0x0009;
-
-      struct SettingsData {
-        uint32_t version = settingsVersion;
+      struct {
+        uint32_t version = 4;
         uint32_t stepsGoal = 10000;
         uint32_t screenTimeOut = 15000;
 
-        bool alwaysOnDisplay = false;
-
         ClockType clockType = ClockType::H24;
-        WeatherFormat weatherFormat = WeatherFormat::Metric;
         Notification notificationStatus = Notification::On;
-
-        Pinetime::Applications::WatchFace watchFace = Pinetime::Applications::WatchFace::Digital;
         ChimesOption chimesOption = ChimesOption::None;
 
-        PineTimeStyle PTS;
+        uint8_t clockFace = 0;
+        uint8_t appMenu = 0;
+        uint8_t settingsMenu = 0;
 
-        PrideFlag prideFlag = PrideFlag::Gay;
+        uint8_t watchFaceInfineat[4] = {0, 0, 0, 0};
 
-        WatchFaceInfineat watchFaceInfineat;
+        struct {
+          uint32_t ColorTime = 0xFFFFFF;
+          uint32_t ColorBar = 0x0000FF;
+          uint32_t ColorBG = 0x000000;
+          GaugeStyle gaugeStyle = GaugeStyle::Full;
+          WeatherFormat weatherFormat = WeatherFormat::Celsius;
+        } PTS;
 
-        std::bitset<5> wakeUpMode {0};
-        uint16_t shakeWakeThreshold = 150;
-
+        uint8_t wakeUpMode = 0;
+        uint16_t stepsPerMM = 110;
         Controllers::BrightnessController::Levels brightLevel = Controllers::BrightnessController::Levels::Medium;
+        bool alwaysOnDisplay = false;
+      } settings;
 
-        bool dfuAndFsEnabledOnBoot = false;
-      };
-
-      SettingsData settings;
       bool settingsChanged = false;
 
-      uint8_t appMenu = 0;
-      uint8_t settingsMenu = 0;
-      uint8_t watchFacesMenu = 0;
-      /* ble state is intentionally not saved with the other watch settings and initialized
-       * to off (false) on every boot because we always want ble to be enabled on startup
-       */
-      bool bleRadioEnabled = true;
-      bool dfuAndFsEnabledTillReboot = false;
-
-      void LoadSettingsFromFile();
-      void SaveSettingsToFile();
+      void LoadSettingsFromFlash();
+      void SaveSettingsToFlash();
     };
   }
 }
