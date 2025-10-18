@@ -21,17 +21,8 @@ jobs:
     - name: Install build dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y \
-          cmake \
-          ninja-build \
-          python3 \
-          python3-pip \
-          wget \
-          unzip \
-          nodejs \
-          npm
-        # CRITICAL FIX: Install Pillow for image processing
-        pip3 install Pillow
+        sudo apt-get install -y cmake ninja-build python3 python3-pip wget unzip nodejs npm
+        pip3 install Pillow cbor lz4
         sudo npm install -g lv_font_conv@1.5.2
 
     - name: Download ARM GCC toolchain
@@ -48,21 +39,10 @@ jobs:
         sudo mv nRF5_SDK_15.3.0_59ac345 /opt/
         rm nRF5_SDK_15.3.0_59ac345.zip
 
-    - name: Verify toolchain and SDK installation
-      run: |
-        echo "=== ARM GCC Toolchain ==="
-        /opt/gcc-arm-none-eabi-10.3-2021.10/bin/arm-none-eabi-gcc --version
-        echo ""
-        echo "=== nRF5 SDK ==="
-        ls -la /opt/nRF5_SDK_15.3.0_59ac345/components/softdevice/
-        echo ""
-        echo "=== Build Tools ==="
-        cmake --version
-        ninja --version
-        lv_font_conv --version
-        python3 -m pip show Pillow
+    - name: Install adafruit-nrfutil
+      run: pip3 install --user adafruit-nrfutil
 
-    - name: Configure CMake with Ninja generator
+    - name: Configure CMake
       run: |
         cmake -G Ninja \
           -S src \
@@ -70,41 +50,29 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release \
           -DARM_NONE_EABI_TOOLCHAIN_PATH=/opt/gcc-arm-none-eabi-10.3-2021.10 \
           -DNRF5_SDK_PATH=/opt/nRF5_SDK_15.3.0_59ac345 \
-          -DBUILD_DFU=0 \
+          -DBUILD_DFU=1 \
           -DBUILD_RESOURCES=1
 
-    - name: Build ONLY main firmware (skip recovery)
+    - name: Build main firmware ONLY
       run: |
         cd build
-        ninja pinetime-app pinetime-mcuboot-app pinetime-mcuboot-app-image
+        ninja pinetime-app pinetime-mcuboot-app
 
-    - name: List generated firmware files
+    - name: List build artifacts
       if: always()
       run: |
-        echo "=== Build Artifacts ==="
-        find build -type f \( -name "*.bin" -o -name "*.hex" -o -name "*.out" \) -ls
+        echo "=== Firmware Files ==="
+        find build -name "*.bin" -o -name "*.hex" -o -name "*.zip" | sort
 
-    - name: Upload firmware artifacts
+    - name: Upload firmware
       uses: actions/upload-artifact@v4
       if: success()
       with:
-        name: praxiomhealth-firmware-${{ github.sha }}
+        name: praxiomhealth-firmware
         path: |
           build/src/pinetime-app*.bin
           build/src/pinetime-app*.hex
-          build/src/pinetime-app*.out
           build/src/pinetime-mcuboot-app*.bin
           build/src/pinetime-mcuboot-app*.hex
+          build/src/*.zip
         retention-days: 90
-        if-no-files-found: warn
-
-    - name: Upload build logs (on failure)
-      uses: actions/upload-artifact@v4
-      if: failure()
-      with:
-        name: build-logs-${{ github.sha }}
-        path: |
-          build/CMakeFiles/CMakeOutput.log
-          build/CMakeFiles/CMakeError.log
-        retention-days: 30
-        if-no-files-found: ignore
