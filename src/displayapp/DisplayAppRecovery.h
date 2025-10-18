@@ -4,86 +4,84 @@
 #include <task.h>
 #include <drivers/St7789.h>
 #include <drivers/SpiMaster.h>
-#include <components/gfx/Gfx.h>
-#include <bits/unique_ptr.h>
-#include <queue.h>
-#include "components/brightness/BrightnessController.h"
-#include "components/motor/MotorController.h"
-#include "displayapp/TouchEvents.h"
-// REMOVED: Apps.h is not available in recovery mode
-// #include "displayapp/apps/Apps.h"
+#include <Components.h>
+// REMOVED: #include "components/gfx/Gfx.h" - No longer exists in InfiniTime 1.13+
+#include <lvgl/lvgl.h>
 
 namespace Pinetime {
-  namespace System {
-    class SystemTask;
+  namespace Drivers {
+    class Cst816S;
+    class WatchdogView;
   }
   namespace Controllers {
+    class Battery;
     class Ble;
     class DateTime;
     class NotificationManager;
     class HeartRateController;
     class Settings;
-    class MotorController;
-    class BrightnessController;
+    class MotionController;
     class TouchHandler;
-    class AlarmController;
-    class Ble;
   }
 
+  namespace System {
+    class SystemTask;
+  };
   namespace Applications {
-    class DisplayAppRecovery {
+    class DisplayApp {
     public:
-      DisplayAppRecovery(System::SystemTask* systemTask,
-                        Controllers::Ble& bleController,
-                        Controllers::DateTime& dateTimeController,
-                        Controllers::TimerController& timerController,
-                        Controllers::AlarmController& alarmController,
-                        Controllers::BrightnessController& brightnessController,
-                        Controllers::TouchHandler& touchHandler,
-                        Controllers::MotorController& motorController);
-      void Start();
+      DisplayApp(Drivers::St7789& lcd,
+                 Components::LittleVgl& lvgl,
+                 Drivers::Cst816S& touchPanel,
+                 Controllers::Battery& batteryController,
+                 Controllers::Ble& bleController,
+                 Controllers::DateTime& dateTimeController,
+                 Drivers::WatchdogView& watchdog,
+                 Pinetime::Controllers::NotificationManager& notificationManager,
+                 Pinetime::Controllers::HeartRateController& heartRateController,
+                 Controllers::Settings& settingsController,
+                 Pinetime::Controllers::MotionController& motionController,
+                 Pinetime::Controllers::TouchHandler& touchHandler);
+      void Start(System::SystemTask* systemTask);
       void PushMessage(Display::Messages msg);
 
-      void Register(System::SystemTask* systemTask);
+      void Register(Pinetime::System::SystemTask* systemTask);
+      void Stop();
 
     private:
+      Pinetime::Drivers::St7789& lcd;
+      Components::LittleVgl& lvgl;
+      Pinetime::Drivers::Cst816S& touchPanel;
+      Pinetime::Controllers::Battery& batteryController;
+      Pinetime::Controllers::Ble& bleController;
+      Pinetime::Controllers::DateTime& dateTimeController;
+      Pinetime::Drivers::WatchdogView& watchdog;
+      Pinetime::Controllers::NotificationManager& notificationManager;
+      Pinetime::Controllers::HeartRateController& heartRateController;
+      Pinetime::Controllers::Settings& settingsController;
+      Pinetime::Controllers::MotionController& motionController;
+      Pinetime::Controllers::TouchHandler& touchHandler;
+      Pinetime::System::SystemTask* systemTask = nullptr;
       TaskHandle_t taskHandle;
+
       static void Process(void* instance);
+      void DisplayLogo(uint16_t color);
+      void DisplayOtaProgress(uint8_t percent, uint16_t color);
       void InitHw();
       void Refresh();
-      
-      System::SystemTask* systemTask = nullptr;
-      Controllers::Ble& bleController;
-      Controllers::DateTime& dateTimeController;
-      Controllers::TimerController& timerController;
-      Controllers::AlarmController& alarmController;
-      Controllers::BrightnessController& brightnessController;
-      Controllers::TouchHandler& touchHandler;
-      Controllers::MotorController& motorController;
+      void ReturnApp(Apps app, DisplayApp::FullRefreshDirections direction, TouchEvents touchEvent);
+      void LoadApp(Apps app, DisplayApp::FullRefreshDirections direction);
 
-      Pinetime::Controllers::Lvgl lvgl;
-      QueueHandle_t msgQueue;
+      Controllers::TouchHandler::Gestures OnTouchEvent();
+      void RunningState();
+      void IdleState();
+      void PushMessageToSystemTask(Pinetime::System::Messages message);
 
       static constexpr uint8_t queueSize = 10;
       static constexpr uint8_t itemSize = 1;
+      QueueHandle_t msgQueue;
 
-      enum class States { Idle, Running };
-      States state = States::Running;
-      TickType_t lastWakeTime;
-
-      enum class Notifications : uint8_t {
-        GoToSleep,
-        GoToRunning,
-        UpdateDateTime,
-        NewNotification,
-        TimerDone,
-        AlarmTriggered,
-        BleConnected,
-        BleDisconnected,
-        TouchEvent,
-        ButtonEvent
-      };
-      uint32_t notification = 0;
+      lv_point_t touchPoint;
     };
   }
 }
