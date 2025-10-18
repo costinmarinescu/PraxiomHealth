@@ -30,6 +30,8 @@ jobs:
           unzip \
           nodejs \
           npm
+        # CRITICAL FIX: Install Pillow for image processing
+        pip3 install Pillow
         sudo npm install -g lv_font_conv@1.5.2
 
     - name: Download ARM GCC toolchain
@@ -58,6 +60,7 @@ jobs:
         cmake --version
         ninja --version
         lv_font_conv --version
+        python3 -m pip show Pillow
 
     - name: Configure CMake with Ninja generator
       run: |
@@ -70,14 +73,14 @@ jobs:
           -DBUILD_DFU=0 \
           -DBUILD_RESOURCES=1
 
-    - name: Build main firmware only (skip recovery)
-      run: ninja -C build pinetime-app
+    - name: Build firmware with Ninja
+      run: ninja -C build
 
     - name: List generated firmware files
       if: always()
       run: |
         echo "=== Build Artifacts ==="
-        find build -type f \( -name "*.bin" -o -name "*.hex" -o -name "*.out" -o -name "*.zip" \) -ls
+        find build -type f \( -name "*.bin" -o -name "*.hex" -o -name "*.out" \) -ls
 
     - name: Upload firmware artifacts
       uses: actions/upload-artifact@v4
@@ -90,7 +93,6 @@ jobs:
           build/src/pinetime-app*.out
           build/src/pinetime-mcuboot-app*.bin
           build/src/pinetime-mcuboot-app*.hex
-          build/src/*.zip
         retention-days: 90
         if-no-files-found: warn
 
@@ -104,14 +106,3 @@ jobs:
           build/CMakeFiles/CMakeError.log
         retention-days: 30
         if-no-files-found: ignore
-
-    - name: Create release on tag push
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: actions/upload-artifact@v4
-      with:
-        name: praxiomhealth-release-${{ github.ref_name }}
-        path: |
-          build/src/pinetime-app*.bin
-          build/src/pinetime-app*.hex
-          build/src/*.zip
-        retention-days: 365
