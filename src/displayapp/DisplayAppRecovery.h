@@ -4,9 +4,17 @@
 #include <task.h>
 #include <drivers/St7789.h>
 #include <drivers/SpiMaster.h>
-#include <Components.h>
+// REMOVED: #include <Components.h> - Does not exist in InfiniTime 1.13+
 // REMOVED: #include "components/gfx/Gfx.h" - No longer exists in InfiniTime 1.13+
 #include <lvgl/lvgl.h>
+#include "components/battery/BatteryController.h"
+#include "components/ble/BleController.h"
+#include "components/datetime/DateTimeController.h"
+#include "components/settings/Settings.h"
+#include "components/motor/MotorController.h"
+#include "components/motion/MotionController.h"
+#include "touchhandler/TouchHandler.h"
+#include "Messages.h"
 
 namespace Pinetime {
   namespace Drivers {
@@ -22,12 +30,35 @@ namespace Pinetime {
     class Settings;
     class MotionController;
     class TouchHandler;
+    class MotorController;
   }
-
+  namespace Components {
+    class LittleVgl;
+  }
   namespace System {
     class SystemTask;
-  };
+  }
+
   namespace Applications {
+    namespace Display {
+      enum class Messages : uint8_t {
+        GoToSleep,
+        GoToRunning,
+        UpdateBleConnection,
+        TouchEvent,
+        ButtonPushed,
+        NewNotification,
+        TimerDone,
+        BleFirmwareUpdateStarted,
+        UpdateTimeOut,
+        DimScreen,
+        RestoreBrightness,
+        ShowPairingKey,
+        AlarmTriggered,
+        Chime
+      };
+    }
+
     class DisplayApp {
     public:
       DisplayApp(Drivers::St7789& lcd,
@@ -41,10 +72,11 @@ namespace Pinetime {
                  Pinetime::Controllers::HeartRateController& heartRateController,
                  Controllers::Settings& settingsController,
                  Pinetime::Controllers::MotionController& motionController,
+                 Pinetime::Controllers::MotorController& motorController,
                  Pinetime::Controllers::TouchHandler& touchHandler);
+      
       void Start(System::SystemTask* systemTask);
       void PushMessage(Display::Messages msg);
-
       void Register(Pinetime::System::SystemTask* systemTask);
       void Stop();
 
@@ -60,6 +92,7 @@ namespace Pinetime {
       Pinetime::Controllers::HeartRateController& heartRateController;
       Pinetime::Controllers::Settings& settingsController;
       Pinetime::Controllers::MotionController& motionController;
+      Pinetime::Controllers::MotorController& motorController;
       Pinetime::Controllers::TouchHandler& touchHandler;
       Pinetime::System::SystemTask* systemTask = nullptr;
       TaskHandle_t taskHandle;
@@ -69,13 +102,6 @@ namespace Pinetime {
       void DisplayOtaProgress(uint8_t percent, uint16_t color);
       void InitHw();
       void Refresh();
-      void ReturnApp(Apps app, DisplayApp::FullRefreshDirections direction, TouchEvents touchEvent);
-      void LoadApp(Apps app, DisplayApp::FullRefreshDirections direction);
-
-      Controllers::TouchHandler::Gestures OnTouchEvent();
-      void RunningState();
-      void IdleState();
-      void PushMessageToSystemTask(Pinetime::System::Messages message);
 
       static constexpr uint8_t queueSize = 10;
       static constexpr uint8_t itemSize = 1;
