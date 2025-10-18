@@ -3,7 +3,6 @@ project(pinetime-app C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
 # define some variables just for this example to determine file locations
 set(NRF_PROJECT_NAME pinetime-app)
