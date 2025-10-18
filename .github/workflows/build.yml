@@ -1,18 +1,60 @@
 name: Build PraxiomHealth
-on: [push, pull_request]
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-22.04
+    
     steps:
       - uses: actions/checkout@v4
-      - name: Setup dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build python3-pip
-      - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-      - name: Build
-        run: cmake --build build
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
         with:
-          name: firmware
-          path: build/*.bin
+          submodules: recursive
+      
+      - name: Setup dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build python3-pip wget unzip nodejs npm
+          pip3 install Pillow cbor lz4
+          sudo npm install -g lv_font_conv@1.5.2
+      
+      - name: Download ARM GCC toolchain
+        run: |
+          wget -q https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
+          tar -xjf gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
+          sudo mv gcc-arm-none-eabi-10.3-2021.10 /opt/
+          rm gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
+      
+      - name: Download nRF5 SDK
+        run: |
+          wget -q https://developer.nordicsemi.com/nRF5_SDK/nRF5_SDK_v15.x.x/nRF5_SDK_15.3.0_59ac345.zip
+          unzip -q nRF5_SDK_15.3.0_59ac345.zip
+          sudo mv nRF5_SDK_15.3.0_59ac345 /opt/
+          rm nRF5_SDK_15.3.0_59ac345.zip
+      
+      - name: Configure CMake
+        run: |
+          cmake -G Ninja \
+            -S src \
+            -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DARM_NONE_EABI_TOOLCHAIN_PATH=/opt/gcc-arm-none-eabi-10.3-2021.10 \
+            -DNRF5_SDK_PATH=/opt/nRF5_SDK_15.3.0_59ac345 \
+            -DBUILD_DFU=1 \
+            -DBUILD_RESOURCES=1
+      
+      - name: Build firmware
+        run: ninja -C build
+      
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: praxiomhealth-firmware
+          path: |
+            build/src/pinetime-app*.bin
+            build/src/pinetime-app*.hex
