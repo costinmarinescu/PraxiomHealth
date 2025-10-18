@@ -4,7 +4,8 @@
 #include <lvgl/lvgl.h>
 #include "components/settings/Settings.h"
 
-// Empty recovery implementation
-void StartRecoveryTask() {
+// Minimal recovery task stub
+extern "C" void StartRecoveryTask(void* pvParameters) {
+  // Immediately exit recovery
   vTaskDelete(nullptr);
 }
