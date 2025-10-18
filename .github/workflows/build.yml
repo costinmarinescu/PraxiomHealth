@@ -53,10 +53,8 @@ jobs:
           -DBUILD_DFU=1 \
           -DBUILD_RESOURCES=1
 
-    - name: Build main firmware ONLY
-      run: |
-        cd build
-        ninja pinetime-app pinetime-mcuboot-app
+    - name: Build firmware
+      run: ninja -C build
 
     - name: List build artifacts
       if: always()
@@ -64,11 +62,11 @@ jobs:
         echo "=== Firmware Files ==="
         find build -name "*.bin" -o -name "*.hex" -o -name "*.zip" | sort
 
-    - name: Upload firmware
+    - name: Upload firmware artifacts
       uses: actions/upload-artifact@v4
       if: success()
       with:
-        name: praxiomhealth-firmware
+        name: praxiomhealth-firmware-${{ github.sha }}
         path: |
           build/src/pinetime-app*.bin
           build/src/pinetime-app*.hex
