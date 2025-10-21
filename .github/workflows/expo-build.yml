@@ -28,14 +28,5 @@ jobs:
       - name: Install dependencies
         run: npm install
         
-      - name: Initialize EAS project
-        run: eas init --id $(uuidgen) --non-interactive || echo "Project already initialized"
-        
-      - name: Configure EAS build
-        run: eas build:configure --platform android --non-interactive || echo "Build already configured"
-        
       - name: Build Android APK
-        run: eas build --platform android --profile preview --non-interactive --no-wait
-        
-      - name: Build submitted
-        run: echo "Build submitted to EAS! Check https://expo.dev for progress"
+        run: eas build --platform android --profile preview --non-interactive
