@@ -1,11 +1,9 @@
 {
   "expo": {
-    "owner": "costinmarinescu",
     "name": "Praxiom Health",
     "slug": "praxiom-health",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
     "platforms": ["ios", "android"],
     "ios": {
       "supportsTablet": true,
@@ -32,25 +30,3 @@
     ]
   }
 }
-```
-
----
-
-## ✅ **Now Run the Build:**
-
-1. Push both updated files to GitHub
-2. Go to **Actions** tab
-3. Click **"Run workflow"**
-4. Wait for build to start
-
-This time EAS will automatically create the project for you when it runs the first build!
-
----
-
-## 📱 **After Build Starts:**
-
-Once the workflow runs successfully, you'll see:
-```
-✓ Project created in EAS
-✓ Build submitted
-✓ Check https://expo.dev for progress
