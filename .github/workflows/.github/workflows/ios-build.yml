@@ -1,0 +1,38 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: |
+        npm install
+        cd ios && pod install && cd ..
+        
+    - name: Build iOS
+      run: |
+        cd ios
+        xcodebuild -workspace PraxiomHealth.xcworkspace \
+          -scheme PraxiomHealth \
+          -configuration Release \
+          -sdk iphonesimulator \
+          -derivedDataPath build
+          
+    - name: Upload IPA
+      uses: actions/upload-artifact@v3
+      with:
+        name: ios-build
+        path: ios/build/Build/Products/Release-iphonesimulator/
