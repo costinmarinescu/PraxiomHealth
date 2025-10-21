@@ -1,4 +1,4 @@
-# 🏥 Praxiom Health - Bio-Age Monitoring System
+# 🏥 Praxiom Health - Bio-Age Monitoring Coaching App
 
 Complete mobile app for biological age assessment through integrated oral-systemic biomarker analysis.
 
