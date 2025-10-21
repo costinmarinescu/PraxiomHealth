@@ -18,7 +18,7 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 18
-          cache: 'npm'
+          # REMOVED: cache: npm  <-- This was causing the error
           
       - name: 🔧 Setup Expo and EAS
         uses: expo/expo-github-action@v8
@@ -27,10 +27,85 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
           
       - name: 📦 Install dependencies
-        run: npm ci
+        run: npm install
+        # CHANGED: npm ci to npm install (ci requires lock file)
         
       - name: 🏗️ Build Android APK
         run: eas build --platform android --profile preview --non-interactive --no-wait
         
       - name: ✅ Build submitted
         run: echo "Build submitted to EAS! Check https://expo.dev for progress"
+```
+
+**What I changed:**
+1. ❌ Removed `cache: npm` (line that caused error)
+2. ✅ Changed `npm ci` to `npm install` (npm ci requires lock file)
+
+---
+
+## 📝 **Update on GitHub:**
+
+### **Option 1: Edit Directly on GitHub (Easiest)**
+
+1. Go to your repo: https://github.com/costinmarinescu/PraxiomHealth
+2. Navigate to `.github/workflows/expo-build.yml`
+3. Click the **pencil icon** (Edit)
+4. Replace ALL content with the fixed code above
+5. Click **"Commit changes"**
+6. The build will automatically start again!
+
+### **Option 2: Upload Fixed File**
+
+1. Delete the old workflow file from your repo
+2. Upload the new one with the fixed code
+
+---
+
+## ⚠️ **Wait - Do You Have EXPO_TOKEN Set?**
+
+Before the build can succeed, you **MUST** have your Expo token configured:
+
+### **Check if you added it:**
+
+1. Go to: https://github.com/costinmarinescu/PraxiomHealth/settings/secrets/actions
+2. Do you see `EXPO_TOKEN` in the list?
+
+### **If NOT, add it now:**
+
+**Step 1: Get Expo Token**
+1. Go to https://expo.dev/signup (create FREE account if you don't have one)
+2. After signup, go to https://expo.dev/settings/access-tokens
+3. Click **"Create Token"**
+4. Name: `GitHub Actions`
+5. Click **"Create"**
+6. **Copy the token** (looks like: `xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
+
+**Step 2: Add to GitHub**
+1. Go to: https://github.com/costinmarinescu/PraxiomHealth/settings/secrets/actions
+2. Click **"New repository secret"**
+3. Name: `EXPO_TOKEN` (must be exact)
+4. Value: Paste your Expo token
+5. Click **"Add secret"**
+
+---
+
+## 🚀 **Test Again**
+
+After you:
+1. ✅ Updated the workflow file
+2. ✅ Added EXPO_TOKEN secret
+
+Then:
+1. Go to **Actions** tab
+2. Click **"Build Praxiom Health App"**
+3. Click **"Run workflow"** → **"Run workflow"**
+4. Wait 2-3 minutes
+5. Build should start successfully!
+
+---
+
+## 📱 **Where to Get Your APK**
+
+After the build succeeds, you'll see:
+```
+✅ Build submitted to EAS! Check https://expo.dev for progress
