@@ -3,26 +3,13 @@
     "version": ">= 5.9.1"
   },
   "build": {
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal"
-    },
     "preview": {
       "distribution": "internal",
       "android": {
-        "buildType": "apk"
-      },
-      "ios": {
-        "simulator": true
+        "buildType": "apk",
+        "credentialsSource": "remote"
       }
     },
-    "production": {
-      "android": {
-        "buildType": "app-bundle"
-      }
-    }
-  },
-  "submit": {
     "production": {}
   }
 }
