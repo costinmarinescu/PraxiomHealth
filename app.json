@@ -5,37 +5,20 @@
     "slug": "praxiom-health",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFA500"
-    },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "platforms": ["ios", "android"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.praxiom.health",
-      "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "Allow Praxiom Health to connect to your PineTime watch",
-        "NSBluetoothPeripheralUsageDescription": "Allow Praxiom Health to connect to your PineTime watch"
-      }
+      "bundleIdentifier": "com.praxiom.health"
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FFA500"
-      },
       "package": "com.praxiom.health",
       "permissions": [
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.BLUETOOTH_SCAN",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "plugins": [
@@ -43,10 +26,31 @@
         "react-native-ble-plx",
         {
           "isBackgroundEnabled": true,
-          "modes": ["peripheral", "central"],
-          "bluetoothAlwaysPermission": "Allow Praxiom Health to connect to your PineTime watch to sync health data"
+          "modes": ["peripheral", "central"]
         }
       ]
     ]
   }
 }
+```
+
+---
+
+## ✅ **Now Run the Build:**
+
+1. Push both updated files to GitHub
+2. Go to **Actions** tab
+3. Click **"Run workflow"**
+4. Wait for build to start
+
+This time EAS will automatically create the project for you when it runs the first build!
+
+---
+
+## 📱 **After Build Starts:**
+
+Once the workflow runs successfully, you'll see:
+```
+✓ Project created in EAS
+✓ Build submitted
+✓ Check https://expo.dev for progress
