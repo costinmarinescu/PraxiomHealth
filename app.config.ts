@@ -15,7 +15,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     [
-      "expo-ble-plx",
+      "react-native-ble-plx",
       {
         isBackgroundEnabled: true,
         modes: ["peripheral", "central"],
