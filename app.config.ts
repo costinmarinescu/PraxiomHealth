@@ -25,12 +25,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ],
   ios: {
     supportsTablet: true,
-    bundleIdentifier: "com.praxiom.health",
-    infoPlist: {
-      ITSAppUsesNonExemptEncryption: false,
-      NSBluetoothAlwaysUsageDescription: "Allow Praxiom Health to connect to your PineTime watch",
-      NSBluetoothPeripheralUsageDescription: "Allow Praxiom Health to connect to your PineTime watch"
-    }
+    bundleIdentifier: "com.praxiom.health"
   },
   android: {
     adaptiveIcon: {
@@ -44,12 +39,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "BLUETOOTH_CONNECT",
       "BLUETOOTH_SCAN",
       "ACCESS_FINE_LOCATION"
-    ]
-  },
-  extra: {
-    eas: {
-      projectId: "your-project-id-here"
-    }
+    ],
+    versionCode: 1
   },
   cli: {
     appVersionSource: "remote"
