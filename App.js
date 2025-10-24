@@ -10,8 +10,21 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import Svg, { Circle, G } from 'react-native-svg';
+import { Buffer } from 'buffer';
 
 const { width } = Dimensions.get('window');
+
+// BLE Service UUIDs for PineTime
+const BLE_SERVICES = {
+  HEART_RATE: '0000180d-0000-1000-8000-00805f9b34fb',
+  HEART_RATE_MEASUREMENT: '00002a37-0000-1000-8000-00805f9b34fb',
+  CURRENT_TIME: '00001805-0000-1000-8000-00805f9b34fb',
+  CURRENT_TIME_CHAR: '00002a2b-0000-1000-8000-00805f9b34fb',
+  // Custom Praxiom Service (needs to be added to firmware)
+  PRAXIOM_SERVICE: '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+  PRAXIOM_BIO_AGE: '6e400002-b5a3-f393-e0a9-e50e24dcca9e',
+  PRAXIOM_HEALTH_DATA: '6e400003-b5a3-f393-e0a9-e50e24dcca9e',
+};
 
 // Circular Progress Component
 const CircularProgress = ({ size, strokeWidth, percentage, color, children }) => {
@@ -60,6 +73,10 @@ export default function App() {
   const [currentTier, setCurrentTier] = useState(1);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeReasons, setUpgradeReasons] = useState([]);
+  
+  // BLE Monitoring States
+  const [heartRateMonitoring, setHeartRateMonitoring] = useState(null);
+  const [lastSyncTime, setLastSyncTime] = useState(null);
   
   // TIER 1 BIOMARKERS
   const [tier1Biomarkers, setTier1Biomarkers] = useState({
@@ -121,6 +138,9 @@ export default function App() {
     loadStoredData();
     checkBackupReminder();
     return () => {
+      if (heartRateMonitoring) {
+        heartRateMonitoring.remove();
+      }
       bleManager.destroy();
     };
   }, []);
@@ -298,6 +318,155 @@ export default function App() {
     return { shouldUpgrade, reasons };
   };
 
+  // PARSE HEART RATE VALUE FROM BLE
+  const parseHeartRateValue = (base64Value) => {
+    try {
+      const buffer = Buffer.from(base64Value, 'base64');
+      const flags = buffer[0];
+      const is16Bit = (flags & 0x01) !== 0;
+      const heartRate = is16Bit 
+        ? buffer.readUInt16LE(1)
+        : buffer.readUInt8(1);
+      return heartRate;
+    } catch (error) {
+      console.error('Error parsing heart rate:', error);
+      return 0;
+    }
+  };
+
+  // START MONITORING HEART RATE FROM WATCH
+  const startHeartRateMonitoring = (device) => {
+    try {
+      const subscription = device.monitorCharacteristicForService(
+        BLE_SERVICES.HEART_RATE,
+        BLE_SERVICES.HEART_RATE_MEASUREMENT,
+        (error, characteristic) => {
+          if (error) {
+            console.error('Heart rate monitoring error:', error);
+            return;
+          }
+
+          if (characteristic?.value) {
+            const heartRate = parseHeartRateValue(characteristic.value);
+            console.log('Heart rate received:', heartRate);
+            
+            setTier1Biomarkers(prev => ({
+              ...prev,
+              heartRate: heartRate.toString()
+            }));
+            
+            setLastSyncTime(new Date().toISOString());
+          }
+        }
+      );
+      
+      setHeartRateMonitoring(subscription);
+      console.log('Heart rate monitoring started');
+    } catch (error) {
+      console.error('Failed to start heart rate monitoring:', error);
+    }
+  };
+
+  // SEND BIOLOGICAL AGE TO WATCH
+  const sendBioAgeToWatch = async (device, bioAge) => {
+    try {
+      const services = await device.services();
+      const hasPraxiomService = services.some(s => 
+        s.uuid.toLowerCase() === BLE_SERVICES.PRAXIOM_SERVICE.toLowerCase()
+      );
+      
+      if (!hasPraxiomService) {
+        console.log('Praxiom service not found on watch. Using fallback notification.');
+        Alert.alert(
+          'Firmware Update Needed',
+          `Your watch needs the custom Praxiom firmware to display Bio-Age.\n\nYour calculated Bio-Age: ${bioAge} years\n\nThis value will sync automatically once you install the custom firmware.`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      const ageValue = Math.round(bioAge * 10);
+      const buffer = Buffer.alloc(2);
+      buffer.writeUInt16LE(ageValue, 0);
+      const base64Data = buffer.toString('base64');
+      
+      await device.writeCharacteristicWithResponseForService(
+        BLE_SERVICES.PRAXIOM_SERVICE,
+        BLE_SERVICES.PRAXIOM_BIO_AGE,
+        base64Data
+      );
+      
+      console.log('Bio-Age sent to watch:', bioAge);
+      Alert.alert('Success', `Bio-Age (${bioAge} years) synced to watch!`);
+      setLastSyncTime(new Date().toISOString());
+    } catch (error) {
+      console.error('Error sending bio-age to watch:', error);
+      
+      if (error.message.includes('service') || error.message.includes('characteristic')) {
+        Alert.alert(
+          'Custom Firmware Required',
+          `Install the Praxiom firmware on your watch to enable Bio-Age display.\n\nYour calculated Bio-Age: ${bioAge} years`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Sync Error', 'Failed to send data to watch: ' + error.message);
+      }
+    }
+  };
+
+  // SEND HEALTH DATA PACKAGE TO WATCH
+  const sendHealthDataToWatch = async (device, healthData) => {
+    try {
+      const services = await device.services();
+      const hasPraxiomService = services.some(s => 
+        s.uuid.toLowerCase() === BLE_SERVICES.PRAXIOM_SERVICE.toLowerCase()
+      );
+      
+      if (!hasPraxiomService) {
+        console.log('Praxiom service not found. Skipping health data sync.');
+        return;
+      }
+
+      const buffer = Buffer.alloc(5);
+      buffer.writeUInt16LE(Math.round(healthData.biologicalAge * 10), 0);
+      buffer.writeUInt8(healthData.oralHealthScore, 2);
+      buffer.writeUInt8(healthData.systemicHealthScore, 3);
+      buffer.writeUInt8(healthData.fitnessScore, 4);
+      
+      const base64Data = buffer.toString('base64');
+      
+      await device.writeCharacteristicWithResponseForService(
+        BLE_SERVICES.PRAXIOM_SERVICE,
+        BLE_SERVICES.PRAXIOM_HEALTH_DATA,
+        base64Data
+      );
+      
+      console.log('Health data package sent to watch');
+    } catch (error) {
+      console.error('Error sending health data to watch:', error);
+    }
+  };
+
+  // MANUAL SYNC TO WATCH
+  const manualSyncToWatch = async () => {
+    if (!connectedDevice) {
+      Alert.alert('Not Connected', 'Please connect to your watch first');
+      return;
+    }
+    
+    if (healthScores.biologicalAge === 0) {
+      Alert.alert('No Data', 'Please calculate your Bio-Age first');
+      return;
+    }
+    
+    try {
+      await sendBioAgeToWatch(connectedDevice, healthScores.biologicalAge);
+      await sendHealthDataToWatch(connectedDevice, healthScores);
+    } catch (error) {
+      Alert.alert('Sync Failed', error.message);
+    }
+  };
+
   // PRAXIOM TIER 1 ALGORITHMS
   const calculateTier1Scores = () => {
     const age = parseFloat(tier1Biomarkers.age) || 38;
@@ -411,6 +580,13 @@ export default function App() {
 
     setHealthScores(newScores);
     saveData(tier1Biomarkers, tier2Biomarkers, epigeneticData, newScores, currentTier);
+    
+    // Send bio-age to watch if connected
+    if (connectedDevice) {
+      sendBioAgeToWatch(connectedDevice, newScores.biologicalAge);
+      sendHealthDataToWatch(connectedDevice, newScores);
+    }
+    
     setCurrentScreen('dashboard');
     Alert.alert('Success', 'Tier 1 Bio-Age calculated using validated Praxiom algorithms!');
   };
@@ -458,6 +634,13 @@ export default function App() {
 
     setHealthScores(updatedScores);
     saveData(tier1Biomarkers, tier2Biomarkers, epigeneticData, updatedScores, 2);
+    
+    // Send to watch if connected
+    if (connectedDevice) {
+      sendBioAgeToWatch(connectedDevice, updatedScores.biologicalAge);
+      sendHealthDataToWatch(connectedDevice, updatedScores);
+    }
+    
     setCurrentScreen('dashboard');
     Alert.alert('Success', 'Tier 2 Enhanced Bio-Age calculated!');
   };
@@ -508,10 +691,33 @@ export default function App() {
       const connected = await device.connect();
       await connected.discoverAllServicesAndCharacteristics();
       setConnectedDevice(connected);
-      Alert.alert('Connected!', `Connected to ${device.name}. Heart rate and activity data will sync automatically.`);
+      
+      // Start monitoring heart rate
+      startHeartRateMonitoring(connected);
+      
+      // Send current bio-age to watch if available
+      if (healthScores.biologicalAge > 0) {
+        await sendBioAgeToWatch(connected, healthScores.biologicalAge);
+        await sendHealthDataToWatch(connected, healthScores);
+      }
+      
+      Alert.alert('Connected!', `Connected to ${device.name}. Monitoring heart rate...`);
     } catch (error) {
+      console.error('Connection error:', error);
       Alert.alert('Connection Failed', error.message);
     }
+  };
+
+  const disconnectWatch = () => {
+    if (heartRateMonitoring) {
+      heartRateMonitoring.remove();
+      setHeartRateMonitoring(null);
+    }
+    if (connectedDevice) {
+      connectedDevice.cancelConnection();
+      setConnectedDevice(null);
+    }
+    Alert.alert('Disconnected', 'Watch disconnected');
   };
 
   const manualConnect = (device) => {
@@ -820,15 +1026,24 @@ export default function App() {
               <Text style={styles.connectedTitle}>Connected to Watch</Text>
               <Text style={styles.connectedDevice}>{connectedDevice.name}</Text>
               <Text style={styles.connectedSubtext}>
-                Heart rate and activity data syncing automatically
+                {heartRateMonitoring ? '💗 Heart rate monitoring active' : '⏸️ Monitoring paused'}
               </Text>
+              {lastSyncTime && (
+                <Text style={styles.lastSyncText}>
+                  Last sync: {new Date(lastSyncTime).toLocaleTimeString()}
+                </Text>
+              )}
+              
+              <TouchableOpacity 
+                style={styles.syncButton}
+                onPress={manualSyncToWatch}
+              >
+                <Text style={styles.syncButtonText}>🔄 Sync Bio-Age to Watch</Text>
+              </TouchableOpacity>
+              
               <TouchableOpacity 
                 style={styles.disconnectButton}
-                onPress={() => {
-                  connectedDevice.cancelConnection();
-                  setConnectedDevice(null);
-                  Alert.alert('Disconnected', 'Watch disconnected');
-                }}
+                onPress={disconnectWatch}
               >
                 <Text style={styles.disconnectButtonText}>Disconnect Watch</Text>
               </TouchableOpacity>
@@ -893,7 +1108,8 @@ export default function App() {
               • Display your biological age on the watchface{'\n'}
               • Sync heart rate and activity data automatically{'\n'}
               • Provide real-time health monitoring{'\n'}
-              • Store data locally for offline access
+              • Store data locally for offline access{'\n\n'}
+              <Text style={{fontWeight: 'bold'}}>Note:</Text> Bio-Age display requires custom Praxiom firmware on your watch. Heart rate monitoring works with standard InfiniTime.
             </Text>
           </View>
         </ScrollView>
@@ -1929,7 +2145,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
+    marginBottom: 10,
+  },
+  lastSyncText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 10,
     marginBottom: 20,
+    fontStyle: 'italic',
+  },
+  syncButton: {
+    backgroundColor: '#2196F3',
+    padding: 15,
+    borderRadius: 10,
+    minWidth: 200,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  syncButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   disconnectButton: {
     backgroundColor: '#f44336',
