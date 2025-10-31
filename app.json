@@ -1,4 +1,3 @@
-
 {
   "expo": {
     "name": "Praxiom Health",
@@ -42,10 +41,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      [
-        "expo-document-picker",
-        {}
-      ]
+      "expo-document-picker"
     ],
     "extra": {
       "eas": {
