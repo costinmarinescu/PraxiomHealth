@@ -1,10 +1,22 @@
 import { BleManager } from 'react-native-ble-plx';
-import { Buffer } from 'buffer';
 
 // Praxiom Custom BLE Service UUIDs (from specs)
 const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 const BIOAGE_CHAR_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
 const HEALTH_DATA_CHAR_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+// Helper function to convert UInt16 to base64
+function uint16ToBase64(value) {
+  const bytes = new Uint8Array(2);
+  bytes[0] = value & 0xFF;
+  bytes[1] = (value >> 8) & 0xFF;
+  return btoa(String.fromCharCode.apply(null, bytes));
+}
+
+// Helper function to convert array to base64
+function arrayToBase64(arr) {
+  return btoa(String.fromCharCode.apply(null, arr));
+}
 
 class PraxiomBLEService {
   constructor() {
@@ -82,9 +94,7 @@ class PraxiomBLEService {
 
     try {
       const ageValue = Math.round(bioAge * 10);
-      const buffer = Buffer.alloc(2);
-      buffer.writeUInt16LE(ageValue, 0);
-      const base64Data = buffer.toString('base64');
+      const base64Data = uint16ToBase64(ageValue);
 
       await this.device.writeCharacteristicWithResponseForService(
         SERVICE_UUID,
@@ -113,17 +123,18 @@ class PraxiomBLEService {
 
     try {
       const ageValue = Math.round(bioAge * 10);
-      const buffer = Buffer.alloc(5);
+      const bytes = new Uint8Array(5);
       
       // Bio-Age (2 bytes, little-endian)
-      buffer.writeUInt16LE(ageValue, 0);
+      bytes[0] = ageValue & 0xFF;
+      bytes[1] = (ageValue >> 8) & 0xFF;
       
       // Health scores (1 byte each, 0-100)
-      buffer.writeUInt8(Math.min(100, Math.max(0, oralHealth)), 2);
-      buffer.writeUInt8(Math.min(100, Math.max(0, systemicHealth)), 3);
-      buffer.writeUInt8(Math.min(100, Math.max(0, fitnessScore)), 4);
+      bytes[2] = Math.min(100, Math.max(0, oralHealth));
+      bytes[3] = Math.min(100, Math.max(0, systemicHealth));
+      bytes[4] = Math.min(100, Math.max(0, fitnessScore));
       
-      const base64Data = buffer.toString('base64');
+      const base64Data = arrayToBase64(bytes);
 
       await this.device.writeCharacteristicWithResponseForService(
         SERVICE_UUID,
