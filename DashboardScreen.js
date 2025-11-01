@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,6 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import BLEService from '../services/BLEService';
-import WearableDataService from '../services/WearableDataService';
 
 export default function DashboardScreen({ navigation }) {
   const [healthData, setHealthData] = useState({
@@ -19,84 +17,24 @@ export default function DashboardScreen({ navigation }) {
     systemicHealth: 78,
     fitnessScore: 92
   });
-  const [isConnected, setIsConnected] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
 
-  useEffect(() => {
-    // Initialize BLE
-    BLEService.init();
-    
-    // Check connection status
-    const checkConnection = setInterval(() => {
-      setIsConnected(BLEService.getConnectionStatus());
-    }, 2000);
-
-    return () => clearInterval(checkConnection);
-  }, []);
-
-  const handleImportData = async () => {
-    try {
-      setIsSyncing(true);
-      const importedData = await WearableDataService.importData();
-      
-      if (importedData) {
-        const metrics = WearableDataService.calculateHealthMetrics(importedData);
-        
-        // Update fitness score from imported data
-        setHealthData(prev => ({
-          ...prev,
-          fitnessScore: metrics.fitnessScore
-        }));
-
-        Alert.alert(
-          'Data Imported',
-          `Successfully imported data from ${importedData.source}\n\n` +
-          `Heart Rate: ${metrics.avgHeartRate} bpm\n` +
-          `Total Steps: ${metrics.totalSteps}\n` +
-          `Fitness Score: ${metrics.fitnessScore}`,
-          [{ text: 'OK' }]
-        );
-      }
-    } catch (error) {
-      Alert.alert('Import Error', error.message);
-    } finally {
-      setIsSyncing(false);
-    }
+  const handleImportData = () => {
+    Alert.alert(
+      'Import Data',
+      'Data import feature will be added soon.\n\nSupported formats:\n• Garmin CSV\n• Fitbit CSV\n• Apple Health JSON',
+      [{ text: 'OK' }]
+    );
   };
 
-  const handleSyncToWatch = async () => {
-    if (!isConnected) {
-      Alert.alert(
-        'Not Connected',
-        'Please connect to your Praxiom watch first',
-        [
-          { text: 'Cancel' },
-          { text: 'Connect', onPress: () => navigation.navigate('Watch') }
-        ]
-      );
-      return;
-    }
-
-    try {
-      setIsSyncing(true);
-      
-      const success = await BLEService.sendHealthData(
-        healthData.bioAge,
-        healthData.oralHealth,
-        healthData.systemicHealth,
-        healthData.fitnessScore
-      );
-
-      if (success) {
-        Alert.alert('Success', 'Health data synced to your watch!');
-      } else {
-        Alert.alert('Sync Failed', 'Could not sync data to watch');
-      }
-    } catch (error) {
-      Alert.alert('Sync Error', error.message);
-    } finally {
-      setIsSyncing(false);
-    }
+  const handleSyncToWatch = () => {
+    Alert.alert(
+      'Sync to Watch',
+      'Please connect to your Praxiom watch first from the Watch tab.',
+      [
+        { text: 'Cancel' },
+        { text: 'Go to Watch', onPress: () => navigation.navigate('Watch') }
+      ]
+    );
   };
 
   const getScoreColor = (score) => {
@@ -122,11 +60,7 @@ export default function DashboardScreen({ navigation }) {
                 style={styles.iconButton}
                 onPress={() => navigation.navigate('Watch')}
               >
-                <Ionicons 
-                  name={isConnected ? "watch" : "watch-outline"} 
-                  size={24} 
-                  color={isConnected ? "#4CAF50" : "#FFF"} 
-                />
+                <Ionicons name="watch-outline" size={24} color="#FFF" />
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.iconButton}
@@ -221,32 +155,24 @@ export default function DashboardScreen({ navigation }) {
             <TouchableOpacity 
               style={[styles.button, styles.importButton]}
               onPress={handleImportData}
-              disabled={isSyncing}
             >
               <Ionicons name="download-outline" size={20} color="#FFF" />
-              <Text style={styles.buttonText}>
-                {isSyncing ? 'Importing...' : 'Import Data'}
-              </Text>
+              <Text style={styles.buttonText}>Import Data</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
               style={[styles.button, styles.syncButton]}
               onPress={handleSyncToWatch}
-              disabled={isSyncing || !isConnected}
             >
               <Ionicons name="sync-outline" size={20} color="#FFF" />
-              <Text style={styles.buttonText}>
-                {isSyncing ? 'Syncing...' : 'Sync to Watch'}
-              </Text>
+              <Text style={styles.buttonText}>Sync to Watch</Text>
             </TouchableOpacity>
           </View>
 
           {/* Info Text */}
-          {!isConnected && (
-            <Text style={styles.infoText}>
-              Connect to your Praxiom watch to sync health data
-            </Text>
-          )}
+          <Text style={styles.infoText}>
+            Connect to your Praxiom watch to sync health data
+          </Text>
         </ScrollView>
       </LinearGradient>
     </View>

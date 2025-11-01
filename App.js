@@ -52,23 +52,14 @@ export default function App() {
         <Tab.Screen 
           name="Dashboard" 
           component={DashboardScreen}
-          options={{
-            tabBarLabel: 'Dashboard',
-          }}
         />
         <Tab.Screen 
           name="Watch" 
           component={WatchScreen}
-          options={{
-            tabBarLabel: 'Watch',
-          }}
         />
         <Tab.Screen 
           name="Settings" 
           component={SettingsScreen}
-          options={{
-            tabBarLabel: 'Settings',
-          }}
         />
       </Tab.Navigator>
     </NavigationContainer>
