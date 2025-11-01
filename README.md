@@ -1,4 +1,4 @@
-# Praxiom Health App
+# Praxiom Health App 1.1
 
 A React Native mobile application that connects to the Praxiom smartwatch and integrates health data from multiple wearable devices (Garmin, Fitbit, Apple Health, etc.).
 
