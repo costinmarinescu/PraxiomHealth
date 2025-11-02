@@ -16,14 +16,28 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.praxiom.health"
+      "bundleIdentifier": "com.praxiom.health",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to your Praxiom Health watch and sync your health data.",
+        "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to connect to your Praxiom Health watch.",
+        "NSHealthShareUsageDescription": "This app needs access to your health data to calculate your health scores.",
+        "NSHealthUpdateUsageDescription": "This app needs to save your health data."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.praxiom.health"
+      "package": "com.praxiom.health",
+      "permissions": [
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_SCAN",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
