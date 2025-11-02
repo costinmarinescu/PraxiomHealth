@@ -9,26 +9,19 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1585B5"
+      "backgroundColor": "#ffffff"
     },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.praxiomhealth.app",
-      "infoPlist": {
-        "NSHealthShareUsageDescription": "Praxiom Health needs access to read your health data to calculate your biological age and health scores.",
-        "NSHealthUpdateUsageDescription": "Praxiom Health may write health data if you choose to sync information.",
-        "NSBluetoothAlwaysUsageDescription": "Praxiom Health uses Bluetooth to connect to your Praxiom watch.",
-        "NSBluetoothPeripheralUsageDescription": "Praxiom Health uses Bluetooth to communicate with your watch.",
-        "NSLocationWhenInUseUsageDescription": "Bluetooth requires location permission on iOS."
-      }
+      "bundleIdentifier": "com.praxiomhealth.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1585B5"
+        "backgroundColor": "#ffffff"
       },
       "package": "com.praxiomhealth.app",
       "permissions": [
@@ -36,33 +29,16 @@
         "BLUETOOTH_ADMIN",
         "BLUETOOTH_CONNECT",
         "BLUETOOTH_SCAN",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "ACTIVITY_RECOGNITION"
+        "ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      [
-        "expo-font",
-        {
-          "fonts": []
-        }
-      ],
-      [
-        "react-native-ble-plx",
-        {
-          "isBackgroundEnabled": true,
-          "modes": [
-            "peripheral",
-            "central"
-          ],
-          "bluetoothAlwaysPermission": "Allow Praxiom Health to connect to your watch via Bluetooth."
-        }
-      ]
-    ],
-    "sdkVersion": "51.0.0"
+    "extra": {
+      "eas": {
+        "projectId": "0b25cc14-e855-4c8b-8272-95523bb9c592"
+      }
+    }
   }
 }
