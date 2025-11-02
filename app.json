@@ -4,34 +4,65 @@
     "slug": "praxiom-health",
     "version": "1.0.0",
     "orientation": "portrait",
-    "platforms": ["ios", "android"],
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1585B5"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.praxiom.health"
+      "bundleIdentifier": "com.praxiomhealth.app",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "Praxiom Health needs access to read your health data to calculate your biological age and health scores.",
+        "NSHealthUpdateUsageDescription": "Praxiom Health may write health data if you choose to sync information.",
+        "NSBluetoothAlwaysUsageDescription": "Praxiom Health uses Bluetooth to connect to your Praxiom watch.",
+        "NSBluetoothPeripheralUsageDescription": "Praxiom Health uses Bluetooth to communicate with your watch.",
+        "NSLocationWhenInUseUsageDescription": "Bluetooth requires location permission on iOS."
+      }
     },
     "android": {
-      "package": "com.praxiom.health",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1585B5"
+      },
+      "package": "com.praxiomhealth.app",
       "permissions": [
-        "android.permission.BLUETOOTH",
-        "android.permission.BLUETOOTH_ADMIN",
-        "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.BLUETOOTH_SCAN",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_SCAN",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACTIVITY_RECOGNITION"
       ]
     },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
     "plugins": [
+      [
+        "expo-font",
+        {
+          "fonts": []
+        }
+      ],
       [
         "react-native-ble-plx",
         {
           "isBackgroundEnabled": true,
-          "modes": ["peripheral", "central"]
+          "modes": [
+            "peripheral",
+            "central"
+          ],
+          "bluetoothAlwaysPermission": "Allow Praxiom Health to connect to your watch via Bluetooth."
         }
       ]
     ],
-    "extra": {
-      "eas": {
-        "projectId": "0b25cc14-e855-4c8b-8272-95523bb9c592"
-      }
-    }
+    "sdkVersion": "51.0.0"
   }
 }
