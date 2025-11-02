@@ -76,12 +76,6 @@ export default function DashboardScreen() {
   };
 
   const handleBiomarkers = async () => {
-    Alert.alert(
-      'Tier 1 Biomarkers',
-      'Loading biomarker data from connected wearables...',
-      [{ text: 'OK' }]
-    );
-
     try {
       const scores = await WearableDataService.importAndCalculateScores();
       if (scores) {
@@ -92,19 +86,19 @@ export default function DashboardScreen() {
         }));
         
         Alert.alert(
-          'Biomarkers Updated',
-          `Fitness Score: ${scores.fitnessScore}\nSystemic Health: ${scores.systemicScore}`,
+          'Biomarkers Calculated',
+          `Using sample data for demonstration:\n\nFitness Score: ${scores.fitnessScore}/100\nSystemic Health: ${scores.systemicScore}/100\n\n${scores.note || 'Connect your Praxiom watch or add native health module integrations for real-time data.'}`,
           [{ text: 'OK' }]
         );
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to load biomarker data');
+      Alert.alert('Error', 'Failed to calculate biomarker scores');
     }
   };
 
   const sendDataToWatch = async () => {
     if (!BLEService.isConnected()) {
-      Alert.alert('Not Connected', 'Please connect to your watch first');
+      Alert.alert('Not Connected', 'Please connect to your watch first from the Watch tab.');
       return;
     }
 
@@ -115,9 +109,9 @@ export default function DashboardScreen() {
         healthData.systemicHealth || 0,
         healthData.fitnessScore || 0
       );
-      Alert.alert('Success', 'Data sent to watch!');
+      Alert.alert('Success', 'Health data sent to your Praxiom watch!');
     } catch (error) {
-      Alert.alert('Error', 'Failed to send data to watch');
+      Alert.alert('Error', 'Failed to send data to watch. Make sure you are still connected.');
     }
   };
 
@@ -195,7 +189,7 @@ export default function DashboardScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.biomarkerButton} onPress={handleBiomarkers}>
-            <Text style={styles.buttonText}>📊 Load Tier 1 Biomarkers</Text>
+            <Text style={styles.buttonText}>📊 Calculate Biomarker Scores</Text>
           </TouchableOpacity>
 
           {BLEService.isConnected() && (
