@@ -1,285 +1,469 @@
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Parse CSV data
-function parseCSV(csvText) {
-  const lines = csvText.split('\n');
-  const headers = lines[0].split(',').map(h => h.trim());
-  const data = [];
+// Optional imports - these require native modules
+let AppleHealthKit = null;
+let GoogleFit = null;
 
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i].trim() === '') continue;
-    
-    const values = lines[i].split(',');
-    const entry = {};
-    headers.forEach((header, index) => {
-      entry[header] = values[index] ? values[index].trim() : '';
-    });
-    data.push(entry);
-  }
-
-  return data;
+// Try to import health libraries if available
+try {
+  AppleHealthKit = require('react-native-health');
+} catch (e) {
+  console.log('Apple HealthKit not available');
 }
 
-// Parse JSON data
-function parseJSON(jsonText) {
-  try {
-    return JSON.parse(jsonText);
-  } catch (error) {
-    console.error('Error parsing JSON:', error);
-    return null;
-  }
+try {
+  GoogleFit = require('react-native-google-fit');
+} catch (e) {
+  console.log('Google Fit not available');
 }
 
 class WearableDataService {
-  
-  // Import data from file (supports CSV and JSON)
-  async importData() {
+  constructor() {
+    this.isInitialized = false;
+    this.healthDataCache = {};
+    this.healthKitAvailable = AppleHealthKit !== null && Platform.OS === 'ios';
+    this.googleFitAvailable = GoogleFit !== null && Platform.OS === 'android';
+  }
+
+  /**
+   * Check if wearable integration is available
+   */
+  isAvailable() {
+    return this.healthKitAvailable || this.googleFitAvailable;
+  }
+
+  /**
+   * Initialize health data access for the platform
+   */
+  async initialize() {
+    if (this.isInitialized) return true;
+
+    if (!this.isAvailable()) {
+      console.log('Health libraries not available - this is expected in development');
+      return false;
+    }
+
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['text/csv', 'application/json', 'text/plain'],
-        copyToCacheDirectory: true
-      });
-
-      if (result.type === 'cancel') {
-        return null;
+      if (Platform.OS === 'ios' && this.healthKitAvailable) {
+        return await this.initializeAppleHealth();
+      } else if (Platform.OS === 'android' && this.googleFitAvailable) {
+        return await this.initializeGoogleFit();
       }
-
-      const fileContent = await FileSystem.readAsStringAsync(result.uri);
-      const fileName = result.name.toLowerCase();
-      
-      let parsedData;
-      
-      if (fileName.endsWith('.csv')) {
-        parsedData = parseCSV(fileContent);
-      } else if (fileName.endsWith('.json')) {
-        parsedData = parseJSON(fileContent);
-      } else {
-        // Try to parse as CSV first, then JSON
-        try {
-          parsedData = parseCSV(fileContent);
-        } catch {
-          parsedData = parseJSON(fileContent);
-        }
-      }
-
-      if (!parsedData) {
-        throw new Error('Could not parse file data');
-      }
-
-      return this.processWearableData(parsedData, fileName);
+      return false;
     } catch (error) {
-      console.error('Error importing data:', error);
-      throw error;
+      console.error('Failed to initialize wearable data service:', error);
+      return false;
     }
   }
 
-  // Process data from different wearables
-  processWearableData(data, fileName) {
-    let processedData = {
-      source: 'Unknown',
-      heartRate: [],
-      steps: [],
-      sleep: [],
-      calories: [],
-      rawData: data
+  /**
+   * Initialize Apple HealthKit for iOS
+   */
+  async initializeAppleHealth() {
+    const permissions = {
+      permissions: {
+        read: [
+          AppleHealthKit.Constants.Permissions.HeartRate,
+          AppleHealthKit.Constants.Permissions.RestingHeartRate,
+          AppleHealthKit.Constants.Permissions.HeartRateVariability,
+          AppleHealthKit.Constants.Permissions.Steps,
+          AppleHealthKit.Constants.Permissions.StepCount,
+          AppleHealthKit.Constants.Permissions.DistanceWalkingRunning,
+          AppleHealthKit.Constants.Permissions.ActiveEnergyBurned,
+          AppleHealthKit.Constants.Permissions.OxygenSaturation,
+          AppleHealthKit.Constants.Permissions.BloodPressureSystolic,
+          AppleHealthKit.Constants.Permissions.BloodPressureDiastolic,
+          AppleHealthKit.Constants.Permissions.SleepAnalysis,
+          AppleHealthKit.Constants.Permissions.Workout,
+        ],
+        write: [],
+      },
     };
 
-    // Detect source from filename
-    if (fileName.includes('garmin')) {
-      processedData.source = 'Garmin';
-      processedData = this.processGarminData(data, processedData);
-    } else if (fileName.includes('fitbit')) {
-      processedData.source = 'Fitbit';
-      processedData = this.processFitbitData(data, processedData);
-    } else if (fileName.includes('apple') || fileName.includes('health')) {
-      processedData.source = 'Apple Health';
-      processedData = this.processAppleHealthData(data, processedData);
-    } else {
-      // Generic processing
-      processedData = this.processGenericData(data, processedData);
-    }
-
-    return processedData;
-  }
-
-  // Process Garmin data
-  processGarminData(data, processedData) {
-    if (Array.isArray(data)) {
-      data.forEach(entry => {
-        if (entry.heartRate || entry['Heart Rate']) {
-          processedData.heartRate.push({
-            timestamp: entry.timestamp || entry.date,
-            value: parseInt(entry.heartRate || entry['Heart Rate'])
-          });
-        }
-        if (entry.steps || entry.Steps) {
-          processedData.steps.push({
-            timestamp: entry.timestamp || entry.date,
-            value: parseInt(entry.steps || entry.Steps)
-          });
+    return new Promise((resolve, reject) => {
+      AppleHealthKit.initHealthKit(permissions, (error) => {
+        if (error) {
+          console.error('[AppleHealth] Cannot grant permissions', error);
+          reject(error);
+        } else {
+          console.log('[AppleHealth] Permissions granted');
+          this.isInitialized = true;
+          resolve(true);
         }
       });
-    }
-    return processedData;
-  }
-
-  // Process Fitbit data
-  processFitbitData(data, processedData) {
-    if (Array.isArray(data)) {
-      data.forEach(entry => {
-        if (entry['Heart Rate'] || entry.heart_rate) {
-          processedData.heartRate.push({
-            timestamp: entry.Time || entry.timestamp,
-            value: parseInt(entry['Heart Rate'] || entry.heart_rate)
-          });
-        }
-        if (entry.Steps || entry.steps) {
-          processedData.steps.push({
-            timestamp: entry.Time || entry.timestamp,
-            value: parseInt(entry.Steps || entry.steps)
-          });
-        }
-      });
-    }
-    return processedData;
-  }
-
-  // Process Apple Health data
-  processAppleHealthData(data, processedData) {
-    // Apple Health exports are usually complex XML, but if converted to JSON
-    if (Array.isArray(data)) {
-      data.forEach(entry => {
-        const type = entry.type || entry['@type'];
-        
-        if (type && type.includes('HeartRate')) {
-          processedData.heartRate.push({
-            timestamp: entry.startDate,
-            value: parseFloat(entry.value)
-          });
-        }
-        if (type && type.includes('StepCount')) {
-          processedData.steps.push({
-            timestamp: entry.startDate,
-            value: parseFloat(entry.value)
-          });
-        }
-      });
-    }
-    return processedData;
-  }
-
-  // Generic data processing
-  processGenericData(data, processedData) {
-    if (!Array.isArray(data)) return processedData;
-
-    data.forEach(entry => {
-      // Try to find heart rate data
-      const hrKeys = ['heartRate', 'heart_rate', 'hr', 'bpm', 'pulse'];
-      for (const key of hrKeys) {
-        if (entry[key]) {
-          processedData.heartRate.push({
-            timestamp: entry.timestamp || entry.date || entry.time,
-            value: parseInt(entry[key])
-          });
-          break;
-        }
-      }
-
-      // Try to find steps data
-      const stepKeys = ['steps', 'step_count', 'stepCount'];
-      for (const key of stepKeys) {
-        if (entry[key]) {
-          processedData.steps.push({
-            timestamp: entry.timestamp || entry.date || entry.time,
-            value: parseInt(entry[key])
-          });
-          break;
-        }
-      }
-
-      // Try to find sleep data
-      const sleepKeys = ['sleep', 'sleep_duration', 'sleepDuration'];
-      for (const key of sleepKeys) {
-        if (entry[key]) {
-          processedData.sleep.push({
-            timestamp: entry.timestamp || entry.date || entry.time,
-            value: parseInt(entry[key])
-          });
-          break;
-        }
-      }
     });
-
-    return processedData;
   }
 
-  // Calculate health metrics from imported data
-  calculateHealthMetrics(importedData) {
-    const metrics = {
-      avgHeartRate: 0,
-      totalSteps: 0,
-      avgSleep: 0,
-      fitnessScore: 0
+  /**
+   * Initialize Google Fit for Android
+   */
+  async initializeGoogleFit() {
+    const options = {
+      scopes: [
+        'https://www.googleapis.com/auth/fitness.activity.read',
+        'https://www.googleapis.com/auth/fitness.heart_rate.read',
+        'https://www.googleapis.com/auth/fitness.blood_pressure.read',
+        'https://www.googleapis.com/auth/fitness.oxygen_saturation.read',
+        'https://www.googleapis.com/auth/fitness.sleep.read',
+      ],
     };
 
-    // Calculate average heart rate
-    if (importedData.heartRate.length > 0) {
-      const sum = importedData.heartRate.reduce((acc, item) => acc + item.value, 0);
-      metrics.avgHeartRate = Math.round(sum / importedData.heartRate.length);
-    }
+    return new Promise((resolve, reject) => {
+      GoogleFit.authorize(options)
+        .then((authResult) => {
+          if (authResult.success) {
+            console.log('[GoogleFit] Authorization successful');
+            this.isInitialized = true;
+            resolve(true);
+          } else {
+            console.error('[GoogleFit] Authorization denied');
+            reject(new Error('Authorization denied'));
+          }
+        })
+        .catch((error) => {
+          console.error('[GoogleFit] Authorization error', error);
+          reject(error);
+        });
+    });
+  }
 
-    // Calculate total steps
-    if (importedData.steps.length > 0) {
-      metrics.totalSteps = importedData.steps.reduce((acc, item) => acc + item.value, 0);
-    }
-
-    // Calculate average sleep
-    if (importedData.sleep.length > 0) {
-      const sum = importedData.sleep.reduce((acc, item) => acc + item.value, 0);
-      metrics.avgSleep = Math.round(sum / importedData.sleep.length);
-    }
-
-    // Calculate fitness score (simple algorithm)
-    let fitnessScore = 0;
-    
-    // Heart rate component (30 points) - optimal resting HR: 60-70 bpm
-    if (metrics.avgHeartRate > 0) {
-      if (metrics.avgHeartRate >= 60 && metrics.avgHeartRate <= 70) {
-        fitnessScore += 30;
-      } else if (metrics.avgHeartRate >= 50 && metrics.avgHeartRate < 60) {
-        fitnessScore += 25;
-      } else if (metrics.avgHeartRate > 70 && metrics.avgHeartRate <= 80) {
-        fitnessScore += 20;
-      } else {
-        fitnessScore += 10;
+  /**
+   * Fetch comprehensive health data from wearables
+   */
+  async fetchHealthData(startDate, endDate) {
+    if (!this.isInitialized) {
+      const initialized = await this.initialize();
+      if (!initialized) {
+        throw new Error('Unable to initialize wearable data service');
       }
     }
 
-    // Steps component (40 points) - target: 10,000+ steps/day
-    const avgDailySteps = metrics.totalSteps / (importedData.steps.length || 1);
-    if (avgDailySteps >= 10000) {
-      fitnessScore += 40;
-    } else if (avgDailySteps >= 7500) {
-      fitnessScore += 30;
-    } else if (avgDailySteps >= 5000) {
-      fitnessScore += 20;
-    } else {
-      fitnessScore += 10;
+    const data = {
+      heartRate: await this.getHeartRateData(startDate, endDate),
+      heartRateVariability: await this.getHRVData(startDate, endDate),
+      steps: await this.getStepsData(startDate, endDate),
+      oxygenSaturation: await this.getOxygenSaturationData(startDate, endDate),
+      bloodPressure: await this.getBloodPressureData(startDate, endDate),
+      sleep: await this.getSleepData(startDate, endDate),
+      activity: await this.getActivityData(startDate, endDate),
+    };
+
+    // Cache the data
+    this.healthDataCache = data;
+    await this.saveToStorage(data);
+
+    return data;
+  }
+
+  /**
+   * Get heart rate data
+   */
+  async getHeartRateData(startDate, endDate) {
+    if (Platform.OS === 'ios') {
+      return new Promise((resolve) => {
+        const options = { startDate: startDate.toISOString(), endDate: endDate.toISOString() };
+        AppleHealthKit.getHeartRateSamples(options, (err, results) => {
+          if (err) {
+            console.error('[AppleHealth] Error getting heart rate:', err);
+            resolve([]);
+          } else {
+            resolve(results);
+          }
+        });
+      });
+    } else if (Platform.OS === 'android') {
+      const opt = {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      };
+      return GoogleFit.getHeartRateSamples(opt);
+    }
+    return [];
+  }
+
+  /**
+   * Get heart rate variability (HRV) data
+   */
+  async getHRVData(startDate, endDate) {
+    if (Platform.OS === 'ios') {
+      return new Promise((resolve) => {
+        const options = { startDate: startDate.toISOString(), endDate: endDate.toISOString() };
+        AppleHealthKit.getHeartRateVariabilitySamples(options, (err, results) => {
+          if (err) {
+            console.error('[AppleHealth] Error getting HRV:', err);
+            resolve([]);
+          } else {
+            resolve(results);
+          }
+        });
+      });
+    }
+    // Google Fit doesn't provide direct HRV access
+    return [];
+  }
+
+  /**
+   * Get steps data
+   */
+  async getStepsData(startDate, endDate) {
+    if (Platform.OS === 'ios') {
+      return new Promise((resolve) => {
+        const options = { startDate: startDate.toISOString(), endDate: endDate.toISOString() };
+        AppleHealthKit.getStepCount(options, (err, results) => {
+          if (err) {
+            console.error('[AppleHealth] Error getting steps:', err);
+            resolve({ value: 0 });
+          } else {
+            resolve(results);
+          }
+        });
+      });
+    } else if (Platform.OS === 'android') {
+      const opt = {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      };
+      return GoogleFit.getDailyStepCountSamples(opt);
+    }
+    return { value: 0 };
+  }
+
+  /**
+   * Get oxygen saturation (SpO2) data
+   */
+  async getOxygenSaturationData(startDate, endDate) {
+    if (Platform.OS === 'ios') {
+      return new Promise((resolve) => {
+        const options = { startDate: startDate.toISOString(), endDate: endDate.toISOString() };
+        AppleHealthKit.getOxygenSaturationSamples(options, (err, results) => {
+          if (err) {
+            console.error('[AppleHealth] Error getting SpO2:', err);
+            resolve([]);
+          } else {
+            resolve(results);
+          }
+        });
+      });
+    }
+    return [];
+  }
+
+  /**
+   * Get blood pressure data
+   */
+  async getBloodPressureData(startDate, endDate) {
+    if (Platform.OS === 'ios') {
+      return new Promise((resolve) => {
+        const options = { startDate: startDate.toISOString(), endDate: endDate.toISOString() };
+        AppleHealthKit.getBloodPressureSamples(options, (err, results) => {
+          if (err) {
+            console.error('[AppleHealth] Error getting blood pressure:', err);
+            resolve([]);
+          } else {
+            resolve(results);
+          }
+        });
+      });
+    }
+    return [];
+  }
+
+  /**
+   * Get sleep data
+   */
+  async getSleepData(startDate, endDate) {
+    if (Platform.OS === 'ios') {
+      return new Promise((resolve) => {
+        const options = { startDate: startDate.toISOString(), endDate: endDate.toISOString() };
+        AppleHealthKit.getSleepSamples(options, (err, results) => {
+          if (err) {
+            console.error('[AppleHealth] Error getting sleep:', err);
+            resolve([]);
+          } else {
+            resolve(results);
+          }
+        });
+      });
+    } else if (Platform.OS === 'android') {
+      const opt = {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      };
+      return GoogleFit.getSleepSamples(opt);
+    }
+    return [];
+  }
+
+  /**
+   * Get activity/workout data
+   */
+  async getActivityData(startDate, endDate) {
+    if (Platform.OS === 'ios') {
+      return new Promise((resolve) => {
+        const options = { startDate: startDate.toISOString(), endDate: endDate.toISOString() };
+        AppleHealthKit.getSamples(options, (err, results) => {
+          if (err) {
+            console.error('[AppleHealth] Error getting activity:', err);
+            resolve([]);
+          } else {
+            resolve(results);
+          }
+        });
+      });
+    } else if (Platform.OS === 'android') {
+      const opt = {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      };
+      return GoogleFit.getActivitySamples(opt);
+    }
+    return [];
+  }
+
+  /**
+   * Calculate fitness score from wearable data
+   */
+  calculateFitnessScore(healthData) {
+    let score = 0;
+    let factors = 0;
+
+    // Steps (0-30 points)
+    if (healthData.steps && healthData.steps.value) {
+      const steps = healthData.steps.value;
+      const stepsScore = Math.min(30, (steps / 10000) * 30);
+      score += stepsScore;
+      factors++;
     }
 
-    // Sleep component (30 points) - target: 7-9 hours
-    if (metrics.avgSleep >= 420 && metrics.avgSleep <= 540) { // 7-9 hours in minutes
-      fitnessScore += 30;
-    } else if (metrics.avgSleep >= 360 && metrics.avgSleep < 420) {
-      fitnessScore += 20;
-    } else {
-      fitnessScore += 10;
+    // Heart rate variability (0-25 points)
+    if (healthData.heartRateVariability && healthData.heartRateVariability.length > 0) {
+      const avgHRV = healthData.heartRateVariability.reduce((sum, item) => sum + item.value, 0) 
+                     / healthData.heartRateVariability.length;
+      const hrvScore = Math.min(25, (avgHRV / 100) * 25);
+      score += hrvScore;
+      factors++;
     }
 
-    metrics.fitnessScore = Math.min(100, fitnessScore);
+    // Resting heart rate (0-20 points)
+    if (healthData.heartRate && healthData.heartRate.length > 0) {
+      const avgHR = healthData.heartRate.reduce((sum, item) => sum + item.value, 0) 
+                    / healthData.heartRate.length;
+      // Lower resting HR is better (ideal 60-70)
+      const hrScore = avgHR <= 60 ? 20 : Math.max(0, 20 - ((avgHR - 60) / 2));
+      score += hrScore;
+      factors++;
+    }
 
-    return metrics;
+    // Sleep (0-15 points)
+    if (healthData.sleep && healthData.sleep.length > 0) {
+      const totalSleep = healthData.sleep.reduce((sum, item) => {
+        const duration = (new Date(item.endDate) - new Date(item.startDate)) / (1000 * 60 * 60);
+        return sum + duration;
+      }, 0);
+      const avgSleep = totalSleep / healthData.sleep.length;
+      const sleepScore = avgSleep >= 7 ? 15 : (avgSleep / 7) * 15;
+      score += sleepScore;
+      factors++;
+    }
+
+    // Activity/exercise (0-10 points)
+    if (healthData.activity && healthData.activity.length > 0) {
+      const activityScore = Math.min(10, healthData.activity.length * 2);
+      score += activityScore;
+      factors++;
+    }
+
+    // Normalize to 0-100 scale
+    return factors > 0 ? (score / factors) * (100 / 20) : 0;
+  }
+
+  /**
+   * Calculate systemic health score from wearable data
+   */
+  calculateSystemicScore(healthData) {
+    let score = 100;
+
+    // Blood pressure
+    if (healthData.bloodPressure && healthData.bloodPressure.length > 0) {
+      const avgSystolic = healthData.bloodPressure.reduce((sum, item) => 
+        sum + item.bloodPressureSystolicValue, 0) / healthData.bloodPressure.length;
+      const avgDiastolic = healthData.bloodPressure.reduce((sum, item) => 
+        sum + item.bloodPressureDiastolicValue, 0) / healthData.bloodPressure.length;
+      
+      if (avgSystolic > 140 || avgDiastolic > 90) score -= 20;
+      else if (avgSystolic > 130 || avgDiastolic > 85) score -= 10;
+    }
+
+    // Oxygen saturation
+    if (healthData.oxygenSaturation && healthData.oxygenSaturation.length > 0) {
+      const avgSpO2 = healthData.oxygenSaturation.reduce((sum, item) => 
+        sum + item.value, 0) / healthData.oxygenSaturation.length;
+      
+      if (avgSpO2 < 95) score -= 15;
+      else if (avgSpO2 < 97) score -= 5;
+    }
+
+    // Resting heart rate
+    if (healthData.heartRate && healthData.heartRate.length > 0) {
+      const avgHR = healthData.heartRate.reduce((sum, item) => 
+        sum + item.value, 0) / healthData.heartRate.length;
+      
+      if (avgHR > 100 || avgHR < 40) score -= 15;
+      else if (avgHR > 90 || avgHR < 50) score -= 8;
+    }
+
+    return Math.max(0, Math.min(100, score));
+  }
+
+  /**
+   * Save health data to local storage
+   */
+  async saveToStorage(data) {
+    try {
+      await AsyncStorage.setItem('wearableHealthData', JSON.stringify(data));
+      await AsyncStorage.setItem('wearableDataLastSync', new Date().toISOString());
+    } catch (error) {
+      console.error('Error saving wearable data:', error);
+    }
+  }
+
+  /**
+   * Load cached health data from storage
+   */
+  async loadFromStorage() {
+    try {
+      const data = await AsyncStorage.getItem('wearableHealthData');
+      const lastSync = await AsyncStorage.getItem('wearableDataLastSync');
+      
+      if (data) {
+        this.healthDataCache = JSON.parse(data);
+        return { data: this.healthDataCache, lastSync };
+      }
+    } catch (error) {
+      console.error('Error loading wearable data:', error);
+    }
+    return null;
+  }
+
+  /**
+   * Import data from Fitbit (requires Fitbit API setup)
+   */
+  async importFromFitbit(accessToken) {
+    // This requires Fitbit OAuth setup and API integration
+    // Placeholder for Fitbit integration
+    console.log('Fitbit integration requires API setup');
+    throw new Error('Fitbit integration not yet implemented');
+  }
+
+  /**
+   * Import data from Garmin (requires Garmin Connect API setup)
+   */
+  async importFromGarmin(accessToken) {
+    // This requires Garmin Connect API setup
+    // Placeholder for Garmin integration
+    console.log('Garmin integration requires API setup');
+    throw new Error('Garmin integration not yet implemented');
   }
 }
 

@@ -1,181 +1,182 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
+import React, { useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  ScrollView, 
   TouchableOpacity,
-  ScrollView,
-  Alert
+  ActivityIndicator 
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import BLEService from '../services/BLEService';
 
 export default function DashboardScreen({ navigation }) {
   const [healthData, setHealthData] = useState({
-    bioAge: 38.5,
-    oralHealth: 85,
-    systemicHealth: 78,
-    fitnessScore: 92
+    biologicalAge: 0,
+    chronologicalAge: 0,
+    oralHealthScore: 0,
+    systemicHealthScore: 0,
+    fitnessScore: 0
   });
+  const [loading, setLoading] = useState(true);
 
-  const handleImportData = () => {
-    Alert.alert(
-      'Import Data',
-      'Data import feature will be added soon.\n\nSupported formats:\n• Garmin CSV\n• Fitbit CSV\n• Apple Health JSON',
-      [{ text: 'OK' }]
-    );
+  useEffect(() => {
+    loadHealthData();
+    // Listen for watch data updates
+    const unsubscribe = BLEService.onDataReceived((data) => {
+      if (data.praxiomAge) {
+        updateHealthData({ biologicalAge: data.praxiomAge });
+      }
+    });
+    return () => unsubscribe && unsubscribe();
+  }, []);
+
+  const loadHealthData = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('healthData');
+      if (stored) {
+        setHealthData(JSON.parse(stored));
+      }
+      setLoading(false);
+    } catch (error) {
+      console.error('Error loading health data:', error);
+      setLoading(false);
+    }
   };
 
-  const handleSyncToWatch = () => {
-    Alert.alert(
-      'Sync to Watch',
-      'Please connect to your Praxiom watch first from the Watch tab.',
-      [
-        { text: 'Cancel' },
-        { text: 'Go to Watch', onPress: () => navigation.navigate('Watch') }
-      ]
-    );
+  const updateHealthData = async (newData) => {
+    const updated = { ...healthData, ...newData };
+    setHealthData(updated);
+    await AsyncStorage.setItem('healthData', JSON.stringify(updated));
   };
 
   const getScoreColor = (score) => {
-    if (score >= 80) return '#4CAF50';
-    if (score >= 60) return '#FF9800';
-    return '#F44336';
+    if (score >= 85) return '#4CAF50'; // Green
+    if (score >= 70) return '#8BC34A'; // Light green
+    if (score >= 50) return '#FFA726'; // Orange
+    return '#EF5350'; // Red
   };
 
-  return (
-    <View style={styles.container}>
+  const getScoreLabel = (score) => {
+    if (score >= 85) return 'Excellent';
+    if (score >= 70) return 'Good';
+    if (score >= 50) return 'Fair';
+    return 'Poor';
+  };
+
+  const HealthScoreCard = ({ title, score, style }) => {
+    const color = getScoreColor(score);
+    const label = getScoreLabel(score);
+    const percentage = Math.min(100, Math.max(0, score));
+
+    return (
+      <View style={[styles.scoreCard, style]}>
+        <View style={styles.scoreCircleContainer}>
+          <View style={styles.scoreCircleOuter}>
+            <View 
+              style={[
+                styles.scoreCircleProgress, 
+                { 
+                  borderColor: color,
+                  borderWidth: 8,
+                  transform: [{ rotate: `${(percentage / 100) * 360}deg` }]
+                }
+              ]} 
+            />
+            <View style={styles.scoreCircleInner}>
+              <Text style={styles.scoreValue}>{Math.round(score)}</Text>
+            </View>
+          </View>
+        </View>
+        <Text style={styles.scoreTitle}>{title}</Text>
+        <View style={[styles.scoreLabel, { backgroundColor: color }]}>
+          <Text style={styles.scoreLabelText}>{label}</Text>
+        </View>
+      </View>
+    );
+  };
+
+  if (loading) {
+    return (
       <LinearGradient
-        colors={['#FF6B35', '#F7931E', '#3BCEAC']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.background}
+        colors={['rgba(21, 133, 181, 0.3)', 'rgba(94, 221, 238, 0.3)']}
+        style={styles.container}
       >
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>PRAXIOM HEALTH</Text>
-            <View style={styles.headerIcons}>
-              <TouchableOpacity 
-                style={styles.iconButton}
-                onPress={() => navigation.navigate('Watch')}
-              >
-                <Ionicons name="watch-outline" size={24} color="#FFF" />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.iconButton}
-                onPress={() => navigation.navigate('Settings')}
-              >
-                <Ionicons name="settings-outline" size={24} color="#FFF" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Bio-Age Card */}
-          <View style={styles.bioAgeCard}>
-            <Text style={styles.bioAgeLabel}>Your Bio-Age</Text>
-            <Text style={styles.bioAgeValue}>{healthData.bioAge}</Text>
-            <Text style={styles.bioAgeUnit}>years</Text>
-          </View>
-
-          {/* Health Scores */}
-          <View style={styles.scoresContainer}>
-            {/* Oral Health */}
-            <View style={styles.scoreCard}>
-              <Ionicons name="medkit" size={32} color="#FF6B35" />
-              <Text style={styles.scoreLabel}>Oral Health</Text>
-              <Text style={[
-                styles.scoreValue,
-                { color: getScoreColor(healthData.oralHealth) }
-              ]}>
-                {healthData.oralHealth}
-              </Text>
-              <View style={styles.scoreBar}>
-                <View 
-                  style={[
-                    styles.scoreBarFill,
-                    { 
-                      width: `${healthData.oralHealth}%`,
-                      backgroundColor: getScoreColor(healthData.oralHealth)
-                    }
-                  ]} 
-                />
-              </View>
-            </View>
-
-            {/* Systemic Health */}
-            <View style={styles.scoreCard}>
-              <Ionicons name="heart" size={32} color="#F7931E" />
-              <Text style={styles.scoreLabel}>Systemic Health</Text>
-              <Text style={[
-                styles.scoreValue,
-                { color: getScoreColor(healthData.systemicHealth) }
-              ]}>
-                {healthData.systemicHealth}
-              </Text>
-              <View style={styles.scoreBar}>
-                <View 
-                  style={[
-                    styles.scoreBarFill,
-                    { 
-                      width: `${healthData.systemicHealth}%`,
-                      backgroundColor: getScoreColor(healthData.systemicHealth)
-                    }
-                  ]} 
-                />
-              </View>
-            </View>
-
-            {/* Fitness Score - Centered */}
-            <View style={[styles.scoreCard, styles.fitnessCard]}>
-              <Ionicons name="fitness" size={32} color="#3BCEAC" />
-              <Text style={styles.scoreLabel}>Fitness Score</Text>
-              <Text style={[
-                styles.scoreValue,
-                { color: getScoreColor(healthData.fitnessScore) }
-              ]}>
-                {healthData.fitnessScore}
-              </Text>
-              <View style={styles.scoreBar}>
-                <View 
-                  style={[
-                    styles.scoreBarFill,
-                    { 
-                      width: `${healthData.fitnessScore}%`,
-                      backgroundColor: getScoreColor(healthData.fitnessScore)
-                    }
-                  ]} 
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* Action Buttons */}
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity 
-              style={[styles.button, styles.importButton]}
-              onPress={handleImportData}
-            >
-              <Ionicons name="download-outline" size={20} color="#FFF" />
-              <Text style={styles.buttonText}>Import Data</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.button, styles.syncButton]}
-              onPress={handleSyncToWatch}
-            >
-              <Ionicons name="sync-outline" size={20} color="#FFF" />
-              <Text style={styles.buttonText}>Sync to Watch</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Info Text */}
-          <Text style={styles.infoText}>
-            Connect to your Praxiom watch to sync health data
-          </Text>
-        </ScrollView>
+        <ActivityIndicator size="large" color="#1585B5" />
       </LinearGradient>
-    </View>
+    );
+  }
+
+  const ageDifference = healthData.biologicalAge - healthData.chronologicalAge;
+
+  return (
+    <LinearGradient
+      colors={['rgba(21, 133, 181, 0.3)', 'rgba(94, 221, 238, 0.3)']}
+      style={styles.container}
+    >
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Age Section */}
+        <View style={styles.ageSection}>
+          <Text style={styles.sectionTitle}>Your Biological Age</Text>
+          <Text style={styles.biologicalAge}>
+            {healthData.biologicalAge.toFixed(1)} years
+          </Text>
+          <Text style={styles.chronologicalAge}>
+            Chronological Age: {healthData.chronologicalAge} years 
+            {ageDifference !== 0 && (
+              <Text style={[
+                styles.ageDifference,
+                { color: ageDifference > 0 ? '#EF5350' : '#4CAF50' }
+              ]}>
+                {' '}({ageDifference > 0 ? '+' : ''}{ageDifference.toFixed(1)} years)
+              </Text>
+            )}
+          </Text>
+        </View>
+
+        {/* Health Scores Section */}
+        <View style={styles.scoresContainer}>
+          <View style={styles.topRow}>
+            <HealthScoreCard 
+              title="Oral Health Score"
+              score={healthData.oralHealthScore}
+              style={styles.halfCard}
+            />
+            <HealthScoreCard 
+              title="Systemic Health Score"
+              score={healthData.systemicHealthScore}
+              style={styles.halfCard}
+            />
+          </View>
+          
+          <HealthScoreCard 
+            title="Fitness Score"
+            score={healthData.fitnessScore}
+            style={styles.fullCard}
+          />
+        </View>
+
+        {/* Action Buttons */}
+        <TouchableOpacity 
+          style={styles.button}
+          onPress={() => navigation.navigate('Watch')}
+        >
+          <Text style={styles.buttonText}>Connect to Watch</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.button, styles.secondaryButton]}
+          onPress={() => navigation.navigate('Settings')}
+        >
+          <Text style={styles.buttonText}>Import Wearable Data</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </LinearGradient>
   );
 }
 
@@ -183,133 +184,130 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  background: {
-    flex: 1,
-    opacity: 0.95,
-  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 40,
+    paddingTop: 10,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  ageSection: {
     alignItems: 'center',
     marginBottom: 30,
     marginTop: 10,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFF',
-    letterSpacing: 1,
-  },
-  headerIcons: {
-    flexDirection: 'row',
-    gap: 15,
-  },
-  iconButton: {
-    padding: 5,
-  },
-  bioAgeCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 30,
-    alignItems: 'center',
-    marginBottom: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  bioAgeLabel: {
+  sectionTitle: {
     fontSize: 16,
-    color: '#666',
-    marginBottom: 10,
+    color: '#333',
+    marginBottom: 8,
+    fontWeight: '500',
   },
-  bioAgeValue: {
-    fontSize: 64,
+  biologicalAge: {
+    fontSize: 48,
     fontWeight: 'bold',
-    color: '#FF6B35',
+    color: '#EF5350',
+    marginBottom: 8,
   },
-  bioAgeUnit: {
-    fontSize: 18,
+  chronologicalAge: {
+    fontSize: 14,
     color: '#666',
-    marginTop: 5,
+  },
+  ageDifference: {
+    fontWeight: '600',
   },
   scoresContainer: {
-    gap: 20,
-    marginBottom: 30,
+    marginBottom: 20,
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  halfCard: {
+    width: '48%',
+  },
+  fullCard: {
+    width: '100%',
   },
   scoreCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: 20,
     padding: 20,
-    alignItems: 'flex-start',
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  scoreCircleContainer: {
+    marginBottom: 15,
+  },
+  scoreCircleOuter: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  scoreCircleProgress: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderRightColor: 'transparent',
+    borderBottomColor: 'transparent',
+  },
+  scoreCircleInner: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scoreValue: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  scoreTitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 10,
+    fontWeight: '500',
+  },
+  scoreLabel: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
+  scoreLabelText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  button: {
+    backgroundColor: '#1585B5',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  fitnessCard: {
-    alignItems: 'center',
-    alignSelf: 'center',
-    width: '100%',
-  },
-  scoreLabel: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 10,
-    marginBottom: 5,
-  },
-  scoreValue: {
-    fontSize: 42,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  scoreBar: {
-    width: '100%',
-    height: 8,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  scoreBarFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  buttonContainer: {
-    gap: 15,
-    marginBottom: 20,
-  },
-  button: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
-    gap: 10,
-  },
-  importButton: {
-    backgroundColor: '#3BCEAC',
-  },
-  syncButton: {
-    backgroundColor: '#FF6B35',
+  secondaryButton: {
+    backgroundColor: '#5EDDEE',
   },
   buttonText: {
-    color: '#FFF',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-  },
-  infoText: {
-    textAlign: 'center',
-    color: '#FFF',
-    fontSize: 14,
-    opacity: 0.9,
   },
 });
