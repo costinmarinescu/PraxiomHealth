@@ -20,8 +20,6 @@
     "expo-linear-gradient": "~13.0.2",
     "react-native-ble-plx": "^3.1.2",
     "@react-native-async-storage/async-storage": "1.23.1",
-    "react-native-health": "^1.19.0",
-    "react-native-google-fit": "^0.8.1",
     "base-64": "^1.0.0"
   },
   "devDependencies": {
