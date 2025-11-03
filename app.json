@@ -16,14 +16,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.praxiomhealth.app"
+      "bundleIdentifier": "com.praxiom.health"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.praxiomhealth.app",
+      "package": "com.praxiom.health",
       "permissions": [
         "BLUETOOTH",
         "BLUETOOTH_ADMIN",
