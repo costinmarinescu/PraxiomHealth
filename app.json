@@ -23,7 +23,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.praxiomhealth.app",
+      "package": "com.praxiom.health",
       "permissions": [
         "BLUETOOTH",
         "BLUETOOTH_ADMIN",
