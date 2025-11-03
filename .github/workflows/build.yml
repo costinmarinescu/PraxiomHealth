@@ -3,30 +3,45 @@ name: Build Praxiom Health App
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build Android APK
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - name: 🏗 Setup repo
+        uses: actions/checkout@v4
+
+      - name: 🏗 Setup Node
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
-          
-      - name: Setup Expo and EAS
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-          
-      - name: Install dependencies
-        run: npm install
-        
-      - name: Build Android APK
+          node-version: 18.x
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🔑 Check EAS Credentials (Diagnostic)
+        run: |
+          echo "🔍 Checking Expo project configuration..."
+          echo "Project ID: $(cat app.json | grep projectId | cut -d'"' -f4)"
+          echo "Package: $(cat app.json | grep '\"package\"' | cut -d'"' -f4)"
+          echo ""
+          echo "📋 EAS Configuration:"
+          cat eas.json | grep -A 5 "android"
+        continue-on-error: true
+
+      - name: 🚀 Build app
         run: eas build --platform android --profile preview --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 📦 Upload artifact
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: praxiom-health-apk
+          path: '*.apk'
