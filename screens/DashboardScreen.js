@@ -1,396 +1,484 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  StatusBar,
+  Dimensions
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import BLEService from '../services/BLEService';
-import WearableDataService from '../services/WearableDataService';
+import { Ionicons } from '@expo/vector-icons';
 
-export default function DashboardScreen() {
+const { width } = Dimensions.get('window');
+
+const DashboardScreen = ({ navigation, route }) => {
   const [healthData, setHealthData] = useState({
-    praxiomAge: null,
-    oralHealth: null,
-    systemicHealth: null,
-    fitnessScore: null,
+    oralHealth: 0,
+    systemicHealth: 0,
+    fitnessScore: 0,
+    bioAge: 0,
+    needsTier2: false,
+    needsTier3: false,
+    tier: 1
   });
 
-  const [watchData, setWatchData] = useState({
-    steps: '--',
-    heartRate: '--',
-    o2Saturation: '--'
-  });
-
-  const [loading, setLoading] = useState(true);
-
+  // Update health data when returning from biomarker input
   useEffect(() => {
-    loadData();
-    setupBLEListener();
-    
-    return () => {
-      BLEService.removeListener(handleBLEData);
-    };
-  }, []);
-
-  const loadData = async () => {
-    try {
-      const saved = await AsyncStorage.getItem('healthData');
-      if (saved) {
-        setHealthData(JSON.parse(saved));
-      }
-      setLoading(false);
-    } catch (error) {
-      console.error('Load data error:', error);
-      setLoading(false);
+    if (route.params?.bioAge) {
+      setHealthData({
+        bioAge: route.params.bioAge,
+        oralHealth: route.params.oralHealth || 0,
+        systemicHealth: route.params.systemicHealth || 0,
+        fitnessScore: route.params.fitness || 0,
+        needsTier2: route.params.needsTier2 || false,
+        needsTier3: route.params.needsTier3 || false,
+        inflammatoryScore: route.params.inflammatoryScore || 0,
+        nadScore: route.params.nadScore || 0,
+        wearableScore: route.params.wearableScore || 0,
+        microbiomeRisk: route.params.microbiomeRisk || 0,
+        tier: route.params.tier || 1
+      });
     }
+  }, [route.params]);
+
+  const getHealthStatus = (score) => {
+    if (score === 0) return { text: 'No Data', color: '#95A5A6' };
+    if (score >= 90) return { text: 'Excellent', color: '#2ECC71' };
+    if (score >= 75) return { text: 'Good', color: '#3498DB' };
+    if (score >= 60) return { text: 'Fair', color: '#F39C12' };
+    return { text: 'Poor', color: '#E74C3C' };
   };
 
-  const setupBLEListener = () => {
-    BLEService.addListener(handleBLEData);
-    
-    // Try auto-reconnect
-    BLEService.autoReconnect().then(connected => {
-      if (connected) {
-        console.log('Auto-reconnected to watch');
-      }
-    });
-  };
+  const CircularProgress = ({ score, title }) => {
+    const status = getHealthStatus(score);
 
-  const handleBLEData = (data) => {
-    setHealthData(prev => {
-      const updated = { ...prev, ...data };
-      AsyncStorage.setItem('healthData', JSON.stringify(updated));
-      return updated;
-    });
-
-    // Update watch data if available
-    if (data.heartRate) setWatchData(prev => ({ ...prev, heartRate: data.heartRate }));
-    if (data.steps) setWatchData(prev => ({ ...prev, steps: data.steps }));
-    if (data.o2Saturation) setWatchData(prev => ({ ...prev, o2Saturation: data.o2Saturation }));
-  };
-
-  const handleDNATest = () => {
-    Alert.alert(
-      'DNA Methylation Test',
-      'This feature will guide you through the DNA methylation testing process.\n\nComing soon!',
-      [{ text: 'OK' }]
+    return (
+      <View style={styles.circularCard}>
+        <View style={styles.circularProgressContainer}>
+          <View style={styles.circularProgressOuter}>
+            <View 
+              style={[
+                styles.circularProgressInner,
+                { borderColor: status.color, borderWidth: 8 }
+              ]}
+            >
+              <Text style={styles.scoreText}>{score}</Text>
+            </View>
+          </View>
+        </View>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <View style={[styles.statusBadge, { backgroundColor: status.color }]}>
+          <Text style={styles.statusText}>{status.text}</Text>
+        </View>
+      </View>
     );
-  };
-
-  const handleInputBiomarkers = () => {
-    Alert.alert(
-      'Input Tier Biomarkers',
-      'Enter your biomarker data manually.\n\nThis feature will allow you to input:\n• Blood test results\n• Health metrics\n• Lab values\n\nComing soon!',
-      [{ text: 'OK' }]
-    );
-  };
-
-  const handleBiomarkers = async () => {
-    try {
-      const scores = await WearableDataService.importAndCalculateScores();
-      if (scores) {
-        setHealthData(prev => ({
-          ...prev,
-          fitnessScore: scores.fitnessScore,
-          systemicHealth: scores.systemicScore,
-        }));
-        
-        Alert.alert(
-          'Biomarkers Calculated',
-          `Fitness Score: ${scores.fitnessScore}/100\nSystemic Health: ${scores.systemicScore}/100\n\n${scores.note || 'Scores calculated based on health data.'}`,
-          [{ text: 'OK' }]
-        );
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to calculate biomarker scores');
-    }
-  };
-
-  const sendDataToWatch = async () => {
-    if (!BLEService.isConnected()) {
-      Alert.alert('Not Connected', 'Please connect to your watch first from the Watch tab.');
-      return;
-    }
-
-    try {
-      await BLEService.writeHealthData(
-        healthData.praxiomAge || 0,
-        healthData.oralHealth || 0,
-        healthData.systemicHealth || 0,
-        healthData.fitnessScore || 0
-      );
-      Alert.alert('Success', 'Health data sent to your Praxiom watch!');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to send data to watch. Make sure you are still connected.');
-    }
   };
 
   return (
-    <LinearGradient
-      colors={['rgba(255, 107, 53, 0.15)', 'rgba(0, 0, 0, 0.9)', 'rgba(0, 188, 212, 0.15)']}
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        
-        {/* Praxiom Age - Top Centered */}
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
+      {/* Gradient Background */}
+      <LinearGradient
+        colors={['rgba(255, 140, 0, 0.15)', 'rgba(0, 207, 193, 0.15)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.gradientBackground}
+      />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.headerTitle}>PRAXIOM</Text>
+          <Text style={styles.headerTitle}>HEALTH</Text>
+        </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => navigation.navigate('Watch')}
+          >
+            <Ionicons name="watch" size={24} color="#333" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => navigation.navigate('Settings')}
+          >
+            <Ionicons name="settings-outline" size={24} color="#333" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Bio-Age Display */}
         <View style={styles.bioAgeContainer}>
-          <Text style={styles.bioAgeLabel}>Praxiom Age</Text>
+          <Text style={styles.bioAgeLabel}>
+            {healthData.tier === 2 ? 'Enhanced' : 'Your'} Praxiom Bio-Age
+          </Text>
           <Text style={styles.bioAgeValue}>
-            {healthData.praxiomAge !== null ? healthData.praxiomAge.toFixed(1) : '--'}
+            {healthData.bioAge > 0 ? `${healthData.bioAge}` : '--'}
           </Text>
           <Text style={styles.bioAgeUnit}>years</Text>
+          {healthData.tier === 2 && (
+            <Text style={styles.tierBadge}>TIER 2 ANALYSIS</Text>
+          )}
         </View>
 
-        {/* Row 1: Oral Health | Systemic Health */}
-        <View style={styles.row}>
-          <View style={[styles.metricCard, styles.halfWidth]}>
-            <Text style={styles.metricTitle}>Oral Health</Text>
-            <Text style={styles.metricValue}>
-              {healthData.oralHealth !== null ? healthData.oralHealth : '--'}
-            </Text>
-            <Text style={styles.metricUnit}>score</Text>
-          </View>
-
-          <View style={[styles.metricCard, styles.halfWidth]}>
-            <Text style={styles.metricTitle}>Systemic Health</Text>
-            <Text style={styles.metricValue}>
-              {healthData.systemicHealth !== null ? healthData.systemicHealth : '--'}
-            </Text>
-            <Text style={styles.metricUnit}>score</Text>
-          </View>
+        {/* Health Scores */}
+        <View style={styles.scoresRow}>
+          <CircularProgress score={healthData.oralHealth} title="Oral Health Score" />
+          <CircularProgress score={healthData.systemicHealth} title="Systemic Health Score" />
         </View>
 
-        {/* Row 2: Fitness Score | Live Watch Data */}
-        <View style={styles.row}>
-          <View style={[styles.metricCardTeal, styles.fiftyFiveWidth]}>
-            <Text style={styles.metricTitle}>Fitness Score</Text>
-            <Text style={styles.metricValue}>
-              {healthData.fitnessScore !== null ? healthData.fitnessScore : '--'}
-            </Text>
-            <Text style={styles.metricUnit}>level</Text>
+        {healthData.fitnessScore > 0 && (
+          <View style={styles.fitnessRow}>
+            <CircularProgress score={healthData.fitnessScore} title="Fitness Score" />
           </View>
+        )}
 
-          <View style={[styles.watchDataCardSmall, styles.fortyFiveWidth]}>
-            <Text style={styles.watchDataTitleSmall}>Live Watch</Text>
-            <View style={styles.watchDataItemSmall}>
-              <Text style={styles.watchDataLabelSmall}>Steps</Text>
-              <Text style={styles.watchDataValueSmall}>{watchData.steps}</Text>
+        {/* Tier 2 Scores (if available) */}
+        {healthData.tier === 2 && (
+          <>
+            <View style={styles.scoresRow}>
+              <CircularProgress score={healthData.inflammatoryScore} title="Inflammatory Panel" />
+              <CircularProgress score={healthData.nadScore} title="NAD+ Metabolome" />
             </View>
-            <View style={styles.watchDataItemSmall}>
-              <Text style={styles.watchDataLabelSmall}>HR</Text>
-              <Text style={styles.watchDataValueSmall}>{watchData.heartRate}</Text>
+            <View style={styles.fitnessRow}>
+              <CircularProgress score={healthData.wearableScore} title="Wearable Score" />
             </View>
-            <View style={styles.watchDataItemSmall}>
-              <Text style={styles.watchDataLabelSmall}>O₂</Text>
-              <Text style={styles.watchDataValueSmall}>{watchData.o2Saturation}%</Text>
+          </>
+        )}
+
+        {/* Wearable Integration */}
+        <View style={styles.wearableSection}>
+          <Text style={styles.sectionTitle}>Wearable Integration</Text>
+          <View style={styles.wearableCard}>
+            <View style={styles.wearableRow}>
+              <View style={styles.wearableItem}>
+                <Text style={styles.wearableIcon}>👣</Text>
+                <Text style={styles.wearableLabel}>Steps</Text>
+                <Text style={styles.wearableValue}>10000</Text>
+              </View>
+              <View style={styles.wearableItem}>
+                <Text style={styles.wearableIcon}>❤️</Text>
+                <Text style={styles.wearableLabel}>Heart Rate</Text>
+                <Text style={styles.wearableValue}>100 bpm</Text>
+              </View>
+              <View style={styles.wearableItem}>
+                <Text style={styles.wearableIcon}>💧</Text>
+                <Text style={styles.wearableLabel}>SpO₂</Text>
+                <Text style={styles.wearableValue}>96%</Text>
+              </View>
             </View>
           </View>
         </View>
 
         {/* Action Buttons */}
-        <View style={styles.actionButtonsContainer}>
-          {/* Row 1: DNA Test | Input Biomarkers (side by side) */}
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.dnaButtonHalf} onPress={handleDNATest}>
-              <Text style={styles.buttonText}>🧬 DNA Test</Text>
-            </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.connectButton}
+          onPress={() => {/* Connect watch logic */}}
+        >
+          <Ionicons name="watch" size={20} color="#fff" style={{ marginRight: 8 }} />
+          <Text style={styles.connectButtonText}>Connect Watch</Text>
+        </TouchableOpacity>
 
-            <TouchableOpacity style={styles.inputButtonHalf} onPress={handleInputBiomarkers}>
-              <Text style={styles.buttonText}>📝 Input Biomarkers</Text>
-            </TouchableOpacity>
-          </View>
+        {/* TIER 1 BIOMARKER INPUT BUTTON */}
+        <TouchableOpacity 
+          style={styles.updateButton}
+          onPress={() => navigation.navigate('Tier1BiomarkerInput', { age: healthData.bioAge })}
+        >
+          <Text style={styles.updateButtonText}>Update Tier 1 Biomarker Data</Text>
+        </TouchableOpacity>
 
-          {/* Row 2: Calculate Biomarkers (full width) */}
-          <TouchableOpacity style={styles.biomarkerButton} onPress={handleBiomarkers}>
-            <Text style={styles.buttonText}>📊 Calculate Tier 1 Biomarkers</Text>
+        {/* TIER 2 BIOMARKER INPUT BUTTON (shows if Tier 2 recommended or already in Tier 2) */}
+        {(healthData.needsTier2 || healthData.tier === 2) && (
+          <TouchableOpacity 
+            style={styles.tier2Button}
+            onPress={() => navigation.navigate('Tier2BiomarkerInput', {
+              age: healthData.bioAge,
+              systemicHealth: healthData.systemicHealth
+            })}
+          >
+            <Text style={styles.tier2ButtonText}>
+              {healthData.tier === 2 ? 'Update Tier 2 Biomarker Data' : 'Upgrade to Tier 2 Assessment'}
+            </Text>
           </TouchableOpacity>
+        )}
 
-          {BLEService.isConnected() && (
-            <TouchableOpacity style={styles.syncButton} onPress={sendDataToWatch}>
-              <Text style={styles.buttonText}>📲 Send to Watch</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        {/* TIER 3 RECOMMENDATION (if applicable) */}
+        {healthData.needsTier3 && (
+          <TouchableOpacity 
+            style={styles.tier3Button}
+            onPress={() => {/* Tier 3 logic */}}
+          >
+            <Text style={styles.tier3ButtonIcon}>⚕️</Text>
+            <Text style={styles.tier3ButtonText}>Tier 3 Precision Medicine Recommended</Text>
+          </TouchableOpacity>
+        )}
 
+        <TouchableOpacity 
+          style={styles.dnaButton}
+          onPress={() => {/* DNA test logic */}}
+        >
+          <Text style={styles.dnaButtonIcon}>🧬</Text>
+          <Text style={styles.dnaButtonText}>Input DNA Methylation Test</Text>
+        </TouchableOpacity>
+
+        <View style={{ height: 30 }} />
       </ScrollView>
-    </LinearGradient>
+    </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#fff',
+  },
+  gradientBackground: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 50,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    lineHeight: 22,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    gap: 15,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollContent: {
-    padding: 20,
-    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   bioAgeContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 30,
-    padding: 25,
-    marginTop: 10,
-    marginBottom: 20,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 107, 53, 0.5)',
-    width: '100%',
+    marginBottom: 30,
+    paddingVertical: 20,
   },
   bioAgeLabel: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
+    fontSize: 16,
+    color: '#7F8C8D',
+    marginBottom: 10,
   },
   bioAgeValue: {
-    color: '#00BCD4',
     fontSize: 56,
     fontWeight: 'bold',
+    color: '#2C3E50',
   },
   bioAgeUnit: {
-    color: '#aaa',
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: 18,
+    color: '#7F8C8D',
   },
-  row: {
+  tierBadge: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#3498DB',
+    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+    paddingHorizontal: 15,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  scoresRow: {
     flexDirection: 'row',
-    width: '100%',
-    marginBottom: 15,
     justifyContent: 'space-between',
+    marginBottom: 20,
   },
-  halfWidth: {
-    width: '48%',
+  fitnessRow: {
+    alignItems: 'center',
+    marginBottom: 30,
   },
-  fiftyFiveWidth: {
-    width: '53%',
+  circularCard: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 20,
+    padding: 20,
+    width: (width - 60) / 2,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  fortyFiveWidth: {
-    width: '45%',
+  circularProgressContainer: {
+    alignItems: 'center',
+    marginBottom: 15,
   },
-  metricCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 25,
-    padding: 18,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 107, 53, 0.3)',
+  circularProgressOuter: {
+    width: 120,
+    height: 120,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  metricCardTeal: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 25,
-    padding: 18,
-    borderWidth: 2,
-    borderColor: 'rgba(0, 188, 212, 0.3)',
+  circularProgressInner: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  metricTitle: {
-    color: '#fff',
-    fontSize: 15,
+  scoreText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+  },
+  cardTitle: {
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: 8,
+    color: '#2C3E50',
+    textAlign: 'center',
+    marginBottom: 10,
   },
-  metricValue: {
-    color: '#FF6B35',
-    fontSize: 42,
+  statusBadge: {
+    paddingHorizontal: 15,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
+  statusText: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: 'bold',
   },
-  metricUnit: {
-    color: '#aaa',
-    fontSize: 12,
-    marginTop: 4,
+  wearableSection: {
+    marginBottom: 25,
   },
-  watchDataCardSmall: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 25,
-    padding: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(0, 188, 212, 0.4)',
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    marginBottom: 15,
   },
-  watchDataTitleSmall: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 8,
-    textAlign: 'center',
+  wearableCard: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  watchDataItemSmall: {
+  wearableRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
+    justifyContent: 'space-around',
+  },
+  wearableItem: {
     alignItems: 'center',
   },
-  watchDataLabelSmall: {
-    color: '#aaa',
-    fontSize: 11,
+  wearableIcon: {
+    fontSize: 28,
+    marginBottom: 8,
   },
-  watchDataValueSmall: {
-    color: '#00BCD4',
+  wearableLabel: {
+    fontSize: 12,
+    color: '#7F8C8D',
+    marginBottom: 5,
+  },
+  wearableValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+  },
+  connectButton: {
+    backgroundColor: '#3498DB',
+    borderRadius: 15,
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 15,
+  },
+  connectButtonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  actionButtonsContainer: {
-    width: '100%',
-    marginTop: 20,
-    marginBottom: 20,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    width: '100%',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  dnaButtonHalf: {
-    backgroundColor: '#FF6B35',
-    paddingVertical: 18,
-    paddingHorizontal: 15,
-    borderRadius: 25,
-    width: '48%',
+  updateButton: {
+    backgroundColor: '#FF8C00',
+    borderRadius: 15,
+    padding: 18,
     alignItems: 'center',
-    shadowColor: '#FF6B35',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    marginBottom: 15,
   },
-  inputButtonHalf: {
-    backgroundColor: '#9C27B0',
-    paddingVertical: 18,
-    paddingHorizontal: 15,
-    borderRadius: 25,
-    width: '48%',
-    alignItems: 'center',
-    shadowColor: '#9C27B0',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  biomarkerButton: {
-    backgroundColor: '#00BCD4',
-    paddingVertical: 18,
-    paddingHorizontal: 25,
-    borderRadius: 25,
-    marginBottom: 12,
-    alignItems: 'center',
-    shadowColor: '#00BCD4',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  syncButton: {
-    backgroundColor: '#4CAF50',
-    paddingVertical: 18,
-    paddingHorizontal: 25,
-    borderRadius: 25,
-    alignItems: 'center',
-    shadowColor: '#4CAF50',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  buttonText: {
+  updateButtonText: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  tier2Button: {
+    backgroundColor: '#3498DB',
+    borderRadius: 15,
+    padding: 18,
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  tier2ButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  tier3Button: {
+    backgroundColor: '#9B59B6',
+    borderRadius: 15,
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 15,
+  },
+  tier3ButtonIcon: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  tier3ButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  dnaButton: {
+    backgroundColor: '#27AE60',
+    borderRadius: 15,
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 15,
+  },
+  dnaButtonIcon: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  dnaButtonText: {
+    color: '#fff',
+    fontSize: 16,
     fontWeight: 'bold',
   },
 });
+
+export default DashboardScreen;
