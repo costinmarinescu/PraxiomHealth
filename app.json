@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -16,11 +16,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.praxiomhealth.app",
-      "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to your Praxiom Health smartwatch to sync health data.",
-        "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to connect to your Praxiom Health smartwatch."
-      }
+      "bundleIdentifier": "com.praxiomhealth.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -39,16 +35,6 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      [
-        "react-native-ble-plx",
-        {
-          "isBackgroundEnabled": true,
-          "modes": ["peripheral", "central"],
-          "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to your Praxiom Health smartwatch"
-        }
-      ]
-    ],
     "extra": {
       "eas": {
         "projectId": "0b25cc14-e855-4c8b-8272-95523bb9c592"
