@@ -23,6 +23,9 @@ jobs:
       - name: 📦 Install dependencies
         run: npm install
 
+      - name: 🔧 Install EAS CLI
+        run: npm install -g eas-cli
+
       - name: 🔑 Check EAS Credentials (Diagnostic)
         run: |
           echo "🔍 Checking Expo project configuration..."
