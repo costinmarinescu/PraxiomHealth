@@ -75,6 +75,14 @@ export default function DashboardScreen() {
     );
   };
 
+  const handleInputBiomarkers = () => {
+    Alert.alert(
+      'Input Tier Biomarkers',
+      'Enter your biomarker data manually.\n\nThis feature will allow you to input:\n• Blood test results\n• Health metrics\n• Lab values\n\nComing soon!',
+      [{ text: 'OK' }]
+    );
+  };
+
   const handleBiomarkers = async () => {
     try {
       const scores = await WearableDataService.importAndCalculateScores();
@@ -179,10 +187,18 @@ export default function DashboardScreen() {
 
         {/* Action Buttons */}
         <View style={styles.actionButtonsContainer}>
-          <TouchableOpacity style={styles.dnaButton} onPress={handleDNATest}>
-            <Text style={styles.buttonText}>🧬 DNA Methylation Test</Text>
-          </TouchableOpacity>
+          {/* Row 1: DNA Test | Input Biomarkers (side by side) */}
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={styles.dnaButtonHalf} onPress={handleDNATest}>
+              <Text style={styles.buttonText}>🧬 DNA Test</Text>
+            </TouchableOpacity>
 
+            <TouchableOpacity style={styles.inputButtonHalf} onPress={handleInputBiomarkers}>
+              <Text style={styles.buttonText}>📝 Input Biomarkers</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Row 2: Calculate Biomarkers (full width) */}
           <TouchableOpacity style={styles.biomarkerButton} onPress={handleBiomarkers}>
             <Text style={styles.buttonText}>📊 Calculate Tier 1 Biomarkers</Text>
           </TouchableOpacity>
@@ -315,14 +331,33 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 20,
   },
-  dnaButton: {
+  buttonRow: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  dnaButtonHalf: {
     backgroundColor: '#FF6B35',
     paddingVertical: 18,
-    paddingHorizontal: 25,
+    paddingHorizontal: 15,
     borderRadius: 25,
-    marginBottom: 12,
+    width: '48%',
     alignItems: 'center',
     shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  inputButtonHalf: {
+    backgroundColor: '#9C27B0',
+    paddingVertical: 18,
+    paddingHorizontal: 15,
+    borderRadius: 25,
+    width: '48%',
+    alignItems: 'center',
+    shadowColor: '#9C27B0',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -355,7 +390,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
   },
 });
