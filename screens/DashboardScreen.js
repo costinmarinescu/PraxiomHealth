@@ -5,479 +5,365 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  StatusBar,
-  Dimensions
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+  RefreshControl,
+} from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import PraxiomBackground from '../components/PraxiomBackground';
+import CircularProgress from '../components/CircularProgress';
+import StorageService from '../services/StorageService';
+import BLEService from '../services/BLEService';
 
-const { width } = Dimensions.get('window');
+const DashboardScreen = ({ navigation }) => {
+  const [bioAge, setBioAge] = useState(null);
+  const [oralScore, setOralScore] = useState(0);
+  const [systemicScore, setSystemicScore] = useState(0);
+  const [fitnessScore, setFitnessScore] = useState(0);
+  const [chronologicalAge, setChronologicalAge] = useState(0);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [watchConnected, setWatchConnected] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-const DashboardScreen = ({ navigation, route }) => {
-  const [healthData, setHealthData] = useState({
-    oralHealth: 0,
-    systemicHealth: 0,
-    fitnessScore: 0,
-    bioAge: 0,
-    needsTier2: false,
-    needsTier3: false,
-    tier: 1
-  });
-
-  // Update health data when returning from biomarker input
   useEffect(() => {
-    if (route.params?.bioAge) {
-      setHealthData({
-        bioAge: route.params.bioAge,
-        oralHealth: route.params.oralHealth || 0,
-        systemicHealth: route.params.systemicHealth || 0,
-        fitnessScore: route.params.fitness || 0,
-        needsTier2: route.params.needsTier2 || false,
-        needsTier3: route.params.needsTier3 || false,
-        inflammatoryScore: route.params.inflammatoryScore || 0,
-        nadScore: route.params.nadScore || 0,
-        wearableScore: route.params.wearableScore || 0,
-        microbiomeRisk: route.params.microbiomeRisk || 0,
-        tier: route.params.tier || 1
-      });
+    loadLatestData();
+    
+    // Subscribe to watch connection status
+    const unsubscribe = BLEService.onConnectionChange((connected) => {
+      setWatchConnected(connected);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const loadLatestData = async () => {
+    try {
+      const latestEntry = await StorageService.getLatestBiomarkerEntry();
+      
+      if (latestEntry) {
+        setBioAge(latestEntry.bioAge);
+        setOralScore(latestEntry.oralScore || 0);
+        setSystemicScore(latestEntry.systemicScore || 0);
+        setFitnessScore(latestEntry.fitnessScore || 0);
+        setChronologicalAge(latestEntry.age || 0);
+        setLastUpdate(new Date(latestEntry.timestamp));
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
     }
-  }, [route.params]);
-
-  const getHealthStatus = (score) => {
-    if (score === 0) return { text: 'No Data', color: '#95A5A6' };
-    if (score >= 90) return { text: 'Excellent', color: '#2ECC71' };
-    if (score >= 75) return { text: 'Good', color: '#3498DB' };
-    if (score >= 60) return { text: 'Fair', color: '#F39C12' };
-    return { text: 'Poor', color: '#E74C3C' };
   };
 
-  const CircularProgress = ({ score, title }) => {
-    const status = getHealthStatus(score);
-
-    return (
-      <View style={styles.circularCard}>
-        <View style={styles.circularProgressContainer}>
-          <View style={styles.circularProgressOuter}>
-            <View 
-              style={[
-                styles.circularProgressInner,
-                { borderColor: status.color, borderWidth: 8 }
-              ]}
-            >
-              <Text style={styles.scoreText}>{score}</Text>
-            </View>
-          </View>
-        </View>
-        <Text style={styles.cardTitle}>{title}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: status.color }]}>
-          <Text style={styles.statusText}>{status.text}</Text>
-        </View>
-      </View>
-    );
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadLatestData();
+    setRefreshing(false);
   };
+
+  const getAgeDifference = () => {
+    if (!bioAge || !chronologicalAge) return null;
+    
+    const diff = bioAge - chronologicalAge;
+    if (diff < 0) {
+      return {
+        text: `${Math.abs(diff).toFixed(1)} years younger`,
+        color: '#4ade80',
+        icon: 'trending-down',
+      };
+    } else if (diff > 0) {
+      return {
+        text: `${diff.toFixed(1)} years older`,
+        color: '#ef4444',
+        icon: 'trending-up',
+      };
+    }
+    return {
+      text: 'Matches actual age',
+      color: '#fbbf24',
+      icon: 'remove',
+    };
+  };
+
+  const ageDiff = getAgeDifference();
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      
-      {/* Gradient Background */}
-      <LinearGradient
-        colors={['rgba(255, 140, 0, 0.15)', 'rgba(0, 207, 193, 0.15)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.gradientBackground}
-      />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>PRAXIOM</Text>
-          <Text style={styles.headerTitle}>HEALTH</Text>
-        </View>
-        <View style={styles.headerRight}>
+    <PraxiomBackground>
+      <ScrollView
+        style={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.headerTitle}>PRAXIOM HEALTH</Text>
+            <Text style={styles.headerSubtitle}>Biological Age Assessment</Text>
+          </View>
           <TouchableOpacity
-            style={styles.iconButton}
+            style={[
+              styles.watchStatus,
+              watchConnected && styles.watchConnected,
+            ]}
             onPress={() => navigation.navigate('Watch')}
           >
-            <Ionicons name="watch" size={24} color="#333" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => navigation.navigate('Settings')}
-          >
-            <Ionicons name="settings-outline" size={24} color="#333" />
+            <Ionicons
+              name="watch"
+              size={20}
+              color={watchConnected ? '#4ade80' : '#8e8e93'}
+            />
           </TouchableOpacity>
         </View>
-      </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
         {/* Bio-Age Display */}
-        <View style={styles.bioAgeContainer}>
-          <Text style={styles.bioAgeLabel}>
-            {healthData.tier === 2 ? 'Enhanced' : 'Your'} Praxiom Bio-Age
-          </Text>
-          <Text style={styles.bioAgeValue}>
-            {healthData.bioAge > 0 ? `${healthData.bioAge}` : '--'}
-          </Text>
-          <Text style={styles.bioAgeUnit}>years</Text>
-          {healthData.tier === 2 && (
-            <Text style={styles.tierBadge}>TIER 2 ANALYSIS</Text>
-          )}
-        </View>
+        {bioAge ? (
+          <View style={styles.bioAgeCard}>
+            <Text style={styles.bioAgeLabel}>Your Biological Age</Text>
+            <View style={styles.bioAgeDisplay}>
+              <Text style={styles.bioAgeValue}>{bioAge}</Text>
+              <Text style={styles.bioAgeUnit}>years</Text>
+            </View>
+            
+            {ageDiff && (
+              <View style={styles.ageDiffContainer}>
+                <Ionicons name={ageDiff.icon} size={20} color={ageDiff.color} />
+                <Text style={[styles.ageDiffText, { color: ageDiff.color }]}>
+                  {ageDiff.text}
+                </Text>
+              </View>
+            )}
+
+            {lastUpdate && (
+              <Text style={styles.lastUpdate}>
+                Last updated: {lastUpdate.toLocaleDateString()}
+              </Text>
+            )}
+          </View>
+        ) : (
+          <View style={styles.emptyCard}>
+            <Ionicons name="medical-outline" size={48} color="#8e8e93" />
+            <Text style={styles.emptyText}>No biomarker data yet</Text>
+            <Text style={styles.emptySubtext}>
+              Add your first biomarker assessment
+            </Text>
+          </View>
+        )}
 
         {/* Health Scores */}
-        <View style={styles.scoresRow}>
-          <CircularProgress score={healthData.oralHealth} title="Oral Health Score" />
-          <CircularProgress score={healthData.systemicHealth} title="Systemic Health Score" />
-        </View>
-
-        {healthData.fitnessScore > 0 && (
-          <View style={styles.fitnessRow}>
-            <CircularProgress score={healthData.fitnessScore} title="Fitness Score" />
-          </View>
-        )}
-
-        {/* Tier 2 Scores (if available) */}
-        {healthData.tier === 2 && (
-          <>
-            <View style={styles.scoresRow}>
-              <CircularProgress score={healthData.inflammatoryScore} title="Inflammatory Panel" />
-              <CircularProgress score={healthData.nadScore} title="NAD+ Metabolome" />
+        {bioAge && (
+          <View style={styles.scoresContainer}>
+            <Text style={styles.sectionTitle}>Health Scores</Text>
+            
+            <View style={styles.scoresGrid}>
+              <View style={styles.scoreItem}>
+                <CircularProgress score={oralScore} label="Oral Health" size={110} />
+              </View>
+              
+              <View style={styles.scoreItem}>
+                <CircularProgress score={systemicScore} label="Systemic" size={110} />
+              </View>
             </View>
-            <View style={styles.fitnessRow}>
-              <CircularProgress score={healthData.wearableScore} title="Wearable Score" />
-            </View>
-          </>
-        )}
 
-        {/* Wearable Integration */}
-        <View style={styles.wearableSection}>
-          <Text style={styles.sectionTitle}>Wearable Integration</Text>
-          <View style={styles.wearableCard}>
-            <View style={styles.wearableRow}>
-              <View style={styles.wearableItem}>
-                <Text style={styles.wearableIcon}>👣</Text>
-                <Text style={styles.wearableLabel}>Steps</Text>
-                <Text style={styles.wearableValue}>10000</Text>
-              </View>
-              <View style={styles.wearableItem}>
-                <Text style={styles.wearableIcon}>❤️</Text>
-                <Text style={styles.wearableLabel}>Heart Rate</Text>
-                <Text style={styles.wearableValue}>100 bpm</Text>
-              </View>
-              <View style={styles.wearableItem}>
-                <Text style={styles.wearableIcon}>💧</Text>
-                <Text style={styles.wearableLabel}>SpO₂</Text>
-                <Text style={styles.wearableValue}>96%</Text>
-              </View>
+            <View style={styles.scoresCenterRow}>
+              <CircularProgress score={fitnessScore} label="Fitness" size={110} />
             </View>
           </View>
-        </View>
+        )}
 
         {/* Action Buttons */}
-        <TouchableOpacity 
-          style={styles.connectButton}
-          onPress={() => {/* Connect watch logic */}}
-        >
-          <Ionicons name="watch" size={20} color="#fff" style={{ marginRight: 8 }} />
-          <Text style={styles.connectButtonText}>Connect Watch</Text>
-        </TouchableOpacity>
-
-        {/* TIER 1 BIOMARKER INPUT BUTTON */}
-        <TouchableOpacity 
-          style={styles.updateButton}
-          onPress={() => navigation.navigate('Tier1BiomarkerInput', { age: healthData.bioAge })}
-        >
-          <Text style={styles.updateButtonText}>Update Tier 1 Biomarker Data</Text>
-        </TouchableOpacity>
-
-        {/* TIER 2 BIOMARKER INPUT BUTTON (shows if Tier 2 recommended or already in Tier 2) */}
-        {(healthData.needsTier2 || healthData.tier === 2) && (
-          <TouchableOpacity 
-            style={styles.tier2Button}
-            onPress={() => navigation.navigate('Tier2BiomarkerInput', {
-              age: healthData.bioAge,
-              systemicHealth: healthData.systemicHealth
-            })}
+        <View style={styles.actionsContainer}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.primaryButton]}
+            onPress={() => navigation.navigate('Tier1Input')}
           >
-            <Text style={styles.tier2ButtonText}>
-              {healthData.tier === 2 ? 'Update Tier 2 Biomarker Data' : 'Upgrade to Tier 2 Assessment'}
-            </Text>
+            <Ionicons name="add-circle-outline" size={24} color="#ffffff" />
+            <Text style={styles.actionButtonText}>Update Biomarkers</Text>
           </TouchableOpacity>
-        )}
 
-        {/* TIER 3 RECOMMENDATION (if applicable) */}
-        {healthData.needsTier3 && (
-          <TouchableOpacity 
-            style={styles.tier3Button}
-            onPress={() => {/* Tier 3 logic */}}
+          <TouchableOpacity
+            style={[styles.actionButton, styles.secondaryButton]}
+            onPress={() => navigation.navigate('Historical')}
           >
-            <Text style={styles.tier3ButtonIcon}>⚕️</Text>
-            <Text style={styles.tier3ButtonText}>Tier 3 Precision Medicine Recommended</Text>
+            <Ionicons name="calendar-outline" size={24} color="#00d4ff" />
+            <Text style={styles.secondaryButtonText}>View History</Text>
           </TouchableOpacity>
-        )}
 
-        <TouchableOpacity 
-          style={styles.dnaButton}
-          onPress={() => {/* DNA test logic */}}
-        >
-          <Text style={styles.dnaButtonIcon}>🧬</Text>
-          <Text style={styles.dnaButtonText}>Input DNA Methylation Test</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.secondaryButton]}
+            onPress={() => navigation.navigate('Comparison')}
+          >
+            <Ionicons name="analytics-outline" size={24} color="#00d4ff" />
+            <Text style={styles.secondaryButtonText}>Compare Data</Text>
+          </TouchableOpacity>
 
-        <View style={{ height: 30 }} />
+          <TouchableOpacity
+            style={[styles.actionButton, styles.tertiaryButton]}
+            onPress={() => navigation.navigate('Tier2Input')}
+          >
+            <Ionicons name="rocket-outline" size={24} color="#4ade80" />
+            <Text style={styles.tertiaryButtonText}>Tier 2 Assessment</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
-    </View>
+    </PraxiomBackground>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-  },
-  gradientBackground: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    padding: 20,
+    paddingTop: 60,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#2C3E50',
-    lineHeight: 22,
+    color: '#ffffff',
+    letterSpacing: 2,
   },
-  headerRight: {
-    flexDirection: 'row',
-    gap: 15,
+  headerSubtitle: {
+    fontSize: 12,
+    color: '#8e8e93',
+    marginTop: 4,
   },
-  iconButton: {
+  watchStatus: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    backgroundColor: '#1e1e2e',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
   },
-  scrollContent: {
-    paddingHorizontal: 20,
+  watchConnected: {
+    backgroundColor: '#1e3a28',
   },
-  bioAgeContainer: {
+  bioAgeCard: {
+    margin: 20,
+    padding: 30,
+    backgroundColor: '#1e1e2e',
+    borderRadius: 20,
     alignItems: 'center',
-    marginBottom: 30,
-    paddingVertical: 20,
+    shadowColor: '#00d4ff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   bioAgeLabel: {
-    fontSize: 16,
-    color: '#7F8C8D',
+    fontSize: 14,
+    color: '#8e8e93',
     marginBottom: 10,
+  },
+  bioAgeDisplay: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
   },
   bioAgeValue: {
-    fontSize: 56,
+    fontSize: 64,
     fontWeight: 'bold',
-    color: '#2C3E50',
+    color: '#00d4ff',
   },
   bioAgeUnit: {
-    fontSize: 18,
-    color: '#7F8C8D',
+    fontSize: 24,
+    color: '#8e8e93',
+    marginLeft: 8,
   },
-  tierBadge: {
-    marginTop: 10,
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#3498DB',
-    backgroundColor: 'rgba(52, 152, 219, 0.1)',
-    paddingHorizontal: 15,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  scoresRow: {
+  ageDiffContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  fitnessRow: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginTop: 15,
   },
-  circularCard: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 20,
-    padding: 20,
-    width: (width - 60) / 2,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  circularProgressContainer: {
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  circularProgressOuter: {
-    width: 120,
-    height: 120,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  circularProgressInner: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scoreText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#2C3E50',
-  },
-  cardTitle: {
-    fontSize: 14,
+  ageDiffText: {
+    fontSize: 16,
+    marginLeft: 8,
     fontWeight: '600',
-    color: '#2C3E50',
-    textAlign: 'center',
-    marginBottom: 10,
   },
-  statusBadge: {
-    paddingHorizontal: 15,
-    paddingVertical: 6,
-    borderRadius: 15,
-  },
-  statusText: {
-    color: '#fff',
+  lastUpdate: {
     fontSize: 12,
-    fontWeight: 'bold',
+    color: '#8e8e93',
+    marginTop: 15,
   },
-  wearableSection: {
-    marginBottom: 25,
+  emptyCard: {
+    margin: 20,
+    padding: 40,
+    backgroundColor: '#1e1e2e',
+    borderRadius: 20,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 18,
+    color: '#ffffff',
+    marginTop: 15,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#8e8e93',
+    marginTop: 8,
+  },
+  scoresContainer: {
+    padding: 20,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#2C3E50',
-    marginBottom: 15,
+    color: '#ffffff',
+    marginBottom: 20,
   },
-  wearableCard: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  wearableRow: {
+  scoresGrid: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    marginBottom: 20,
   },
-  wearableItem: {
+  scoreItem: {
     alignItems: 'center',
   },
-  wearableIcon: {
-    fontSize: 28,
-    marginBottom: 8,
+  scoresCenterRow: {
+    alignItems: 'center',
   },
-  wearableLabel: {
-    fontSize: 12,
-    color: '#7F8C8D',
-    marginBottom: 5,
+  actionsContainer: {
+    padding: 20,
+    paddingBottom: 40,
   },
-  wearableValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#2C3E50',
-  },
-  connectButton: {
-    backgroundColor: '#3498DB',
-    borderRadius: 15,
-    padding: 18,
+  actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 15,
-  },
-  connectButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  updateButton: {
-    backgroundColor: '#FF8C00',
-    borderRadius: 15,
     padding: 18,
-    alignItems: 'center',
-    marginBottom: 15,
+    borderRadius: 12,
+    marginBottom: 12,
   },
-  updateButtonText: {
-    color: '#fff',
+  primaryButton: {
+    backgroundColor: '#00d4ff',
+  },
+  secondaryButton: {
+    backgroundColor: '#1e1e2e',
+    borderWidth: 2,
+    borderColor: '#00d4ff',
+  },
+  tertiaryButton: {
+    backgroundColor: '#1e3a28',
+    borderWidth: 2,
+    borderColor: '#4ade80',
+  },
+  actionButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
+    color: '#ffffff',
+    marginLeft: 10,
   },
-  tier2Button: {
-    backgroundColor: '#3498DB',
-    borderRadius: 15,
-    padding: 18,
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  tier2ButtonText: {
-    color: '#fff',
+  secondaryButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
+    color: '#00d4ff',
+    marginLeft: 10,
   },
-  tier3Button: {
-    backgroundColor: '#9B59B6',
-    borderRadius: 15,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 15,
-  },
-  tier3ButtonIcon: {
-    fontSize: 20,
-    marginRight: 10,
-  },
-  tier3ButtonText: {
-    color: '#fff',
+  tertiaryButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  dnaButton: {
-    backgroundColor: '#27AE60',
-    borderRadius: 15,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 15,
-  },
-  dnaButtonIcon: {
-    fontSize: 20,
-    marginRight: 10,
-  },
-  dnaButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: '#4ade80',
+    marginLeft: 10,
   },
 });
 
