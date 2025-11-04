@@ -17,12 +17,11 @@ jobs:
         with:
           node-version: 18
       
-      - name: Setup Expo
-        uses: expo/expo-github-action@v8
-        with:
-          expo-version: latest
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+      
+      - name: Expo Login
+        run: echo "${{ secrets.EXPO_TOKEN }}" | eas login --token-stdin
       
       - name: Install dependencies
         run: npm install
