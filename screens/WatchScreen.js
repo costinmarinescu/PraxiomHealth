@@ -1,273 +1,273 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  FlatList,
+  ScrollView,
+  StatusBar,
   ActivityIndicator,
-  Alert,
-} from 'react';
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import PraxiomBackground from '../components/PraxiomBackground';
-import BLEService from '../services/BLEService';
 
 const WatchScreen = () => {
-  const [scanning, setScanning] = useState(false);
-  const [devices, setDevices] = useState([]);
-  const [connectedDevice, setConnectedDevice] = useState(null);
+  const [isScanning, setIsScanning] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [devices, setDevices] = useState([]);
 
-  useEffect(() => {
-    const unsubscribe = BLEService.onConnectionChange((connected) => {
-      setIsConnected(connected);
-      if (!connected) {
-        setConnectedDevice(null);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const handleScan = async () => {
-    setScanning(true);
-    setDevices([]);
-
-    try {
-      const foundDevices = await BLEService.scanForWatch(
-        (device) => {
-          setDevices((prev) => {
-            if (!prev.find((d) => d.id === device.id)) {
-              return [...prev, device];
-            }
-            return prev;
-          });
-        },
-        10000
-      );
-    } catch (error) {
-      Alert.alert('Scan Error', error.message);
-    } finally {
-      setScanning(false);
-    }
+  const startScan = () => {
+    setIsScanning(true);
+    // Simulate scanning
+    setTimeout(() => {
+      setDevices([
+        { id: '1', name: 'PineTime-PXHM', rssi: -45 },
+        { id: '2', name: 'PineTime-AA23', rssi: -67 },
+      ]);
+      setIsScanning(false);
+    }, 2000);
   };
 
-  const handleConnect = async (device) => {
-    try {
-      await BLEService.connectToWatch(device.id);
-      setConnectedDevice(device);
-      Alert.alert('Connected', `Connected to ${device.name}`);
-    } catch (error) {
-      Alert.alert('Connection Error', error.message);
-    }
+  const connectToDevice = (device) => {
+    setIsConnected(true);
+    // BLE connection logic here
   };
-
-  const handleDisconnect = async () => {
-    try {
-      await BLEService.disconnectFromWatch();
-      Alert.alert('Disconnected', 'Watch disconnected');
-    } catch (error) {
-      Alert.alert('Disconnection Error', error.message);
-    }
-  };
-
-  const renderDevice = ({ item }) => (
-    <TouchableOpacity
-      style={styles.deviceCard}
-      onPress={() => handleConnect(item)}
-    >
-      <Ionicons name="watch-outline" size={32} color="#00d4ff" />
-      <View style={styles.deviceInfo}>
-        <Text style={styles.deviceName}>{item.name || 'Unknown Device'}</Text>
-        <Text style={styles.deviceId}>{item.id}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={24} color="#8e8e93" />
-    </TouchableOpacity>
-  );
 
   return (
-    <PraxiomBackground>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>PineTime Watch</Text>
-          <Text style={styles.subtitle}>
-            {isConnected ? 'Connected' : 'Not connected'}
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      
+      {/* Gradient Background matching dashboard */}
+      <LinearGradient
+        colors={['rgba(255, 140, 0, 0.15)', 'rgba(0, 207, 193, 0.15)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.gradientBackground}
+      />
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <Text style={styles.title}>Connect to PineTime</Text>
+
+        {/* Connection Status */}
+        <View style={[styles.card, styles.statusCard]}>
+          <Ionicons
+            name={isConnected ? 'checkmark-circle' : 'close-circle'}
+            size={48}
+            color={isConnected ? '#2ECC71' : '#95A5A6'}
+          />
+          <Text style={styles.statusText}>
+            {isConnected ? 'Connected' : 'Not Connected'}
           </Text>
+          {isConnected && (
+            <Text style={styles.deviceName}>PineTime-PXHM</Text>
+          )}
         </View>
 
-        {isConnected ? (
-          <View style={styles.connectedContainer}>
-            <View style={styles.connectedCard}>
-              <Ionicons name="checkmark-circle" size={64} color="#4ade80" />
-              <Text style={styles.connectedTitle}>{connectedDevice?.name}</Text>
-              <Text style={styles.connectedSubtitle}>Syncing data...</Text>
-              
-              <TouchableOpacity
-                style={styles.disconnectButton}
-                onPress={handleDisconnect}
-              >
-                <Text style={styles.disconnectText}>Disconnect</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : (
-          <>
-            <View style={styles.scanSection}>
-              <TouchableOpacity
-                style={[styles.scanButton, scanning && styles.scanningButton]}
-                onPress={handleScan}
-                disabled={scanning}
-              >
-                {scanning ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <Ionicons name="bluetooth" size={24} color="#ffffff" />
-                )}
-                <Text style={styles.scanButtonText}>
-                  {scanning ? 'Scanning...' : 'Scan for Watch'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+        {/* Scan Button */}
+        <TouchableOpacity
+          style={[styles.scanButton, isScanning && styles.scanningButton]}
+          onPress={startScan}
+          disabled={isScanning}
+        >
+          {isScanning ? (
+            <>
+              <ActivityIndicator color="white" />
+              <Text style={styles.scanButtonText}>Scanning...</Text>
+            </>
+          ) : (
+            <>
+              <Ionicons name="search" size={24} color="white" />
+              <Text style={styles.scanButtonText}>Scan for Devices</Text>
+            </>
+          )}
+        </TouchableOpacity>
 
-            {devices.length > 0 ? (
-              <FlatList
-                data={devices}
-                renderItem={renderDevice}
-                keyExtractor={(item) => item.id}
-                style={styles.deviceList}
-              />
-            ) : (
-              <View style={styles.emptyState}>
-                <Ionicons name="watch-outline" size={64} color="#8e8e93" />
-                <Text style={styles.emptyText}>No devices found</Text>
-                <Text style={styles.emptySubtext}>
-                  Make sure your PineTime is nearby and Bluetooth is enabled
-                </Text>
-              </View>
-            )}
-          </>
+        {/* Available Devices */}
+        {devices.length > 0 && (
+          <View style={styles.devicesSection}>
+            <Text style={styles.sectionTitle}>Available Devices</Text>
+            {devices.map((device) => (
+              <TouchableOpacity
+                key={device.id}
+                style={styles.deviceCard}
+                onPress={() => connectToDevice(device)}
+              >
+                <View style={styles.deviceInfo}>
+                  <Ionicons name="watch" size={32} color="#00CFC1" />
+                  <View style={styles.deviceDetails}>
+                    <Text style={styles.deviceName}>{device.name}</Text>
+                    <Text style={styles.deviceRssi}>
+                      Signal: {device.rssi} dBm
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={24} color="#95A5A6" />
+              </TouchableOpacity>
+            ))}
+          </View>
         )}
-      </View>
-    </PraxiomBackground>
+
+        {/* Features List */}
+        <View style={styles.featuresSection}>
+          <Text style={styles.sectionTitle}>Watch Features</Text>
+          <View style={styles.featureItem}>
+            <Ionicons name="heart" size={24} color="#FF6B6B" />
+            <Text style={styles.featureText}>Heart Rate Monitoring</Text>
+          </View>
+          <View style={styles.featureItem}>
+            <Ionicons name="footsteps" size={24} color="#00CFC1" />
+            <Text style={styles.featureText}>Step Tracking</Text>
+          </View>
+          <View style={styles.featureItem}>
+            <Ionicons name="body" size={24} color="#9B59B6" />
+            <Text style={styles.featureText}>Bio-Age Display</Text>
+          </View>
+          <View style={styles.featureItem}>
+            <Ionicons name="notifications" size={24} color="#F39C12" />
+            <Text style={styles.featureText}>Health Notifications</Text>
+          </View>
+        </View>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F5F5F5',
   },
-  header: {
-    padding: 20,
-    paddingTop: 60,
+  gradientBackground: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: StatusBar.currentHeight + 20,
+    paddingBottom: 30,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: '#333',
+    marginBottom: 20,
   },
-  subtitle: {
-    fontSize: 14,
-    color: '#8e8e93',
-    marginTop: 4,
-  },
-  connectedContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  connectedCard: {
-    backgroundColor: '#1e1e2e',
-    padding: 40,
+  card: {
+    backgroundColor: 'white',
     borderRadius: 20,
-    alignItems: 'center',
-    width: '100%',
-  },
-  connectedTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginTop: 20,
-  },
-  connectedSubtitle: {
-    fontSize: 14,
-    color: '#8e8e93',
-    marginTop: 8,
-  },
-  disconnectButton: {
-    marginTop: 30,
-    backgroundColor: '#ef4444',
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 12,
-  },
-  disconnectText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  scanSection: {
     padding: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  scanButton: {
-    flexDirection: 'row',
+  statusCard: {
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#00d4ff',
-    padding: 18,
-    borderRadius: 12,
+    marginBottom: 20,
   },
-  scanningButton: {
-    backgroundColor: '#666',
-  },
-  scanButtonText: {
-    fontSize: 16,
+  statusText: {
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#ffffff',
-    marginLeft: 10,
-  },
-  deviceList: {
-    flex: 1,
-  },
-  deviceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1e1e2e',
-    marginHorizontal: 20,
-    marginBottom: 10,
-    padding: 20,
-    borderRadius: 12,
-  },
-  deviceInfo: {
-    flex: 1,
-    marginLeft: 15,
+    color: '#333',
+    marginTop: 10,
   },
   deviceName: {
+    fontSize: 14,
+    color: '#7F8C8D',
+    marginTop: 5,
+  },
+  scanButton: {
+    backgroundColor: '#00CFC1',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 15,
+    marginBottom: 30,
+  },
+  scanningButton: {
+    backgroundColor: '#95A5A6',
+  },
+  scanButtonText: {
+    color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#ffffff',
+    marginLeft: 10,
   },
-  deviceId: {
-    fontSize: 12,
-    color: '#8e8e93',
-    marginTop: 4,
+  devicesSection: {
+    marginBottom: 30,
   },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
+  },
+  deviceCard: {
+    backgroundColor: 'white',
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 40,
+    justifyContent: 'space-between',
+    padding: 15,
+    borderRadius: 15,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  emptyText: {
-    fontSize: 18,
-    color: '#ffffff',
-    marginTop: 20,
+  deviceInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#8e8e93',
-    marginTop: 8,
-    textAlign: 'center',
+  deviceDetails: {
+    marginLeft: 15,
+  },
+  deviceRssi: {
+    fontSize: 12,
+    color: '#95A5A6',
+    marginTop: 2,
+  },
+  featuresSection: {
+    marginBottom: 20,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 15,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  featureText: {
+    fontSize: 16,
+    color: '#333',
+    marginLeft: 15,
   },
 });
 
