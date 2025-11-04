@@ -45,10 +45,7 @@
         "expo-build-properties",
         {
           "android": {
-            "kotlinVersion": "1.9.22",
-            "compileSdkVersion": 34,
-            "targetSdkVersion": 34,
-            "buildToolsVersion": "34.0.0"
+            "kotlinVersion": "1.9.20"
           }
         }
       ]
