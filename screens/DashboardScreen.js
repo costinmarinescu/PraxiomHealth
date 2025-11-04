@@ -43,8 +43,19 @@ const DashboardScreen = ({ navigation }) => {
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>PRAXIOM{'\n'}HEALTH</Text>
+        <View style={styles.headerLeft}>
+          <View style={styles.logoPlaceholder}>
+            <Text style={styles.logoText}>P</Text>
+          </View>
+          <Text style={styles.headerTitle}>PRAXIOM{'\n'}HEALTH</Text>
+        </View>
         <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => navigation.navigate('BiomarkerHistory')}
+          >
+            <Ionicons name="time" size={24} color="#333" />
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconButton}
             onPress={() => navigation.navigate('Watch')}
@@ -139,16 +150,49 @@ const DashboardScreen = ({ navigation }) => {
           <TouchableOpacity style={styles.wearableItem}>
             <Ionicons name="footsteps" size={32} color="#00CFC1" />
             <Text style={styles.wearableLabel}>Steps</Text>
+            <Text style={styles.wearableValue}>10000</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.wearableItem}>
             <Ionicons name="heart" size={32} color="#FF6B6B" />
             <Text style={styles.wearableLabel}>Heart Rate</Text>
+            <Text style={styles.wearableValue}>100 bpm</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.wearableItem}>
             <Ionicons name="water" size={32} color="#4ECDC4" />
             <Text style={styles.wearableLabel}>SpO₂</Text>
+            <Text style={styles.wearableValue}>96%</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Action Buttons */}
+        <TouchableOpacity
+          style={[styles.actionButton, styles.connectButton]}
+          onPress={() => navigation.navigate('Watch')}
+        >
+          <Ionicons name="watch" size={24} color="white" />
+          <Text style={styles.actionButtonText}>Connect Watch</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, styles.biomarkerButton]}
+          onPress={() => navigation.navigate('BiomarkerInput')}
+        >
+          <Text style={styles.actionButtonText}>Update Tier 1 Biomarker Data</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, styles.dnaButton]}
+        >
+          <Ionicons name="bar-chart" size={24} color="white" />
+          <Text style={styles.actionButtonText}>Input DNA Methylation Test</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, styles.upgradeButton]}
+        >
+          <Ionicons name="arrow-up-circle" size={24} color="white" />
+          <Text style={styles.actionButtonText}>Upgrade to Tier 2 Assessment</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -174,6 +218,24 @@ const styles = StyleSheet.create({
     paddingTop: StatusBar.currentHeight + 10,
     paddingBottom: 10,
     backgroundColor: 'transparent',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FF8C00',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  logoText: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
   headerTitle: {
     fontSize: 16,
@@ -318,6 +380,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#7F8C8D',
     marginTop: 8,
+  },
+  wearableValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 4,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    borderRadius: 15,
+    marginTop: 15,
+  },
+  connectButton: {
+    backgroundColor: '#2196F3',
+  },
+  biomarkerButton: {
+    backgroundColor: '#FF9800',
+  },
+  dnaButton: {
+    backgroundColor: '#2196F3',
+  },
+  upgradeButton: {
+    backgroundColor: '#2ECC71',
+  },
+  actionButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 10,
   },
 });
 
