@@ -5,30 +5,23 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1a1a2e"
+      "backgroundColor": "#ffffff"
     },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.praxiom.health",
-      "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "Praxiom Health needs Bluetooth to connect to your PineTime smartwatch for health monitoring.",
-        "NSBluetoothPeripheralUsageDescription": "Praxiom Health needs Bluetooth to sync health data with your smartwatch.",
-        "NSHealthShareUsageDescription": "Praxiom Health needs access to your health data to calculate your biological age.",
-        "NSHealthUpdateUsageDescription": "Praxiom Health needs to save health data.",
-        "NSMotionUsageDescription": "Praxiom Health needs motion data for fitness tracking."
-      }
+      "bundleIdentifier": "com.praxiom.health"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1a1a2e"
+        "backgroundColor": "#ffffff"
       },
       "package": "com.praxiom.health",
       "permissions": [
@@ -36,25 +29,24 @@
         "BLUETOOTH_ADMIN",
         "BLUETOOTH_CONNECT",
         "BLUETOOTH_SCAN",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "ACTIVITY_RECOGNITION"
+        "ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "extra": {
-      "eas": {
-        "projectId": "0b25cc14-e855-4c8b-8272-95523bb9c592"
-      }
-    },
-    "owner": "costinmarinescu",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/0b25cc14-e855-4c8b-8272-95523bb9c592"
-    }
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.22",
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "34.0.0"
+          }
+        }
+      ]
+    ]
   }
 }
