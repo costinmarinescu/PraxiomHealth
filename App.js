@@ -1,11 +1,12 @@
-// App.js
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Ionicons } from '@expo/vector-icons';
+import { Text } from 'react-native';
 
+// Import screens
 import DashboardScreen from './screens/DashboardScreen';
-import WatchScreen from './screens/WatchScreen';
+import BiomarkerInputScreen from './screens/BiomarkerInputScreen';
+import ReportScreen from './screens/ReportScreen';
 import SettingsScreen from './screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
@@ -14,36 +15,69 @@ export default function App() {
   return (
     <NavigationContainer>
       <Tab.Navigator
-        screenOptions={({ route }) => ({
-          tabBarIcon: ({ focused, color, size }) => {
-            let iconName;
-
-            if (route.name === 'Dashboard') {
-              iconName = focused ? 'home' : 'home-outline';
-            } else if (route.name === 'Watch') {
-              iconName = focused ? 'watch' : 'watch-outline';
-            } else if (route.name === 'Settings') {
-              iconName = focused ? 'settings' : 'settings-outline';
-            }
-
-            return <Ionicons name={iconName} size={size} color={color} />;
-          },
-          tabBarActiveTintColor: '#FF8C00',
-          tabBarInactiveTintColor: 'gray',
+        screenOptions={{
           tabBarStyle: {
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            backgroundColor: '#1a1a1e',
+            borderTopColor: 'rgba(255, 255, 255, 0.1)',
             borderTopWidth: 1,
-            borderTopColor: '#E0E0E0',
-            paddingTop: 5,
-            paddingBottom: 5,
-            height: 60,
           },
-          headerShown: false,
-        })}
+          tabBarActiveTintColor: '#00CFC1',
+          tabBarInactiveTintColor: '#888888',
+          headerStyle: {
+            backgroundColor: '#1a1a1e',
+          },
+          headerTintColor: '#FFFFFF',
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}
       >
-        <Tab.Screen name="Dashboard" component={DashboardScreen} />
-        <Tab.Screen name="Watch" component={WatchScreen} />
-        <Tab.Screen name="Settings" component={SettingsScreen} />
+        <Tab.Screen 
+          name="Dashboard" 
+          component={DashboardScreen}
+          options={{
+            tabBarLabel: 'Dashboard',
+            tabBarIcon: ({ color }) => (
+              <Text style={{ fontSize: 20 }}>🏠</Text>
+            ),
+            headerShown: false,
+          }}
+        />
+        
+        <Tab.Screen 
+          name="Input" 
+          component={BiomarkerInputScreen}
+          options={{
+            tabBarLabel: 'Input',
+            tabBarIcon: ({ color }) => (
+              <Text style={{ fontSize: 20 }}>📝</Text>
+            ),
+            title: 'Input Biomarkers',
+          }}
+        />
+        
+        <Tab.Screen 
+          name="Report" 
+          component={ReportScreen}
+          options={{
+            tabBarLabel: 'Report',
+            tabBarIcon: ({ color }) => (
+              <Text style={{ fontSize: 20 }}>📊</Text>
+            ),
+            title: 'Your Report',
+          }}
+        />
+        
+        <Tab.Screen 
+          name="Settings" 
+          component={SettingsScreen}
+          options={{
+            tabBarLabel: 'Settings',
+            tabBarIcon: ({ color }) => (
+              <Text style={{ fontSize: 20 }}>⚙️</Text>
+            ),
+          }}
+        />
       </Tab.Navigator>
     </NavigationContainer>
   );
