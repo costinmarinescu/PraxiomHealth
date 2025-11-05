@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -17,35 +17,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.praxiom.health",
-      "infoPlist": {
-        "NSHealthShareUsageDescription": "Praxiom Health needs access to read your health data to calculate your biological age.",
-        "NSHealthUpdateUsageDescription": "Praxiom Health needs permission to save health data.",
-        "NSBluetoothAlwaysUsageDescription": "Praxiom Health uses Bluetooth to connect to your smartwatch and sync health data.",
-        "NSBluetoothPeripheralUsageDescription": "Praxiom Health uses Bluetooth to connect to your smartwatch."
-      },
-      "config": {
-        "usesNonExemptEncryption": false
-      }
+      "deploymentTarget": "13.4"
     },
     "android": {
+      "package": "com.praxiom.health",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      },
-      "package": "com.praxiom.health",
-      "permissions": [
-        "BLUETOOTH",
-        "BLUETOOTH_ADMIN",
-        "BLUETOOTH_SCAN",
-        "BLUETOOTH_CONNECT",
-        "BLUETOOTH_ADVERTISE",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "ACTIVITY_RECOGNITION",
-        "BODY_SENSORS",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
-      ]
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -60,11 +39,10 @@
         "expo-build-properties",
         {
           "android": {
-            "kotlinVersion": "1.9.20",
-            "minSdkVersion": 26
+            "kotlinVersion": "1.9.20"
           },
           "ios": {
-            "deploymentTarget": "13.0"
+            "deploymentTarget": "13.4"
           }
         }
       ]
