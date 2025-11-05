@@ -7,20 +7,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 let AppleHealthKit = null;
 let HealthConnect = null;
 
+// Note: react-native-health removed to fix build issues
+// Will be added back when iOS HealthKit integration is needed
 if (Platform.OS === 'ios') {
-  try {
-    AppleHealthKit = require('react-native-health').default;
-  } catch (e) {
-    console.log('Apple HealthKit not available');
-  }
+  // HealthKit integration placeholder
+  console.log('iOS HealthKit integration not yet implemented');
 }
 
 if (Platform.OS === 'android') {
-  try {
-    HealthConnect = require('react-native-health-connect');
-  } catch (e) {
-    console.log('Health Connect not available');
-  }
+  // Health Connect integration placeholder
+  console.log('Android Health Connect integration not yet implemented');
 }
 
 class WearableService {
