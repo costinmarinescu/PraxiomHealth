@@ -100,33 +100,11 @@ export default function WatchScreen() {
   };
 
   const setupAppleHealth = async () => {
-    const result = await WearableService.initializeAppleHealth();
-    if (result.success) {
-      Alert.alert('Success', 'Apple HealthKit connected!');
-      setConnectedDevice({
-        provider: 'apple',
-        deviceName: 'Apple HealthKit',
-        connected: true,
-      });
-      setConnectionStatus('connected');
-    } else {
-      Alert.alert('Error', result.error);
-    }
+    Alert.alert('Coming Soon', 'Apple HealthKit integration will be available in a future update!');
   };
 
   const setupHealthConnect = async () => {
-    const result = await WearableService.initializeHealthConnect();
-    if (result.success) {
-      Alert.alert('Success', 'Health Connect enabled!');
-      setConnectedDevice({
-        provider: 'healthconnect',
-        deviceName: 'Health Connect',
-        connected: true,
-      });
-      setConnectionStatus('connected');
-    } else {
-      Alert.alert('Error', result.error);
-    }
+    Alert.alert('Coming Soon', 'Health Connect integration will be available in a future update!');
   };
 
   const renderDevice = ({ item }) => (
