@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,16 @@ import {
   TextInput,
   Modal,
   Alert,
-  Image
+  Platform
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function DashboardScreen() {
   // State for biomarkers and scores
-  const [praxiomAge, setPraxiomAge] = useState(null);
+  const [biologicalAge, setBiologicalAge] = useState(null);
+  const [chronologicalAge, setChronologicalAge] = useState(null);
+  const [dateOfBirth, setDateOfBirth] = useState(null);
   const [oralHealth, setOralHealth] = useState(null);
   const [systemicHealth, setSystemicHealth] = useState(null);
   const [fitnessScore, setFitnessScore] = useState(null);
@@ -25,9 +28,12 @@ export default function DashboardScreen() {
   const [oxygen, setOxygen] = useState('--');
   
   // Modal states
+  const [showDOBModal, setShowDOBModal] = useState(false);
   const [showDNAModal, setShowDNAModal] = useState(false);
   const [showBiomarkerModal, setShowBiomarkerModal] = useState(false);
   const [showTier2Modal, setShowTier2Modal] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState(new Date());
   
   // DNA Methylation input
   const [dnaMethylation, setDNAMethylation] = useState('');
@@ -54,29 +60,73 @@ export default function DashboardScreen() {
     vitaminD: ''
   });
 
-  // Function to push Praxiom Age to watch
+  // Calculate chronological age from date of birth
+  useEffect(() => {
+    if (dateOfBirth) {
+      const today = new Date();
+      const birthDate = new Date(dateOfBirth);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      
+      // Calculate decimal age (more precise)
+      const daysSinceBirth = (today - birthDate) / (1000 * 60 * 60 * 24);
+      const decimalAge = daysSinceBirth / 365.25;
+      
+      setChronologicalAge(decimalAge);
+    }
+  }, [dateOfBirth]);
+
+  // Function to push Biological Age to watch
   const pushToWatch = () => {
-    if (praxiomAge === null) {
-      Alert.alert('No Bio-Age', 'Please calculate your Tier 1 biomarkers first to generate your Bio-Age.');
+    if (biologicalAge === null) {
+      Alert.alert('No Bio-Age', 'Please calculate your Tier 1 biomarkers first to generate your Biological Age.');
       return;
     }
     
-    // TODO: Implement BLE communication to watch
     Alert.alert(
       'Sync to Watch',
-      `Pushing Bio-Age ${praxiomAge.toFixed(1)} years to your PineTime watch...`,
+      `Pushing Biological Age ${biologicalAge.toFixed(1)} years to your PineTime watch...`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Sync Now', 
           onPress: () => {
-            // Here you would implement the BLE sync
-            console.log('Syncing to watch:', praxiomAge);
-            Alert.alert('Success', 'Bio-Age synced to watch!');
+            // TODO: Implement BLE communication to watch
+            console.log('Syncing to watch:', biologicalAge);
+            Alert.alert('Success', 'Biological Age synced to watch!');
           }
         }
       ]
     );
+  };
+
+  // Save Date of Birth
+  const saveDateOfBirth = () => {
+    if (!tempDate) {
+      Alert.alert('Missing Date', 'Please select your date of birth.');
+      return;
+    }
+    
+    const today = new Date();
+    if (tempDate > today) {
+      Alert.alert('Invalid Date', 'Date of birth cannot be in the future.');
+      return;
+    }
+    
+    const minDate = new Date();
+    minDate.setFullYear(minDate.getFullYear() - 120);
+    if (tempDate < minDate) {
+      Alert.alert('Invalid Date', 'Please enter a valid date of birth.');
+      return;
+    }
+
+    setDateOfBirth(tempDate);
+    setShowDOBModal(false);
+    Alert.alert('Saved', 'Your date of birth has been recorded.');
   };
 
   // Calculate Tier 1 Biomarkers
@@ -89,13 +139,18 @@ export default function DashboardScreen() {
       return;
     }
 
-    // Simple calculation algorithm (you can make this more sophisticated)
-    let baseAge = dnaMethylation ? parseFloat(dnaMethylation) : 40;
+    if (chronologicalAge === null) {
+      Alert.alert('Missing DOB', 'Please enter your date of birth first for accurate calculations.');
+      return;
+    }
+
+    // Simple calculation algorithm
+    let baseAge = dnaMethylation ? parseFloat(dnaMethylation) : chronologicalAge;
     let adjustments = 0;
     let count = 0;
 
     // Oral Health Score calculation
-    let oralScore = 85; // Default
+    let oralScore = 85;
     if (tier1Biomarkers.salivaryPH) {
       const ph = parseFloat(tier1Biomarkers.salivaryPH);
       if (ph < 6.5 || ph > 7.2) oralScore -= 10;
@@ -114,7 +169,7 @@ export default function DashboardScreen() {
     setOralHealth(Math.max(50, Math.min(100, oralScore)));
 
     // Systemic Health Score calculation
-    let systemicScore = 85; // Default
+    let systemicScore = 85;
     if (tier1Biomarkers.hsCRP) {
       const crp = parseFloat(tier1Biomarkers.hsCRP);
       if (crp > 1.0) {
@@ -149,11 +204,11 @@ export default function DashboardScreen() {
     }
     setSystemicHealth(Math.max(50, Math.min(100, systemicScore)));
 
-    // Calculate final Bio-Age
+    // Calculate final Biological Age
     const finalAge = baseAge + (adjustments / Math.max(1, count)) * 2;
-    setPraxiomAge(finalAge);
+    setBiologicalAge(finalAge);
 
-    // Estimate fitness score based on overall health
+    // Estimate fitness score
     const avgScore = (oralScore + systemicScore) / 2;
     if (avgScore >= 85) setFitnessScore(90);
     else if (avgScore >= 70) setFitnessScore(75);
@@ -161,7 +216,7 @@ export default function DashboardScreen() {
 
     Alert.alert(
       'Calculation Complete',
-      `Your Bio-Age: ${finalAge.toFixed(1)} years\nOral Health: ${oralScore}%\nSystemic Health: ${systemicScore}%`,
+      `Your Biological Age: ${finalAge.toFixed(1)} years\nChronological Age: ${chronologicalAge.toFixed(1)} years\nDifference: ${(finalAge - chronologicalAge).toFixed(1)} years\n\nOral Health: ${oralScore}%\nSystemic Health: ${systemicScore}%`,
       [{ text: 'OK' }]
     );
   };
@@ -183,21 +238,26 @@ export default function DashboardScreen() {
     setShowDNAModal(false);
   };
 
-  // Save Tier 1 Biomarkers
   const saveTier1Biomarkers = () => {
     setShowBiomarkerModal(false);
     Alert.alert('Saved', 'Tier 1 biomarkers have been recorded.');
   };
 
-  // Save Tier 2 Biomarkers
   const saveTier2Biomarkers = () => {
     setShowTier2Modal(false);
     Alert.alert('Saved', 'Tier 2 biomarkers have been recorded.');
   };
 
+  const onDateChange = (event, selectedDate) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setTempDate(selectedDate);
+    }
+  };
+
   return (
     <LinearGradient
-      colors={['rgba(255, 140, 0, 0.15)', 'rgba(0, 207, 193, 0.15)']}
+      colors={['#1a1a2e', '#16213e', '#0f3460']}
       style={styles.container}
     >
       <ScrollView 
@@ -207,105 +267,274 @@ export default function DashboardScreen() {
       >
         {/* Header with Logo */}
         <View style={styles.header}>
-          <View style={styles.logoPlaceholder}>
-            <Text style={styles.logoText}>PH</Text>
+          <View style={styles.logoContainer}>
+            <LinearGradient
+              colors={['#8B5CF6', '#7C3AED']}
+              style={styles.logo}
+            >
+              <Text style={styles.logoText}>PH</Text>
+            </LinearGradient>
           </View>
           <Text style={styles.headerText}>Praxiom Health</Text>
         </View>
 
-        {/* Praxiom Age Card */}
+        {/* Main Age Card - Biological Age */}
         <TouchableOpacity 
-          style={[styles.mainCard, styles.praxiomAgeCard]}
+          style={styles.mainCard}
           onPress={pushToWatch}
-          activeOpacity={0.8}
+          activeOpacity={0.9}
         >
-          <Text style={styles.cardTitle}>Praxiom Age</Text>
-          <View style={styles.ageValueContainer}>
-            <Text style={styles.ageValue}>
-              {praxiomAge !== null ? praxiomAge.toFixed(1) : '--'}
+          <LinearGradient
+            colors={['#8B5CF6', '#7C3AED', '#6D28D9']}
+            style={styles.mainCardGradient}
+          >
+            <View style={styles.ageHeader}>
+              <View style={styles.iconContainer}>
+                <Text style={styles.icon}>🧬</Text>
+              </View>
+              <Text style={styles.mainCardTitle}>Biological Age</Text>
+            </View>
+            
+            <View style={styles.ageDisplay}>
+              {/* Chronological Age - Small Display */}
+              <View style={styles.chronoAgeContainer}>
+                <Text style={styles.chronoLabel}>Chronological</Text>
+                <Text style={styles.chronoAge}>
+                  {chronologicalAge !== null ? chronologicalAge.toFixed(1) : '--'}
+                </Text>
+              </View>
+
+              {/* Arrow */}
+              <Text style={styles.arrow}>→</Text>
+
+              {/* Biological Age - Large Display */}
+              <View style={styles.bioAgeContainer}>
+                <Text style={styles.bioLabel}>Biological</Text>
+                <Text style={styles.bioAge}>
+                  {biologicalAge !== null ? biologicalAge.toFixed(1) : '--'}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.yearsLabel}>years</Text>
+            
+            {biologicalAge !== null && chronologicalAge !== null && (
+              <View style={styles.differenceContainer}>
+                <Text style={styles.differenceText}>
+                  {biologicalAge < chronologicalAge ? '✨ ' : ''}
+                  {Math.abs(biologicalAge - chronologicalAge).toFixed(1)} years 
+                  {biologicalAge < chronologicalAge ? ' younger' : ' older'}
+                </Text>
+              </View>
+            )}
+
+            <Text style={styles.tapToSync}>
+              {biologicalAge !== null ? '👆 Tap to sync to watch' : '💡 Calculate biomarkers first'}
             </Text>
-          </View>
-          <Text style={styles.ageLabel}>years</Text>
-          <Text style={styles.tapToSync}>
-            {praxiomAge !== null ? 'Tap to sync to watch' : 'Calculate biomarkers first'}
-          </Text>
+          </LinearGradient>
         </TouchableOpacity>
 
         {/* Health Score Cards Row */}
         <View style={styles.cardRow}>
-          <View style={[styles.card, styles.orangeCard]}>
-            <Text style={styles.cardTitle}>Oral Health</Text>
-            <View style={styles.scoreContainer}>
-              <Text style={styles.scoreValue}>
-                {oralHealth !== null ? oralHealth : '--'}
-              </Text>
-            </View>
-            <Text style={styles.scoreLabel}>score</Text>
+          <View style={styles.card}>
+            <LinearGradient
+              colors={['#EC4899', '#DB2777']}
+              style={styles.cardGradient}
+            >
+              <Text style={styles.cardTitle}>Oral Health</Text>
+              <View style={styles.scoreContainer}>
+                <Text style={styles.scoreValue}>
+                  {oralHealth !== null ? oralHealth : '--'}
+                </Text>
+                <Text style={styles.scoreUnit}>%</Text>
+              </View>
+              <View style={styles.scoreBar}>
+                <View style={[styles.scoreBarFill, { width: `${oralHealth || 0}%` }]} />
+              </View>
+            </LinearGradient>
           </View>
 
-          <View style={[styles.card, styles.orangeCard]}>
-            <Text style={styles.cardTitle}>Systemic Health</Text>
-            <View style={styles.scoreContainer}>
-              <Text style={styles.scoreValue}>
-                {systemicHealth !== null ? systemicHealth : '--'}
-              </Text>
-            </View>
-            <Text style={styles.scoreLabel}>score</Text>
+          <View style={styles.card}>
+            <LinearGradient
+              colors={['#F59E0B', '#D97706']}
+              style={styles.cardGradient}
+            >
+              <Text style={styles.cardTitle}>Systemic Health</Text>
+              <View style={styles.scoreContainer}>
+                <Text style={styles.scoreValue}>
+                  {systemicHealth !== null ? systemicHealth : '--'}
+                </Text>
+                <Text style={styles.scoreUnit}>%</Text>
+              </View>
+              <View style={styles.scoreBar}>
+                <View style={[styles.scoreBarFill, { width: `${systemicHealth || 0}%` }]} />
+              </View>
+            </LinearGradient>
           </View>
         </View>
 
         {/* Fitness and Watch Cards Row */}
         <View style={styles.cardRow}>
-          <View style={[styles.card, styles.cyanCard]}>
-            <Text style={styles.cardTitle}>Fitness Score</Text>
-            <View style={styles.scoreContainer}>
-              <Text style={styles.scoreValue}>
-                {fitnessScore !== null ? fitnessScore : '--'}
-              </Text>
-            </View>
-            <Text style={styles.scoreLabel}>level</Text>
+          <View style={styles.card}>
+            <LinearGradient
+              colors={['#10B981', '#059669']}
+              style={styles.cardGradient}
+            >
+              <Text style={styles.cardTitle}>Fitness Score</Text>
+              <View style={styles.scoreContainer}>
+                <Text style={styles.scoreValue}>
+                  {fitnessScore !== null ? fitnessScore : '--'}
+                </Text>
+              </View>
+              <Text style={styles.scoreLabel}>level</Text>
+            </LinearGradient>
           </View>
 
-          <View style={[styles.card, styles.cyanCard]}>
-            <Text style={styles.cardTitle}>Live Watch</Text>
-            <View style={styles.liveWatchContent}>
-              <View style={styles.liveWatchRow}>
-                <Text style={styles.liveWatchLabel}>Steps</Text>
-                <Text style={styles.liveWatchValue}>{steps}</Text>
+          <View style={styles.card}>
+            <LinearGradient
+              colors={['#3B82F6', '#2563EB']}
+              style={styles.cardGradient}
+            >
+              <Text style={styles.cardTitle}>Live Watch</Text>
+              <View style={styles.liveWatchContent}>
+                <View style={styles.liveWatchRow}>
+                  <Text style={styles.liveWatchLabel}>Steps</Text>
+                  <Text style={styles.liveWatchValue}>{steps}</Text>
+                </View>
+                <View style={styles.liveWatchRow}>
+                  <Text style={styles.liveWatchLabel}>HR</Text>
+                  <Text style={styles.liveWatchValue}>{heartRate}</Text>
+                </View>
+                <View style={styles.liveWatchRow}>
+                  <Text style={styles.liveWatchLabel}>O₂</Text>
+                  <Text style={styles.liveWatchValue}>{oxygen}</Text>
+                </View>
               </View>
-              <View style={styles.liveWatchRow}>
-                <Text style={styles.liveWatchLabel}>HR</Text>
-                <Text style={styles.liveWatchValue}>{heartRate}</Text>
-              </View>
-              <View style={styles.liveWatchRow}>
-                <Text style={styles.liveWatchLabel}>O₂</Text>
-                <Text style={styles.liveWatchValue}>{oxygen}</Text>
-              </View>
-            </View>
+            </LinearGradient>
           </View>
         </View>
 
         {/* Action Buttons */}
+        {!dateOfBirth && (
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => setShowDOBModal(true)}
+          >
+            <LinearGradient
+              colors={['#8B5CF6', '#7C3AED']}
+              style={styles.buttonGradient}
+            >
+              <Text style={styles.buttonText}>📅 Set Date of Birth</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity 
-          style={[styles.actionButton, styles.orangeButton]}
+          style={styles.actionButton}
           onPress={() => setShowDNAModal(true)}
         >
-          <Text style={styles.buttonText}>🧬 DNA Methylation Test</Text>
+          <LinearGradient
+            colors={['#EC4899', '#DB2777']}
+            style={styles.buttonGradient}
+          >
+            <Text style={styles.buttonText}>🧬 DNA Methylation Test</Text>
+          </LinearGradient>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={[styles.actionButton, styles.purpleButton]}
+          style={styles.actionButton}
           onPress={() => setShowBiomarkerModal(true)}
         >
-          <Text style={styles.buttonText}>📝 Input Biomarkers</Text>
+          <LinearGradient
+            colors={['#F59E0B', '#D97706']}
+            style={styles.buttonGradient}
+          >
+            <Text style={styles.buttonText}>📝 Input Biomarkers</Text>
+          </LinearGradient>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={[styles.actionButton, styles.cyanButton]}
+          style={styles.actionButton}
           onPress={calculateTier1}
         >
-          <Text style={styles.buttonText}>📊 Calculate Tier 1 Biomarkers</Text>
+          <LinearGradient
+            colors={['#10B981', '#059669']}
+            style={styles.buttonGradient}
+          >
+            <Text style={styles.buttonText}>📊 Calculate Tier 1 Biomarkers</Text>
+          </LinearGradient>
         </TouchableOpacity>
+
+        {/* Date of Birth Modal */}
+        <Modal
+          visible={showDOBModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowDOBModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <LinearGradient
+                colors={['#1F2937', '#111827']}
+                style={styles.modalGradient}
+              >
+                <Text style={styles.modalTitle}>Date of Birth</Text>
+                <Text style={styles.modalDescription}>
+                  Your chronological age will be automatically calculated and updated yearly
+                </Text>
+                
+                <TouchableOpacity 
+                  style={styles.dateButton}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Text style={styles.dateButtonText}>
+                    {tempDate.toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}
+                  </Text>
+                </TouchableOpacity>
+
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={tempDate}
+                    mode="date"
+                    display="spinner"
+                    onChange={onDateChange}
+                    maximumDate={new Date()}
+                    minimumDate={new Date(1900, 0, 1)}
+                  />
+                )}
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity 
+                    style={styles.modalButton}
+                    onPress={() => setShowDOBModal(false)}
+                  >
+                    <LinearGradient
+                      colors={['#374151', '#1F2937']}
+                      style={styles.modalButtonGradient}
+                    >
+                      <Text style={styles.modalButtonText}>Cancel</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.modalButton}
+                    onPress={saveDateOfBirth}
+                  >
+                    <LinearGradient
+                      colors={['#8B5CF6', '#7C3AED']}
+                      style={styles.modalButtonGradient}
+                    >
+                      <Text style={styles.modalButtonText}>Save</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </LinearGradient>
+            </View>
+          </View>
+        </Modal>
 
         {/* DNA Methylation Modal */}
         <Modal
@@ -316,33 +545,49 @@ export default function DashboardScreen() {
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>DNA Methylation Test</Text>
-              <Text style={styles.modalDescription}>
-                Enter your biological age from DNA methylation testing
-              </Text>
-              
-              <TextInput
-                style={styles.input}
-                placeholder="Enter age (years)"
-                keyboardType="decimal-pad"
-                value={dnaMethylation}
-                onChangeText={setDNAMethylation}
-              />
+              <LinearGradient
+                colors={['#1F2937', '#111827']}
+                style={styles.modalGradient}
+              >
+                <Text style={styles.modalTitle}>DNA Methylation Test</Text>
+                <Text style={styles.modalDescription}>
+                  Enter your biological age from DNA methylation testing
+                </Text>
+                
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter age (years)"
+                  placeholderTextColor="#6B7280"
+                  keyboardType="decimal-pad"
+                  value={dnaMethylation}
+                  onChangeText={setDNAMethylation}
+                />
 
-              <View style={styles.modalButtons}>
-                <TouchableOpacity 
-                  style={[styles.modalButton, styles.cancelButton]}
-                  onPress={() => setShowDNAModal(false)}
-                >
-                  <Text style={styles.modalButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.modalButton, styles.saveButton]}
-                  onPress={saveDNAMethylation}
-                >
-                  <Text style={styles.modalButtonText}>Save</Text>
-                </TouchableOpacity>
-              </View>
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity 
+                    style={styles.modalButton}
+                    onPress={() => setShowDNAModal(false)}
+                  >
+                    <LinearGradient
+                      colors={['#374151', '#1F2937']}
+                      style={styles.modalButtonGradient}
+                    >
+                      <Text style={styles.modalButtonText}>Cancel</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.modalButton}
+                    onPress={saveDNAMethylation}
+                  >
+                    <LinearGradient
+                      colors={['#EC4899', '#DB2777']}
+                      style={styles.modalButtonGradient}
+                    >
+                      <Text style={styles.modalButtonText}>Save</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </LinearGradient>
             </View>
           </View>
         </Modal>
@@ -357,86 +602,112 @@ export default function DashboardScreen() {
           <View style={styles.modalOverlay}>
             <ScrollView style={styles.modalScrollView}>
               <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Tier 1 Biomarkers</Text>
-                
-                <Text style={styles.sectionHeader}>Oral Health</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Salivary pH (6.5-7.2)"
-                  keyboardType="decimal-pad"
-                  value={tier1Biomarkers.salivaryPH}
-                  onChangeText={(val) => setTier1Biomarkers({...tier1Biomarkers, salivaryPH: val})}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="MMP-8 ng/mL (<60)"
-                  keyboardType="decimal-pad"
-                  value={tier1Biomarkers.mmp8}
-                  onChangeText={(val) => setTier1Biomarkers({...tier1Biomarkers, mmp8: val})}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Flow Rate mL/min (>1.5)"
-                  keyboardType="decimal-pad"
-                  value={tier1Biomarkers.flowRate}
-                  onChangeText={(val) => setTier1Biomarkers({...tier1Biomarkers, flowRate: val})}
-                />
-
-                <Text style={styles.sectionHeader}>Systemic Health</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="hs-CRP mg/L (<1.0)"
-                  keyboardType="decimal-pad"
-                  value={tier1Biomarkers.hsCRP}
-                  onChangeText={(val) => setTier1Biomarkers({...tier1Biomarkers, hsCRP: val})}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Omega-3 Index % (>8.0)"
-                  keyboardType="decimal-pad"
-                  value={tier1Biomarkers.omega3}
-                  onChangeText={(val) => setTier1Biomarkers({...tier1Biomarkers, omega3: val})}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="HbA1c % (<5.7)"
-                  keyboardType="decimal-pad"
-                  value={tier1Biomarkers.hba1c}
-                  onChangeText={(val) => setTier1Biomarkers({...tier1Biomarkers, hba1c: val})}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="GDF-15 pg/mL (<1200)"
-                  keyboardType="decimal-pad"
-                  value={tier1Biomarkers.gdf15}
-                  onChangeText={(val) => setTier1Biomarkers({...tier1Biomarkers, gdf15: val})}
-                />
-
-                {/* Upgrade to Tier 2 Button */}
-                <TouchableOpacity 
-                  style={[styles.upgradeButton]}
-                  onPress={() => {
-                    setShowBiomarkerModal(false);
-                    setTimeout(() => setShowTier2Modal(true), 300);
-                  }}
+                <LinearGradient
+                  colors={['#1F2937', '#111827']}
+                  style={styles.modalGradient}
                 >
-                  <Text style={styles.upgradeButtonText}>⬆️ Upgrade to Tier 2</Text>
-                </TouchableOpacity>
+                  <Text style={styles.modalTitle}>Tier 1 Biomarkers</Text>
+                  
+                  <Text style={styles.sectionHeader}>Oral Health</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Salivary pH (6.5-7.2)"
+                    placeholderTextColor="#6B7280"
+                    keyboardType="decimal-pad"
+                    value={tier1Biomarkers.salivaryPH}
+                    onChangeText={(val) => setTier1Biomarkers({...tier1Biomarkers, salivaryPH: val})}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="MMP-8 ng/mL (<60)"
+                    placeholderTextColor="#6B7280"
+                    keyboardType="decimal-pad"
+                    value={tier1Biomarkers.mmp8}
+                    onChangeText={(val) => setTier1Biomarkers({...tier1Biomarkers, mmp8: val})}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Flow Rate mL/min (>1.5)"
+                    placeholderTextColor="#6B7280"
+                    keyboardType="decimal-pad"
+                    value={tier1Biomarkers.flowRate}
+                    onChangeText={(val) => setTier1Biomarkers({...tier1Biomarkers, flowRate: val})}
+                  />
 
-                <View style={styles.modalButtons}>
+                  <Text style={styles.sectionHeader}>Systemic Health</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="hs-CRP mg/L (<1.0)"
+                    placeholderTextColor="#6B7280"
+                    keyboardType="decimal-pad"
+                    value={tier1Biomarkers.hsCRP}
+                    onChangeText={(val) => setTier1Biomarkers({...tier1Biomarkers, hsCRP: val})}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Omega-3 Index % (>8.0)"
+                    placeholderTextColor="#6B7280"
+                    keyboardType="decimal-pad"
+                    value={tier1Biomarkers.omega3}
+                    onChangeText={(val) => setTier1Biomarkers({...tier1Biomarkers, omega3: val})}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="HbA1c % (<5.7)"
+                    placeholderTextColor="#6B7280"
+                    keyboardType="decimal-pad"
+                    value={tier1Biomarkers.hba1c}
+                    onChangeText={(val) => setTier1Biomarkers({...tier1Biomarkers, hba1c: val})}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="GDF-15 pg/mL (<1200)"
+                    placeholderTextColor="#6B7280"
+                    keyboardType="decimal-pad"
+                    value={tier1Biomarkers.gdf15}
+                    onChangeText={(val) => setTier1Biomarkers({...tier1Biomarkers, gdf15: val})}
+                  />
+
                   <TouchableOpacity 
-                    style={[styles.modalButton, styles.cancelButton]}
-                    onPress={() => setShowBiomarkerModal(false)}
+                    style={styles.upgradeButton}
+                    onPress={() => {
+                      setShowBiomarkerModal(false);
+                      setTimeout(() => setShowTier2Modal(true), 300);
+                    }}
                   >
-                    <Text style={styles.modalButtonText}>Cancel</Text>
+                    <LinearGradient
+                      colors={['#8B5CF6', '#7C3AED']}
+                      style={styles.upgradeButtonGradient}
+                    >
+                      <Text style={styles.upgradeButtonText}>⬆️ Upgrade to Tier 2</Text>
+                    </LinearGradient>
                   </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.modalButton, styles.saveButton]}
-                    onPress={saveTier1Biomarkers}
-                  >
-                    <Text style={styles.modalButtonText}>Save</Text>
-                  </TouchableOpacity>
-                </View>
+
+                  <View style={styles.modalButtons}>
+                    <TouchableOpacity 
+                      style={styles.modalButton}
+                      onPress={() => setShowBiomarkerModal(false)}
+                    >
+                      <LinearGradient
+                        colors={['#374151', '#1F2937']}
+                        style={styles.modalButtonGradient}
+                      >
+                        <Text style={styles.modalButtonText}>Cancel</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.modalButton}
+                      onPress={saveTier1Biomarkers}
+                    >
+                      <LinearGradient
+                        colors={['#F59E0B', '#D97706']}
+                        style={styles.modalButtonGradient}
+                      >
+                        <Text style={styles.modalButtonText}>Save</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                </LinearGradient>
               </View>
             </ScrollView>
           </View>
@@ -452,80 +723,102 @@ export default function DashboardScreen() {
           <View style={styles.modalOverlay}>
             <ScrollView style={styles.modalScrollView}>
               <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Tier 2 Biomarkers</Text>
-                <Text style={styles.modalDescription}>
-                  Advanced biomarker panel for deeper health insights
-                </Text>
-                
-                <Text style={styles.sectionHeader}>Advanced Inflammation</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="IL-6 pg/mL"
-                  keyboardType="decimal-pad"
-                  value={tier2Biomarkers.il6}
-                  onChangeText={(val) => setTier2Biomarkers({...tier2Biomarkers, il6: val})}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="TNF-α pg/mL"
-                  keyboardType="decimal-pad"
-                  value={tier2Biomarkers.tnfAlpha}
-                  onChangeText={(val) => setTier2Biomarkers({...tier2Biomarkers, tnfAlpha: val})}
-                />
+                <LinearGradient
+                  colors={['#1F2937', '#111827']}
+                  style={styles.modalGradient}
+                >
+                  <Text style={styles.modalTitle}>Tier 2 Biomarkers</Text>
+                  <Text style={styles.modalDescription}>
+                    Advanced biomarker panel for deeper health insights
+                  </Text>
+                  
+                  <Text style={styles.sectionHeader}>Advanced Inflammation</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="IL-6 pg/mL"
+                    placeholderTextColor="#6B7280"
+                    keyboardType="decimal-pad"
+                    value={tier2Biomarkers.il6}
+                    onChangeText={(val) => setTier2Biomarkers({...tier2Biomarkers, il6: val})}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="TNF-α pg/mL"
+                    placeholderTextColor="#6B7280"
+                    keyboardType="decimal-pad"
+                    value={tier2Biomarkers.tnfAlpha}
+                    onChangeText={(val) => setTier2Biomarkers({...tier2Biomarkers, tnfAlpha: val})}
+                  />
 
-                <Text style={styles.sectionHeader}>Cardiovascular</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="LDL Particles nmol/L"
-                  keyboardType="decimal-pad"
-                  value={tier2Biomarkers.ldlParticles}
-                  onChangeText={(val) => setTier2Biomarkers({...tier2Biomarkers, ldlParticles: val})}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="ApoB mg/dL"
-                  keyboardType="decimal-pad"
-                  value={tier2Biomarkers.apoB}
-                  onChangeText={(val) => setTier2Biomarkers({...tier2Biomarkers, apoB: val})}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Homocysteine µmol/L"
-                  keyboardType="decimal-pad"
-                  value={tier2Biomarkers.homocysteine}
-                  onChangeText={(val) => setTier2Biomarkers({...tier2Biomarkers, homocysteine: val})}
-                />
+                  <Text style={styles.sectionHeader}>Cardiovascular</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="LDL Particles nmol/L"
+                    placeholderTextColor="#6B7280"
+                    keyboardType="decimal-pad"
+                    value={tier2Biomarkers.ldlParticles}
+                    onChangeText={(val) => setTier2Biomarkers({...tier2Biomarkers, ldlParticles: val})}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="ApoB mg/dL"
+                    placeholderTextColor="#6B7280"
+                    keyboardType="decimal-pad"
+                    value={tier2Biomarkers.apoB}
+                    onChangeText={(val) => setTier2Biomarkers({...tier2Biomarkers, apoB: val})}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Homocysteine µmol/L"
+                    placeholderTextColor="#6B7280"
+                    keyboardType="decimal-pad"
+                    value={tier2Biomarkers.homocysteine}
+                    onChangeText={(val) => setTier2Biomarkers({...tier2Biomarkers, homocysteine: val})}
+                  />
 
-                <Text style={styles.sectionHeader}>Metabolic</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ferritin ng/mL"
-                  keyboardType="decimal-pad"
-                  value={tier2Biomarkers.ferritin}
-                  onChangeText={(val) => setTier2Biomarkers({...tier2Biomarkers, ferritin: val})}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Vitamin D ng/mL"
-                  keyboardType="decimal-pad"
-                  value={tier2Biomarkers.vitaminD}
-                  onChangeText={(val) => setTier2Biomarkers({...tier2Biomarkers, vitaminD: val})}
-                />
+                  <Text style={styles.sectionHeader}>Metabolic</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Ferritin ng/mL"
+                    placeholderTextColor="#6B7280"
+                    keyboardType="decimal-pad"
+                    value={tier2Biomarkers.ferritin}
+                    onChangeText={(val) => setTier2Biomarkers({...tier2Biomarkers, ferritin: val})}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Vitamin D ng/mL"
+                    placeholderTextColor="#6B7280"
+                    keyboardType="decimal-pad"
+                    value={tier2Biomarkers.vitaminD}
+                    onChangeText={(val) => setTier2Biomarkers({...tier2Biomarkers, vitaminD: val})}
+                  />
 
-                <View style={styles.modalButtons}>
-                  <TouchableOpacity 
-                    style={[styles.modalButton, styles.cancelButton]}
-                    onPress={() => setShowTier2Modal(false)}
-                  >
-                    <Text style={styles.modalButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.modalButton, styles.saveButton]}
-                    onPress={saveTier2Biomarkers}
-                  >
-                    <Text style={styles.modalButtonText}>Save</Text>
-                  </TouchableOpacity>
-                </View>
+                  <View style={styles.modalButtons}>
+                    <TouchableOpacity 
+                      style={styles.modalButton}
+                      onPress={() => setShowTier2Modal(false)}
+                    >
+                      <LinearGradient
+                        colors={['#374151', '#1F2937']}
+                        style={styles.modalButtonGradient}
+                      >
+                        <Text style={styles.modalButtonText}>Cancel</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.modalButton}
+                      onPress={saveTier2Biomarkers}
+                    >
+                      <LinearGradient
+                        colors={['#10B981', '#059669']}
+                        style={styles.modalButtonGradient}
+                      >
+                        <Text style={styles.modalButtonText}>Save</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                </LinearGradient>
               </View>
             </ScrollView>
           </View>
@@ -553,71 +846,128 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     marginTop: 10,
   },
-  logo: {
-    width: 40,
-    height: 40,
-    marginRight: 10,
+  logoContainer: {
+    marginRight: 12,
   },
-  logoPlaceholder: {
-    width: 40,
-    height: 40,
-    marginRight: 10,
-    backgroundColor: '#333',
-    borderRadius: 20,
+  logo: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
   },
   logoText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: 'bold',
   },
   headerText: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
+    color: 'white',
   },
   mainCard: {
-    backgroundColor: 'white',
-    borderRadius: 25,
-    padding: 25,
-    marginBottom: 15,
+    marginBottom: 20,
+    borderRadius: 24,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  mainCardGradient: {
+    borderRadius: 24,
+    padding: 24,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
   },
-  praxiomAgeCard: {
-    borderWidth: 3,
-    borderColor: '#00CFC1',
+  ageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#555',
-    marginBottom: 15,
+  iconContainer: {
+    marginRight: 8,
   },
-  ageValueContainer: {
+  icon: {
+    fontSize: 24,
+  },
+  mainCardTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  ageDisplay: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    marginVertical: 20,
   },
-  ageValue: {
-    fontSize: 52,
+  chronoAgeContainer: {
+    alignItems: 'center',
+    opacity: 0.8,
+  },
+  chronoLabel: {
+    fontSize: 12,
+    color: 'white',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  chronoAge: {
+    fontSize: 28,
+    fontWeight: '600',
+    color: 'white',
+  },
+  arrow: {
+    fontSize: 32,
+    color: 'white',
+    marginHorizontal: 20,
+    opacity: 0.6,
+  },
+  bioAgeContainer: {
+    alignItems: 'center',
+  },
+  bioLabel: {
+    fontSize: 12,
+    color: 'white',
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  bioAge: {
+    fontSize: 56,
     fontWeight: 'bold',
-    color: '#00CFC1',
+    color: 'white',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
-  ageLabel: {
+  yearsLabel: {
     fontSize: 16,
-    color: '#888',
-    marginTop: 5,
+    color: 'white',
+    opacity: 0.8,
+    marginTop: 8,
+  },
+  differenceContainer: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 16,
+  },
+  differenceText: {
+    fontSize: 14,
+    color: 'white',
+    fontWeight: '600',
   },
   tapToSync: {
     fontSize: 12,
-    color: '#00CFC1',
-    marginTop: 10,
+    color: 'white',
+    marginTop: 16,
+    opacity: 0.7,
     fontStyle: 'italic',
   },
   cardRow: {
@@ -627,75 +977,93 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
-    backgroundColor: 'white',
-    borderRadius: 25,
-    padding: 20,
-    marginHorizontal: 5,
-    alignItems: 'center',
+    marginHorizontal: 6,
+    borderRadius: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 10,
   },
-  orangeCard: {
-    borderWidth: 3,
-    borderColor: '#FF8C00',
+  cardGradient: {
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    minHeight: 140,
   },
-  cyanCard: {
-    borderWidth: 3,
-    borderColor: '#00CFC1',
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'white',
+    marginBottom: 12,
+    textAlign: 'center',
   },
   scoreContainer: {
-    marginVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginVertical: 8,
   },
   scoreValue: {
-    fontSize: 40,
+    fontSize: 36,
     fontWeight: 'bold',
-    color: '#FF8C00',
+    color: 'white',
+  },
+  scoreUnit: {
+    fontSize: 20,
+    color: 'white',
+    marginLeft: 4,
   },
   scoreLabel: {
-    fontSize: 14,
-    color: '#888',
+    fontSize: 12,
+    color: 'white',
+    opacity: 0.8,
+  },
+  scoreBar: {
+    width: '100%',
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 3,
+    marginTop: 12,
+    overflow: 'hidden',
+  },
+  scoreBarFill: {
+    height: '100%',
+    backgroundColor: 'white',
+    borderRadius: 3,
   },
   liveWatchContent: {
     width: '100%',
-    marginTop: 10,
+    marginTop: 8,
   },
   liveWatchRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginVertical: 5,
+    marginVertical: 4,
   },
   liveWatchLabel: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: 'white',
+    opacity: 0.8,
   },
   liveWatchValue: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#00CFC1',
+    fontWeight: '700',
+    color: 'white',
   },
   actionButton: {
-    borderRadius: 30,
-    padding: 18,
     marginVertical: 8,
-    alignItems: 'center',
+    borderRadius: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  orangeButton: {
-    backgroundColor: '#FF8C00',
-  },
-  purpleButton: {
-    backgroundColor: '#9C27B0',
-  },
-  cyanButton: {
-    backgroundColor: '#00CFC1',
+  buttonGradient: {
+    borderRadius: 16,
+    padding: 18,
+    alignItems: 'center',
   },
   buttonText: {
     fontSize: 16,
@@ -704,7 +1072,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -713,46 +1081,74 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   modalContent: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 25,
     margin: 20,
-    minWidth: 300,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  modalGradient: {
+    padding: 24,
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
+    color: 'white',
+    marginBottom: 12,
     textAlign: 'center',
   },
   modalDescription: {
     fontSize: 14,
-    color: '#666',
+    color: '#9CA3AF',
     marginBottom: 20,
     textAlign: 'center',
   },
   sectionHeader: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FF8C00',
-    marginTop: 15,
-    marginBottom: 10,
+    color: '#8B5CF6',
+    marginTop: 16,
+    marginBottom: 12,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 12,
-    marginVertical: 8,
+    borderColor: '#374151',
+    backgroundColor: '#1F2937',
+    borderRadius: 12,
+    padding: 14,
+    marginVertical: 6,
     fontSize: 14,
+    color: 'white',
+  },
+  dateButton: {
+    backgroundColor: '#1F2937',
+    borderWidth: 1,
+    borderColor: '#374151',
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 12,
+  },
+  dateButtonText: {
+    color: 'white',
+    fontSize: 16,
+    textAlign: 'center',
   },
   upgradeButton: {
-    backgroundColor: '#9C27B0',
-    borderRadius: 15,
-    padding: 15,
     marginTop: 20,
     marginBottom: 10,
+    borderRadius: 12,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  upgradeButtonGradient: {
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
   },
   upgradeButtonText: {
@@ -763,20 +1159,17 @@ const styles = StyleSheet.create({
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 20,
+    marginTop: 24,
   },
   modalButton: {
     flex: 1,
-    borderRadius: 10,
-    padding: 15,
-    marginHorizontal: 5,
+    marginHorizontal: 6,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  modalButtonGradient: {
+    padding: 14,
     alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: '#999',
-  },
-  saveButton: {
-    backgroundColor: '#00CFC1',
   },
   modalButtonText: {
     color: 'white',
