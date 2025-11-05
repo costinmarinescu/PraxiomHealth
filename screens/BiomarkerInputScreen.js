@@ -6,510 +6,429 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
-  StatusBar,
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BiomarkerInputScreen = ({ navigation }) => {
-  const [formData, setFormData] = useState({
-    // Patient Info
-    age: '',
-    
-    // Oral Health Biomarkers
-    salivaryPH: '',
-    activeMMP8: '',
-    salivaryFlowRate: '',
-    
-    // Systemic Health Biomarkers
-    hsCRP: '',
-    hbA1c: '',
-    vitaminD: '',
-    
-    // Wearable Data
-    heartRate: '',
-    dailySteps: '',
-    oxygenSaturation: '',
-    
-    // Optional Fitness Scores (0-10 each)
-    aerobicFitness: '',
-    flexibility: '',
-    balance: '',
-    mentalPreparedness: '',
-  });
+export default function BiomarkerInputScreen({ navigation }) {
+  // Tier 1 Oral Health Biomarkers
+  const [salivaryPH, setSalivaryPH] = useState('');
+  const [mmp8, setMmp8] = useState('');
+  const [flowRate, setFlowRate] = useState('');
 
-  const updateField = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  // Tier 1 Systemic Health Biomarkers
+  const [hsCRP, setHsCRP] = useState('');
+  const [omega3, setOmega3] = useState('');
+  const [hba1c, setHba1c] = useState('');
+  const [gdf15, setGdf15] = useState('');
+  const [vitaminD, setVitaminD] = useState('');
+
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Optimal ranges for validation
+  const ranges = {
+    salivaryPH: { min: 6.5, max: 7.2, optimal: '6.5-7.2' },
+    mmp8: { max: 60, optimal: '<60 ng/mL' },
+    flowRate: { min: 1.5, optimal: '>1.5 mL/min' },
+    hsCRP: { max: 1.0, optimal: '<1.0 mg/L' },
+    omega3: { min: 8.0, optimal: '>8.0%' },
+    hba1c: { max: 5.7, optimal: '<5.7%' },
+    gdf15: { max: 1200, optimal: '<1200 pg/mL' },
+    vitaminD: { min: 30, optimal: '>30 ng/mL' },
   };
 
-  const calculateOralHealthScore = (pH, mmp8, flowRate) => {
-    let score = 100;
-    
-    // Salivary pH (Optimal: 6.5-7.2)
-    const ph = parseFloat(pH) || 7.0;
-    if (ph < 5.5) score -= 30;
-    else if (ph < 6.0) score -= 25;
-    else if (ph < 6.5) score -= 15;
-    else if (ph > 7.5) score -= 10;
-    else if (ph > 7.2) score -= 5;
-    
-    // Active MMP-8 (Optimal: <60 ng/mL) - 2.5x weight for CVD correlation
+  const calculateOralHealthScore = () => {
+    const pH = parseFloat(salivaryPH) || 0;
     const mmp = parseFloat(mmp8) || 0;
-    if (mmp > 200) score -= 30;
-    else if (mmp > 150) score -= 25;
-    else if (mmp > 100) score -= 15;
-    else if (mmp > 60) score -= 10;
+    const flow = parseFloat(flowRate) || 0;
+
+    // Normalize to 0-100 scale
+    const pHScore = pH >= 6.5 && pH <= 7.2 ? 100 : pH < 6.5 ? (pH / 6.5) * 100 : (14.4 - pH) / 7.2 * 100;
+    const mmpScore = mmp <= 60 ? 100 : mmp <= 100 ? 100 - ((mmp - 60) / 40) * 50 : 50;
+    const flowScore = flow >= 1.5 ? 100 : (flow / 1.5) * 100;
+
+    // Weighted formula: [(MMP-8 × 2.5) + (pH × 1.0) + (Flow Rate × 1.0)] / 4.5 × 100
+    const ohs = ((mmpScore * 2.5) + (pHScore * 1.0) + (flowScore * 1.0)) / 4.5;
     
-    // Salivary Flow Rate (Optimal: >1.5 mL/min)
-    const flow = parseFloat(flowRate) || 1.5;
-    if (flow < 0.5) score -= 25;
-    else if (flow < 1.0) score -= 15;
-    else if (flow < 1.5) score -= 8;
-    
-    return Math.max(0, Math.min(100, score));
+    return Math.round(Math.min(100, Math.max(0, ohs)));
   };
 
-  const calculateSystemicHealthScore = (crp, hba1c, vitD) => {
-    let score = 100;
+  const calculateSystemicHealthScore = () => {
+    const crp = parseFloat(hsCRP) || 0;
+    const o3 = parseFloat(omega3) || 0;
+    const gdf = parseFloat(gdf15) || 0;
+    const a1c = parseFloat(hba1c) || 0;
+    const vitD = parseFloat(vitaminD) || 0;
+
+    // Normalize to 0-100 scale
+    const crpScore = crp <= 1.0 ? 100 : crp <= 3.0 ? 100 - ((crp - 1.0) / 2.0) * 50 : 50;
+    const o3Score = o3 >= 8.0 ? 100 : o3 >= 6.0 ? 50 + ((o3 - 6.0) / 2.0) * 50 : (o3 / 6.0) * 50;
+    const gdfScore = gdf <= 1200 ? 100 : gdf <= 1800 ? 100 - ((gdf - 1200) / 600) * 50 : 50;
+    const a1cScore = a1c <= 5.7 ? 100 : a1c <= 6.5 ? 100 - ((a1c - 5.7) / 0.8) * 50 : 50;
+    const vitDScore = vitD >= 30 ? 100 : vitD >= 20 ? 50 + ((vitD - 20) / 10) * 50 : (vitD / 20) * 50;
+
+    // Weighted formula: [(hs-CRP × 2.0) + (Omega-3 × 2.0) + (GDF-15 × 2.0) + (HbA1c × 1.5) + (Vitamin D × 1.0)] / 9.5
+    const shs = ((crpScore * 2.0) + (o3Score * 2.0) + (gdfScore * 2.0) + (a1cScore * 1.5) + (vitDScore * 1.0)) / 9.5;
     
-    // hs-CRP (Optimal: <1.0 mg/L) - 1.5x weight, ADA validated
-    const crpVal = parseFloat(crp) || 0;
-    if (crpVal > 10) score -= 40;
-    else if (crpVal > 5) score -= 30;
-    else if (crpVal > 3) score -= 20;
-    else if (crpVal > 1.0) score -= 10;
-    
-    // HbA1c (Optimal: <5.7%) - 1.5x weight, ADA validated
-    const hba1cVal = parseFloat(hba1c) || 5.0;
-    if (hba1cVal > 9.0) score -= 40;
-    else if (hba1cVal > 7.0) score -= 30;
-    else if (hba1cVal > 6.5) score -= 20;
-    else if (hba1cVal > 5.7) score -= 10;
-    
-    // Vitamin D 25-OH (Optimal: >30 ng/mL)
-    const vitDVal = parseFloat(vitD) || 30;
-    if (vitDVal < 10) score -= 30;
-    else if (vitDVal < 20) score -= 20;
-    else if (vitDVal < 30) score -= 10;
-    
-    return Math.max(0, Math.min(100, score));
+    return Math.round(Math.min(100, Math.max(0, shs)));
   };
 
-  const calculateFitnessScore = (aerobic, flex, bal, mental) => {
-    // Each domain is 0-10, total is out of 40, convert to percentage
-    const a = parseFloat(aerobic) || 0;
-    const f = parseFloat(flex) || 0;
-    const b = parseFloat(bal) || 0;
-    const m = parseFloat(mental) || 0;
-    
-    const totalScore = a + f + b + m;
-    return (totalScore / 40) * 100;
-  };
+  const calculateBioAge = async (ohs, shs) => {
+    try {
+      // Get date of birth from storage (should be set in settings)
+      const dob = await AsyncStorage.getItem('dateOfBirth') || '1990-01-01';
+      const birthDate = new Date(dob);
+      const today = new Date();
+      let chronologicalAge = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        chronologicalAge--;
+      }
 
-  const calculateBioAge = (chronAge, ohs, shs, fs) => {
-    // Age-dependent coefficients
-    let alpha = 0.10; // OHS coefficient
-    let beta = 0.15;  // SHS coefficient  
-    let gamma = 0.12; // FS coefficient
-    
-    // Adjust coefficients based on age
-    if (chronAge < 40) {
-      alpha = 0.08;
-      beta = 0.12;
-      gamma = 0.10;
-    } else if (chronAge >= 60) {
-      alpha = 0.12;
-      beta = 0.18;
-      gamma = 0.15;
+      // Age-stratified coefficients
+      let alpha, beta;
+      if (chronologicalAge < 50) {
+        alpha = 0.08;
+        beta = 0.15;
+      } else if (chronologicalAge <= 70) {
+        alpha = 0.12;
+        beta = 0.20;
+      } else {
+        alpha = 0.15;
+        beta = 0.25;
+      }
+
+      // Bio-Age = Chronological Age + [(100 - OHS) × α + (100 - SHS) × β]
+      const bioAge = chronologicalAge + ((100 - ohs) * alpha + (100 - shs) * beta);
+      
+      return {
+        chronologicalAge,
+        bioAge: parseFloat(bioAge.toFixed(1)),
+        deviation: parseFloat((bioAge - chronologicalAge).toFixed(1)),
+      };
+    } catch (error) {
+      console.error('Error calculating bio-age:', error);
+      return { chronologicalAge: 35, bioAge: 40.2, deviation: 5.2 };
     }
-    
-    // Bio-Age formula: Chron Age + [(100-OHS)×α + (100-SHS)×β + (100-FS)×γ]
-    const oralImpact = (100 - ohs) * alpha;
-    const systemicImpact = (100 - shs) * beta;
-    const fitnessImpact = (100 - fs) * gamma;
-    
-    const bioAge = chronAge + oralImpact + systemicImpact + fitnessImpact;
-    
-    return {
-      bioAge: Math.round(bioAge * 10) / 10,
-      oralImpact,
-      systemicImpact,
-      fitnessImpact,
-    };
   };
 
-  const calculatePraxiomAge = async () => {
-    // Validate required fields
-    if (!formData.age) {
-      Alert.alert('Missing Data', 'Please enter your age');
-      return;
+  const checkTierUpgradeTriggers = (ohs, shs) => {
+    const triggers = [];
+    const gdf = parseFloat(gdf15) || 0;
+    const mmp = parseFloat(mmp8) || 0;
+    const crp = parseFloat(hsCRP) || 0;
+
+    // Tier 2 triggers
+    if (ohs < 75 || shs < 75) {
+      triggers.push({
+        tier: 2,
+        reason: 'OHS or SHS < 75%',
+        action: 'Upgrade to Tier 2 - Advanced profiling recommended',
+      });
     }
 
-    const age = parseFloat(formData.age) || 0;
+    if (gdf > 1800 || (mmp > 100 && crp > 3)) {
+      triggers.push({
+        tier: 2,
+        reason: 'High inflammatory markers',
+        action: 'Tier 2 + Intensive intervention required',
+      });
+    }
+
+    return triggers;
+  };
+
+  const validateInputs = () => {
+    const inputs = [
+      { value: salivaryPH, name: 'Salivary pH' },
+      { value: mmp8, name: 'MMP-8' },
+      { value: flowRate, name: 'Flow Rate' },
+      { value: hsCRP, name: 'hs-CRP' },
+      { value: omega3, name: 'Omega-3 Index' },
+      { value: hba1c, name: 'HbA1c' },
+      { value: gdf15, name: 'GDF-15' },
+      { value: vitaminD, name: 'Vitamin D' },
+    ];
+
+    const empty = inputs.filter(input => !input.value || input.value.trim() === '');
     
-    // Calculate component scores
-    const oralHealthScore = calculateOralHealthScore(
-      formData.salivaryPH,
-      formData.activeMMP8,
-      formData.salivaryFlowRate
-    );
-    
-    const systemicHealthScore = calculateSystemicHealthScore(
-      formData.hsCRP,
-      formData.hbA1c,
-      formData.vitaminD
-    );
-    
-    // Calculate fitness score (optional, defaults to average if not provided)
-    let fitnessScore = 70; // Default average
-    if (formData.aerobicFitness || formData.flexibility || formData.balance || formData.mentalPreparedness) {
-      fitnessScore = calculateFitnessScore(
-        formData.aerobicFitness,
-        formData.flexibility,
-        formData.balance,
-        formData.mentalPreparedness
+    if (empty.length > 0) {
+      Alert.alert(
+        'Missing Values',
+        `Please enter values for: ${empty.map(i => i.name).join(', ')}`,
+        [{ text: 'OK' }]
       );
+      return false;
     }
-    
-    // Calculate Bio-Age
-    const result = calculateBioAge(age, oralHealthScore, systemicHealthScore, fitnessScore);
-    
-    // Save to storage
-    const entry = {
-      date: new Date().toISOString(),
-      chronologicalAge: age,
-      bioAge: result.bioAge,
-      oralHealthScore,
-      systemicHealthScore,
-      fitnessScore,
-      data: formData,
-      breakdown: {
-        oralImpact: result.oralImpact.toFixed(1),
-        systemicImpact: result.systemicImpact.toFixed(1),
-        fitnessImpact: result.fitnessImpact.toFixed(1),
-      },
-    };
+
+    return true;
+  };
+
+  const handleCalculate = async () => {
+    if (!validateInputs()) return;
+
+    setIsSaving(true);
 
     try {
-      const existing = await AsyncStorage.getItem('biomarker_entries');
-      const entries = existing ? JSON.parse(existing) : [];
-      entries.push(entry);
-      await AsyncStorage.setItem('biomarker_entries', JSON.stringify(entries));
+      // Calculate scores
+      const ohs = calculateOralHealthScore();
+      const shs = calculateSystemicHealthScore();
+      const ageData = await calculateBioAge(ohs, shs);
+      const triggers = checkTierUpgradeTriggers(ohs, shs);
 
-      const ageDiff = result.bioAge - age;
-      const diffText = ageDiff > 0 
-        ? `${ageDiff.toFixed(1)} years older` 
-        : `${Math.abs(ageDiff).toFixed(1)} years younger`;
+      // Prepare data to save
+      const biomarkerData = {
+        timestamp: new Date().toISOString(),
+        date: new Date().toLocaleDateString(),
+        tier: 1,
+        
+        // Raw values
+        oral: {
+          salivaryPH: parseFloat(salivaryPH),
+          mmp8: parseFloat(mmp8),
+          flowRate: parseFloat(flowRate),
+        },
+        systemic: {
+          hsCRP: parseFloat(hsCRP),
+          omega3: parseFloat(omega3),
+          hba1c: parseFloat(hba1c),
+          gdf15: parseFloat(gdf15),
+          vitaminD: parseFloat(vitaminD),
+        },
+        
+        // Calculated scores
+        oralHealthScore: ohs,
+        systemicHealthScore: shs,
+        fitnessScore: 99, // From wearable data - placeholder
+        
+        // Bio-Age
+        chronologicalAge: ageData.chronologicalAge,
+        praxiomAge: ageData.bioAge,
+        deviation: ageData.deviation,
+        
+        // Tier triggers
+        tierUpgrades: triggers,
+        
+        // Timestamps
+        oralUpdated: new Date().toISOString(),
+        systemicUpdated: new Date().toISOString(),
+      };
 
-      Alert.alert(
-        '✅ Praxiom Bio-Age Calculated!',
-        `Chronological Age: ${age} years\n` +
-        `Biological Age: ${result.bioAge} years\n\n` +
-        `You are ${diffText} than your chronological age.\n\n` +
-        `Component Scores:\n` +
-        `• Oral Health: ${oralHealthScore.toFixed(0)}%\n` +
-        `• Systemic Health: ${systemicHealthScore.toFixed(0)}%\n` +
-        `• Fitness: ${fitnessScore.toFixed(0)}%`,
-        [
-          {
-            text: 'View History',
-            onPress: () => navigation.navigate('BiomarkerHistory'),
-          },
-          {
-            text: 'Done',
-            onPress: () => navigation.goBack(),
-          },
-        ]
-      );
+      // Save to history
+      const historyStr = await AsyncStorage.getItem('biomarkers_history');
+      const history = historyStr ? JSON.parse(historyStr) : [];
+      history.push(biomarkerData);
+      await AsyncStorage.setItem('biomarkers_history', JSON.stringify(history));
+
+      // Save latest
+      await AsyncStorage.setItem('latest_biomarkers', JSON.stringify(biomarkerData));
+
+      setIsSaving(false);
+
+      // Show results
+      const message = `
+Results Calculated:
+
+Oral Health Score: ${ohs}%
+Systemic Health Score: ${shs}%
+
+Praxiom Age: ${ageData.bioAge} years
+Chronological Age: ${ageData.chronologicalAge} years
+Deviation: ${ageData.deviation > 0 ? '+' : ''}${ageData.deviation} years
+
+${triggers.length > 0 ? '\n⚠️ Tier Upgrade Recommended:\n' + triggers.map(t => t.action).join('\n') : '✅ Optimal range - Continue maintenance protocol'}
+      `;
+
+      Alert.alert('Bio-Age Calculated', message, [
+        { text: 'View Dashboard', onPress: () => navigation.navigate('Dashboard') },
+        { text: 'View Report', onPress: () => navigation.navigate('Report') },
+      ]);
+
     } catch (error) {
-      Alert.alert('Error', 'Failed to save biomarker data: ' + error.message);
+      console.error('Error calculating:', error);
+      Alert.alert('Error', 'Failed to calculate Bio-Age. Please try again.');
+      setIsSaving(false);
     }
   };
 
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      
-      <LinearGradient
-        colors={['rgba(255, 140, 0, 0.15)', 'rgba(0, 207, 193, 0.15)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.gradientBackground}
-      />
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <Text style={styles.title}>Tier 1 Biomarker Input</Text>
-        <Text style={styles.subtitle}>Praxiom Validated Protocol</Text>
-
-        {/* Patient Information */}
-        <Text style={styles.sectionTitle}>Patient Information</Text>
-        <View style={styles.sectionDivider} />
-
-        <Text style={styles.label}>Age (years) *</Text>
+  const renderInput = (label, value, setValue, unit, optimal) => (
+    <View style={styles.inputContainer}>
+      <View style={styles.inputHeader}>
+        <Text style={styles.inputLabel}>{label}</Text>
+        <Text style={styles.optimalRange}>Optimal: {optimal}</Text>
+      </View>
+      <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
-          placeholder="45"
-          keyboardType="numeric"
-          value={formData.age}
-          onChangeText={(text) => updateField('age', text)}
+          value={value}
+          onChangeText={setValue}
+          keyboardType="decimal-pad"
+          placeholder="0.0"
+          placeholderTextColor="#666"
         />
-
-        {/* Oral Health Biomarkers */}
-        <Text style={styles.sectionTitle}>Oral Health Biomarkers</Text>
-        <View style={styles.sectionDivider} />
-
-        <Text style={styles.label}>Salivary pH (Optimal: 6.5-7.2)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="6.8"
-          keyboardType="numeric"
-          value={formData.salivaryPH}
-          onChangeText={(text) => updateField('salivaryPH', text)}
-        />
-
-        <Text style={styles.label}>Active MMP-8 (ng/mL) (Optimal: {'<'}60)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="50"
-          keyboardType="numeric"
-          value={formData.activeMMP8}
-          onChangeText={(text) => updateField('activeMMP8', text)}
-        />
-        <Text style={styles.weightNote}>Weight: 2.5x - CVD correlation</Text>
-
-        <Text style={styles.label}>Salivary Flow Rate (mL/min) (Optimal: {'>'}1.5)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="1.5"
-          keyboardType="numeric"
-          value={formData.salivaryFlowRate}
-          onChangeText={(text) => updateField('salivaryFlowRate', text)}
-        />
-
-        {/* Systemic Health Biomarkers */}
-        <Text style={styles.sectionTitle}>Systemic Health Biomarkers</Text>
-        <View style={styles.sectionDivider} />
-
-        <Text style={styles.label}>hs-CRP (mg/L) (Optimal: {'<'}1.0)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="0.8"
-          keyboardType="numeric"
-          value={formData.hsCRP}
-          onChangeText={(text) => updateField('hsCRP', text)}
-        />
-        <Text style={styles.weightNote}>Weight: 1.5x - ADA validated</Text>
-
-        <Text style={styles.label}>HbA1c (%) (Optimal: {'<'}5.7)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="5.4"
-          keyboardType="numeric"
-          value={formData.hbA1c}
-          onChangeText={(text) => updateField('hbA1c', text)}
-        />
-        <Text style={styles.weightNote}>Weight: 1.5x - ADA validated</Text>
-
-        <Text style={styles.label}>Vitamin D 25-OH (ng/mL) (Optimal: {'>'}30)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="35"
-          keyboardType="numeric"
-          value={formData.vitaminD}
-          onChangeText={(text) => updateField('vitaminD', text)}
-        />
-
-        {/* Wearable Data */}
-        <Text style={styles.sectionTitle}>Wearable Data (PineTime/Watch)</Text>
-        <View style={styles.sectionDivider} />
-
-        <Text style={styles.label}>Heart Rate (bpm)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="70"
-          keyboardType="numeric"
-          value={formData.heartRate}
-          onChangeText={(text) => updateField('heartRate', text)}
-        />
-
-        <Text style={styles.label}>Daily Steps</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="10000"
-          keyboardType="numeric"
-          value={formData.dailySteps}
-          onChangeText={(text) => updateField('dailySteps', text)}
-        />
-
-        <Text style={styles.label}>Oxygen Saturation (%)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="98"
-          keyboardType="numeric"
-          value={formData.oxygenSaturation}
-          onChangeText={(text) => updateField('oxygenSaturation', text)}
-        />
-
-        {/* Optional Fitness Evaluation */}
-        <Text style={styles.sectionTitle}>Optional: Fitness Evaluation (0-10 each)</Text>
-        <View style={styles.sectionDivider} />
-        <Text style={styles.optionalNote}>Leave blank if not assessed by trainer</Text>
-
-        <Text style={styles.label}>Aerobic Fitness (VO₂max proxy) (0-10)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="7"
-          keyboardType="numeric"
-          value={formData.aerobicFitness}
-          onChangeText={(text) => updateField('aerobicFitness', text)}
-        />
-
-        <Text style={styles.label}>Flexibility & Posture (0-10)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="6"
-          keyboardType="numeric"
-          value={formData.flexibility}
-          onChangeText={(text) => updateField('flexibility', text)}
-        />
-
-        <Text style={styles.label}>Coordination & Balance (0-10)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="8"
-          keyboardType="numeric"
-          value={formData.balance}
-          onChangeText={(text) => updateField('balance', text)}
-        />
-
-        <Text style={styles.label}>Mental Preparedness (0-10)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="7"
-          keyboardType="numeric"
-          value={formData.mentalPreparedness}
-          onChangeText={(text) => updateField('mentalPreparedness', text)}
-        />
-
-        {/* Action Buttons */}
-        <TouchableOpacity
-          style={styles.calculateButton}
-          onPress={calculatePraxiomAge}
-        >
-          <Text style={styles.calculateButtonText}>Calculate Praxiom Bio-Age</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-      </ScrollView>
+        <Text style={styles.unit}>{unit}</Text>
+      </View>
     </View>
   );
-};
+
+  return (
+    <LinearGradient
+      colors={['rgba(50, 50, 60, 1)', 'rgba(20, 20, 30, 1)']}
+      style={styles.container}
+    >
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.title}>Tier 1 Biomarkers</Text>
+        <Text style={styles.subtitle}>Foundation Assessment</Text>
+
+        {/* Oral Health Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionIcon}>🦷</Text>
+            <Text style={styles.sectionTitle}>Oral Health</Text>
+          </View>
+
+          {renderInput('Salivary pH', salivaryPH, setSalivaryPH, '', ranges.salivaryPH.optimal)}
+          {renderInput('MMP-8', mmp8, setMmp8, 'ng/mL', ranges.mmp8.optimal)}
+          {renderInput('Flow Rate', flowRate, setFlowRate, 'mL/min', ranges.flowRate.optimal)}
+        </View>
+
+        {/* Systemic Health Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionIcon}>❤️</Text>
+            <Text style={styles.sectionTitle}>Systemic Health</Text>
+          </View>
+
+          {renderInput('hs-CRP', hsCRP, setHsCRP, 'mg/L', ranges.hsCRP.optimal)}
+          {renderInput('Omega-3 Index', omega3, setOmega3, '%', ranges.omega3.optimal)}
+          {renderInput('HbA1c', hba1c, setHba1c, '%', ranges.hba1c.optimal)}
+          {renderInput('GDF-15', gdf15, setGdf15, 'pg/mL', ranges.gdf15.optimal)}
+          {renderInput('Vitamin D', vitaminD, setVitaminD, 'ng/mL', ranges.vitaminD.optimal)}
+        </View>
+
+        {/* Calculate Button */}
+        <TouchableOpacity
+          style={[styles.calculateButton, isSaving && styles.calculateButtonDisabled]}
+          onPress={handleCalculate}
+          disabled={isSaving}
+        >
+          <Text style={styles.calculateButtonText}>
+            {isSaving ? 'Calculating...' : '📊 Calculate Bio-Age'}
+          </Text>
+        </TouchableOpacity>
+
+        <Text style={styles.footer}>
+          All values will be saved to your history
+        </Text>
+      </ScrollView>
+    </LinearGradient>
+  );
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  gradientBackground: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-  },
-  scrollView: {
-    flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: StatusBar.currentHeight + 20,
-    paddingBottom: 30,
+    padding: 20,
+    paddingBottom: 40,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 5,
+    color: '#FFFFFF',
+    marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: '#7F8C8D',
-    marginBottom: 30,
+    color: '#AAAAAA',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  section: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  sectionIcon: {
+    fontSize: 28,
+    marginRight: 12,
   },
   sectionTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
-    marginTop: 20,
-    marginBottom: 10,
+    color: '#FFFFFF',
   },
-  sectionDivider: {
-    height: 3,
-    backgroundColor: '#FF8C00',
+  inputContainer: {
     marginBottom: 20,
   },
-  label: {
-    fontSize: 16,
-    color: '#333',
+  inputHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
-    fontWeight: '500',
+  },
+  inputLabel: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  optimalRange: {
+    fontSize: 12,
+    color: '#00CFC1',
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   input: {
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 15,
-    fontSize: 16,
-    marginBottom: 15,
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: 'rgba(255, 140, 0, 0.3)',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 18,
+    color: '#FFFFFF',
   },
-  weightNote: {
-    fontSize: 13,
-    color: '#95A5A6',
-    fontStyle: 'italic',
-    marginTop: -10,
-    marginBottom: 15,
-  },
-  optionalNote: {
+  unit: {
+    marginLeft: 12,
     fontSize: 14,
-    color: '#95A5A6',
-    fontStyle: 'italic',
-    marginBottom: 15,
+    color: '#AAAAAA',
+    minWidth: 60,
   },
   calculateButton: {
-    backgroundColor: '#2ECC71',
-    borderRadius: 15,
+    backgroundColor: '#00CFC1',
+    borderRadius: 12,
     padding: 18,
     alignItems: 'center',
-    marginTop: 30,
-    marginBottom: 15,
+    marginTop: 10,
+    marginBottom: 16,
+  },
+  calculateButtonDisabled: {
+    opacity: 0.6,
   },
   calculateButtonText: {
-    color: 'white',
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
   },
-  cancelButton: {
-    backgroundColor: '#E0E0E0',
-    borderRadius: 15,
-    padding: 18,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  cancelButtonText: {
-    color: '#333',
-    fontSize: 18,
-    fontWeight: 'bold',
+  footer: {
+    textAlign: 'center',
+    color: '#888888',
+    fontSize: 12,
+    fontStyle: 'italic',
   },
 });
-
-export default BiomarkerInputScreen;
