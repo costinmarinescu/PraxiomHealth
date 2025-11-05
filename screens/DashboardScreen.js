@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -57,11 +56,6 @@ export default function DashboardScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <Image
-            source={require('../assets/Logo_BW.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
           <Text style={styles.headerText}>PRAXIOM{'\n'}HEALTH</Text>
         </View>
 
@@ -136,20 +130,15 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 30,
-  },
-  logo: {
-    width: 40,
-    height: 40,
-    marginRight: 12,
   },
   headerText: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#FFFFFF',
     lineHeight: 20,
+    textAlign: 'center',
   },
   ageCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
