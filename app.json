@@ -67,12 +67,6 @@
             "deploymentTarget": "13.0"
           }
         }
-      ],
-      [
-        "react-native-health",
-        {
-          "isHealthKitEnabled": true
-        }
       ]
     ]
   }
