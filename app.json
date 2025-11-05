@@ -3,11 +3,6 @@
     "name": "Praxiom Health",
     "slug": "praxiom-health",
     "version": "1.0.0",
-    "extra": {
-      "eas": {
-        "projectId": "0b25cc14-e855-4c8b-8272-95523bb9c592"
-      }
-    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -21,7 +16,16 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.praxiom.health"
+      "bundleIdentifier": "com.praxiom.health",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "Praxiom Health needs access to read your health data to calculate your biological age.",
+        "NSHealthUpdateUsageDescription": "Praxiom Health needs permission to save health data.",
+        "NSBluetoothAlwaysUsageDescription": "Praxiom Health uses Bluetooth to connect to your smartwatch and sync health data.",
+        "NSBluetoothPeripheralUsageDescription": "Praxiom Health uses Bluetooth to connect to your smartwatch."
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -32,21 +36,42 @@
       "permissions": [
         "BLUETOOTH",
         "BLUETOOTH_ADMIN",
-        "BLUETOOTH_CONNECT",
         "BLUETOOTH_SCAN",
-        "ACCESS_FINE_LOCATION"
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_ADVERTISE",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACTIVITY_RECOGNITION",
+        "BODY_SENSORS",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "0b25cc14-e855-4c8b-8272-95523bb9c592"
+      }
     },
     "plugins": [
       [
         "expo-build-properties",
         {
           "android": {
-            "kotlinVersion": "1.9.20"
+            "kotlinVersion": "1.9.20",
+            "minSdkVersion": 26
+          },
+          "ios": {
+            "deploymentTarget": "13.0"
           }
+        }
+      ],
+      [
+        "react-native-health",
+        {
+          "isHealthKitEnabled": true
         }
       ]
     ]

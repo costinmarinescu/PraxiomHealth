@@ -1,11 +1,11 @@
 {
   "name": "praxiom-health",
   "version": "1.0.0",
-  "main": "node_modules/expo/AppEntry.js",
+  "main": "expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web"
   },
   "dependencies": {
@@ -14,20 +14,22 @@
     "expo-font": "~12.0.9",
     "expo-build-properties": "~0.12.5",
     "expo-linear-gradient": "~13.0.2",
-    "expo-print": "~13.0.1",
-    "expo-sharing": "~12.0.1",
     "react": "18.2.0",
     "react-native": "0.74.5",
     "@react-navigation/native": "^6.1.9",
-    "@react-navigation/bottom-tabs": "^6.5.11",
     "@react-navigation/stack": "^6.3.20",
-    "react-native-ble-plx": "^3.1.2",
+    "@react-navigation/bottom-tabs": "^6.5.11",
     "react-native-screens": "~3.31.1",
-    "react-native-safe-area-context": "4.10.1",
-    "react-native-gesture-handler": "~2.16.1",
-    "@react-native-community/datetimepicker": "8.0.1",
+    "react-native-safe-area-context": "4.10.5",
+    "react-native-ble-plx": "^3.1.2",
+    "react-native-health": "^1.20.0",
+    "react-native-health-connect": "^1.2.0",
     "@react-native-async-storage/async-storage": "1.23.1",
-    "@expo/vector-icons": "^14.0.2"
+    "react-native-share": "^10.0.2",
+    "react-native-fs": "^2.20.0",
+    "expo-document-picker": "~12.0.2",
+    "expo-device": "~6.0.2",
+    "buffer": "^6.0.3"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

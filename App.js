@@ -1,45 +1,14 @@
+// App.js
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import DashboardScreen from './screens/DashboardScreen';
 import WatchScreen from './screens/WatchScreen';
 import SettingsScreen from './screens/SettingsScreen';
-import BiomarkerInputScreen from './screens/BiomarkerInputScreen';
-import BiomarkerHistoryScreen from './screens/BiomarkerHistoryScreen';
 
 const Tab = createBottomTabNavigator();
-const Stack = createStackNavigator();
-
-function DashboardStack() {
-  return (
-    <Stack.Navigator>
-      <Stack.Screen 
-        name="DashboardMain" 
-        component={DashboardScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="BiomarkerInput" 
-        component={BiomarkerInputScreen}
-        options={{ 
-          headerShown: false,
-          presentation: 'modal'
-        }}
-      />
-      <Stack.Screen 
-        name="BiomarkerHistory" 
-        component={BiomarkerHistoryScreen}
-        options={{ 
-          headerShown: false,
-          presentation: 'modal'
-        }}
-      />
-    </Stack.Navigator>
-  );
-}
 
 export default function App() {
   return (
@@ -59,12 +28,20 @@ export default function App() {
 
             return <Ionicons name={iconName} size={size} color={color} />;
           },
-          tabBarActiveTintColor: '#00CFC1',
+          tabBarActiveTintColor: '#FF8C00',
           tabBarInactiveTintColor: 'gray',
+          tabBarStyle: {
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            borderTopWidth: 1,
+            borderTopColor: '#E0E0E0',
+            paddingTop: 5,
+            paddingBottom: 5,
+            height: 60,
+          },
           headerShown: false,
         })}
       >
-        <Tab.Screen name="Dashboard" component={DashboardStack} />
+        <Tab.Screen name="Dashboard" component={DashboardScreen} />
         <Tab.Screen name="Watch" component={WatchScreen} />
         <Tab.Screen name="Settings" component={SettingsScreen} />
       </Tab.Navigator>
