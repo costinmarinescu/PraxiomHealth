@@ -5,11 +5,11 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#1a1a1e"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -17,14 +17,25 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.praxiom.health",
-      "deploymentTarget": "13.4"
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "This app needs Bluetooth to connect to your PineTime watch and sync your Praxiom Age.",
+        "NSBluetoothPeripheralUsageDescription": "This app needs Bluetooth to connect to your PineTime watch."
+      }
     },
     "android": {
       "package": "com.praxiom.health",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      }
+        "backgroundColor": "#1a1a1e"
+      },
+      "permissions": [
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_SCAN",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -40,9 +51,6 @@
         {
           "android": {
             "kotlinVersion": "1.9.20"
-          },
-          "ios": {
-            "deploymentTarget": "13.4"
           }
         }
       ]
