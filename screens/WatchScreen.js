@@ -8,82 +8,110 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
-  PermissionsAndroid,
 } from 'react-native';
+import { BleManager } from 'react-native-ble-plx';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import WearableService from '../services/WearableService';
 
-const WatchScreen = () => {
+const manager = new BleManager();
+
+export default function WatchScreen() {
   const [isScanning, setIsScanning] = useState(false);
   const [devices, setDevices] = useState([]);
   const [connectedDevice, setConnectedDevice] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState('disconnected');
-  const [bioAge, setBioAge] = useState(null);
+  const [bleState, setBleState] = useState('Unknown');
+  const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
-    initializeBLE();
-    loadStoredDevice();
-    
+    // Graceful BLE initialization with retry logic
+    initializeBluetooth();
+
     return () => {
-      WearableService.stopScan();
+      manager.destroy();
     };
   }, []);
 
-  const initializeBLE = async () => {
+  const initializeBluetooth = async () => {
     try {
-      await WearableService.init();
-    } catch (error) {
-      console.error('BLE initialization error:', error);
-      Alert.alert('Bluetooth Error', 'Failed to initialize Bluetooth. Please enable Bluetooth and try again.');
-    }
-  };
+      // Give the system time to initialize BLE
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-  const loadStoredDevice = async () => {
-    try {
-      const stored = await AsyncStorage.getItem('connected_watch');
-      if (stored) {
-        const deviceData = JSON.parse(stored);
-        setConnectedDevice(deviceData);
+      // Check BLE state
+      const state = await manager.state();
+      setBleState(state);
+      
+      if (state === 'PoweredOn') {
+        setIsInitializing(false);
+        return;
       }
+
+      // If not powered on, wait a bit and check again
+      if (state === 'Unknown' || state === 'Resetting') {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const retryState = await manager.state();
+        setBleState(retryState);
+        
+        if (retryState === 'PoweredOn') {
+          setIsInitializing(false);
+          return;
+        }
+      }
+
+      // If still not ready, set up a state listener
+      const subscription = manager.onStateChange((state) => {
+        setBleState(state);
+        if (state === 'PoweredOn') {
+          setIsInitializing(false);
+          subscription.remove();
+        }
+      }, true);
+
+      // Stop showing initialization after 3 seconds regardless
+      setTimeout(() => setIsInitializing(false), 3000);
+
     } catch (error) {
-      console.error('Error loading stored device:', error);
+      console.log('BLE initialization:', error);
+      setIsInitializing(false);
+      // Don't show error - let user try scanning anyway
     }
   };
 
   const requestPermissions = async () => {
     if (Platform.OS === 'android') {
-      if (Platform.Version >= 31) {
-        // Android 12+
+      try {
         const granted = await PermissionsAndroid.requestMultiple([
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
         ]);
-        
-        return (
-          granted['android.permission.BLUETOOTH_SCAN'] === PermissionsAndroid.RESULTS.GRANTED &&
-          granted['android.permission.BLUETOOTH_CONNECT'] === PermissionsAndroid.RESULTS.GRANTED &&
-          granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
+        return Object.values(granted).every(
+          permission => permission === PermissionsAndroid.RESULTS.GRANTED
         );
-      } else {
-        // Android 11 and below
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
-        );
-        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      } catch (err) {
+        console.warn(err);
+        return false;
       }
     }
-    return true; // iOS handles permissions automatically
+    return true;
   };
 
   const startScan = async () => {
+    // Check if Bluetooth is enabled before scanning
+    const state = await manager.state();
+    if (state !== 'PoweredOn') {
+      Alert.alert(
+        'Bluetooth Disabled',
+        'Please enable Bluetooth in your device settings to scan for watches.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     const hasPermission = await requestPermissions();
     if (!hasPermission) {
       Alert.alert(
         'Permissions Required',
-        'Bluetooth and location permissions are required to scan for devices.'
+        'Bluetooth permissions are required to scan for devices.',
+        [{ text: 'OK' }]
       );
       return;
     }
@@ -91,119 +119,77 @@ const WatchScreen = () => {
     setIsScanning(true);
     setDevices([]);
 
-    try {
-      WearableService.startScan((device) => {
-        // Filter for PineTime watches or devices with Praxiom service
-        if (
-          device.name?.includes('InfiniTime') ||
-          device.name?.includes('PineTime') ||
-          device.name?.includes('Praxiom')
-        ) {
-          setDevices((prev) => {
-            // Avoid duplicates
-            const exists = prev.find(d => d.id === device.id);
-            if (exists) return prev;
-            return [...prev, device];
-          });
-        }
-      });
-
-      // Auto-stop scan after 10 seconds
-      setTimeout(() => {
-        WearableService.stopScan();
+    manager.startDeviceScan(null, null, (error, device) => {
+      if (error) {
+        console.error(error);
         setIsScanning(false);
-      }, 10000);
-    } catch (error) {
-      console.error('Scan error:', error);
-      Alert.alert('Scan Error', 'Failed to start scanning for devices.');
-      setIsScanning(false);
-    }
-  };
+        return;
+      }
 
-  const stopScan = () => {
-    WearableService.stopScan();
-    setIsScanning(false);
+      if (device && device.name && device.name.includes('Pine')) {
+        setDevices(prevDevices => {
+          const exists = prevDevices.find(d => d.id === device.id);
+          if (!exists) {
+            return [...prevDevices, device];
+          }
+          return prevDevices;
+        });
+      }
+    });
+
+    // Stop scanning after 10 seconds
+    setTimeout(() => {
+      manager.stopDeviceScan();
+      setIsScanning(false);
+    }, 10000);
   };
 
   const connectToDevice = async (device) => {
-    setConnectionStatus('connecting');
-    
     try {
-      const success = await WearableService.connectToDevice(device.id);
+      setIsScanning(false);
+      manager.stopDeviceScan();
+
+      const connected = await manager.connectToDevice(device.id);
+      await connected.discoverAllServicesAndCharacteristics();
       
-      if (success) {
-        setConnectedDevice(device);
-        setConnectionStatus('connected');
-        
-        // Save connected device
-        await AsyncStorage.setItem('connected_watch', JSON.stringify(device));
-        
-        Alert.alert('Connected', `Successfully connected to ${device.name || 'PineTime'}`);
-        
-        // Load Bio-Age from AsyncStorage and sync to watch
-        const storedBioAge = await AsyncStorage.getItem('bio_age');
-        if (storedBioAge) {
-          const age = parseInt(storedBioAge, 10);
-          setBioAge(age);
-          await syncBioAge(age);
-        }
-      } else {
-        setConnectionStatus('disconnected');
-        Alert.alert('Connection Failed', 'Could not connect to the device. Please try again.');
-      }
+      setConnectedDevice(connected);
+      Alert.alert(
+        'Connected!',
+        `Successfully connected to ${device.name}`,
+        [{ text: 'OK' }]
+      );
     } catch (error) {
       console.error('Connection error:', error);
-      setConnectionStatus('disconnected');
-      Alert.alert('Connection Error', error.message || 'Failed to connect to device.');
+      Alert.alert(
+        'Connection Failed',
+        'Could not connect to the watch. Please try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
   const disconnectDevice = async () => {
-    try {
-      await WearableService.disconnect();
-      setConnectedDevice(null);
-      setConnectionStatus('disconnected');
-      await AsyncStorage.removeItem('connected_watch');
-      Alert.alert('Disconnected', 'Watch disconnected successfully.');
-    } catch (error) {
-      console.error('Disconnect error:', error);
-    }
-  };
-
-  const syncBioAge = async (age) => {
-    if (!connectedDevice) {
-      Alert.alert('Not Connected', 'Please connect to your watch first.');
-      return;
-    }
-
-    try {
-      const success = await WearableService.sendBioAge(age || bioAge);
-      if (success) {
-        Alert.alert('Synced!', `Bio-Age ${age || bioAge} sent to your watch.`);
-      } else {
-        Alert.alert('Sync Failed', 'Could not send Bio-Age to watch. Please check connection.');
+    if (connectedDevice) {
+      try {
+        await manager.cancelDeviceConnection(connectedDevice.id);
+        setConnectedDevice(null);
+        Alert.alert('Disconnected', 'Watch has been disconnected.', [{ text: 'OK' }]);
+      } catch (error) {
+        console.error('Disconnect error:', error);
       }
-    } catch (error) {
-      console.error('Sync error:', error);
-      Alert.alert('Sync Error', 'Failed to sync Bio-Age to watch.');
     }
   };
 
   const renderDevice = ({ item }) => (
     <TouchableOpacity
-      style={styles.deviceCard}
+      style={styles.deviceItem}
       onPress={() => connectToDevice(item)}
-      disabled={connectionStatus === 'connecting'}
     >
-      <View style={styles.deviceIcon}>
-        <Ionicons name="watch-outline" size={32} color="#00CFC1" />
-      </View>
       <View style={styles.deviceInfo}>
         <Text style={styles.deviceName}>{item.name || 'Unknown Device'}</Text>
         <Text style={styles.deviceId}>{item.id}</Text>
-        <Text style={styles.deviceRSSI}>Signal: {item.rssi || 'N/A'} dBm</Text>
       </View>
-      <Ionicons name="chevron-forward" size={24} color="#666" />
+      <Text style={styles.connectText}>Connect</Text>
     </TouchableOpacity>
   );
 
@@ -212,122 +198,91 @@ const WatchScreen = () => {
       colors={['rgba(255, 140, 0, 0.15)', 'rgba(0, 207, 193, 0.15)']}
       style={styles.container}
     >
-      {/* Header */}
       <View style={styles.header}>
-        <Ionicons name="watch" size={48} color="#00CFC1" />
+        <View style={styles.iconContainer}>
+          <View style={styles.watchIcon} />
+        </View>
         <Text style={styles.title}>PineTime Watch</Text>
         <Text style={styles.subtitle}>Sync Your Bio-Age</Text>
       </View>
 
-      {/* Connection Status */}
-      <View style={[
-        styles.statusCard,
-        connectionStatus === 'connected' && styles.statusCardConnected,
-        connectionStatus === 'connecting' && styles.statusCardConnecting
-      ]}>
-        <Ionicons
-          name={
-            connectionStatus === 'connected' ? 'checkmark-circle' :
-            connectionStatus === 'connecting' ? 'sync' :
-            'alert-circle'
-          }
-          size={32}
-          color={
-            connectionStatus === 'connected' ? '#4CAF50' :
-            connectionStatus === 'connecting' ? '#FF9800' :
-            '#999'
-          }
-        />
-        <Text style={styles.statusText}>
-          {connectionStatus === 'connected' ? 'Connected' :
-           connectionStatus === 'connecting' ? 'Connecting...' :
-           'Not Connected'}
-        </Text>
-        {connectedDevice && (
-          <Text style={styles.connectedDeviceName}>{connectedDevice.name}</Text>
-        )}
-      </View>
-
-      {/* Bio-Age Display */}
-      {bioAge && connectedDevice && (
-        <View style={styles.bioAgeCard}>
-          <Text style={styles.bioAgeLabel}>Current Bio-Age</Text>
-          <Text style={styles.bioAgeValue}>{bioAge}</Text>
-          <TouchableOpacity
-            style={styles.syncButton}
-            onPress={() => syncBioAge(bioAge)}
-          >
-            <Ionicons name="sync" size={20} color="#FFF" />
-            <Text style={styles.syncButtonText}>Sync to Watch</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Connected Device Actions */}
-      {connectedDevice ? (
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            style={styles.disconnectButton}
-            onPress={disconnectDevice}
-          >
-            <Ionicons name="close-circle" size={20} color="#FFF" />
-            <Text style={styles.disconnectButtonText}>Disconnect</Text>
-          </TouchableOpacity>
+      {isInitializing ? (
+        <View style={styles.initializingContainer}>
+          <ActivityIndicator size="large" color="#00CFC1" />
+          <Text style={styles.initializingText}>Initializing Bluetooth...</Text>
         </View>
       ) : (
         <>
-          {/* Scan Button */}
-          <TouchableOpacity
-            style={[styles.scanButton, isScanning && styles.scanButtonActive]}
-            onPress={isScanning ? stopScan : startScan}
-            disabled={connectionStatus === 'connecting'}
-          >
-            {isScanning ? (
-              <ActivityIndicator size="small" color="#FFF" />
-            ) : (
-              <Ionicons name="search" size={24} color="#FFF" />
-            )}
-            <Text style={styles.scanButtonText}>
-              {isScanning ? 'Scanning...' : 'Scan for Watches'}
+          {connectedDevice ? (
+            <View style={styles.connectedContainer}>
+              <View style={styles.statusCard}>
+                <Text style={styles.statusText}>✓ Connected</Text>
+                <Text style={styles.deviceNameText}>{connectedDevice.name}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.disconnectButton}
+                onPress={disconnectDevice}
+              >
+                <Text style={styles.buttonText}>Disconnect</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.notConnectedContainer}>
+              <View style={styles.statusCard}>
+                <Text style={styles.statusIcon}>⚠</Text>
+                <Text style={styles.statusText}>Not Connected</Text>
+              </View>
+              
+              <TouchableOpacity
+                style={[styles.scanButton, isScanning && styles.scanningButton]}
+                onPress={startScan}
+                disabled={isScanning}
+              >
+                {isScanning ? (
+                  <>
+                    <ActivityIndicator color="#FFF" style={styles.buttonLoader} />
+                    <Text style={styles.buttonText}>Scanning...</Text>
+                  </>
+                ) : (
+                  <Text style={styles.buttonText}>Scan for Watch</Text>
+                )}
+              </TouchableOpacity>
+
+              {devices.length > 0 ? (
+                <View style={styles.devicesContainer}>
+                  <Text style={styles.devicesTitle}>Available Watches:</Text>
+                  <FlatList
+                    data={devices}
+                    renderItem={renderDevice}
+                    keyExtractor={item => item.id}
+                    style={styles.deviceList}
+                  />
+                </View>
+              ) : (
+                !isScanning && (
+                  <Text style={styles.noDevicesText}>No watches found</Text>
+                )
+              )}
+            </View>
+          )}
+
+          <View style={styles.infoCard}>
+            <Text style={styles.infoIcon}>ℹ️</Text>
+            <Text style={styles.infoText}>
+              Make sure your PineTime is turned on and nearby
             </Text>
-          </TouchableOpacity>
+          </View>
 
-          {/* Device List */}
-          {devices.length > 0 && (
-            <View style={styles.deviceListContainer}>
-              <Text style={styles.deviceListTitle}>Available Devices</Text>
-              <FlatList
-                data={devices}
-                renderItem={renderDevice}
-                keyExtractor={(item) => item.id}
-                style={styles.deviceList}
-              />
-            </View>
-          )}
-
-          {/* No Devices Message */}
-          {!isScanning && devices.length === 0 && (
-            <View style={styles.emptyState}>
-              <Ionicons name="watch-outline" size={64} color="#CCC" />
-              <Text style={styles.emptyStateText}>No watches found</Text>
-              <Text style={styles.emptyStateSubtext}>
-                Make sure your PineTime is turned on and nearby
-              </Text>
-            </View>
-          )}
+          <View style={styles.firmwareNotice}>
+            <Text style={styles.firmwareText}>
+              Your PineTime watch needs the Praxiom firmware installed to display Bio-Age.
+            </Text>
+          </View>
         </>
       )}
-
-      {/* Info Box */}
-      <View style={styles.infoBox}>
-        <Ionicons name="information-circle" size={24} color="#00CFC1" />
-        <Text style={styles.infoText}>
-          Your PineTime watch needs the Praxiom firmware installed to display Bio-Age.
-        </Text>
-      </View>
     </LinearGradient>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -336,209 +291,185 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginTop: 20,
     marginBottom: 30,
+    marginTop: 20,
+  },
+  iconContainer: {
+    marginBottom: 15,
+  },
+  watchIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    backgroundColor: '#00CFC1',
+    opacity: 0.8,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
-    marginTop: 10,
+    color: '#2C3E50',
+    marginBottom: 5,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
-    marginTop: 5,
+    color: '#7F8C8D',
+  },
+  initializingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  initializingText: {
+    marginTop: 15,
+    fontSize: 16,
+    color: '#7F8C8D',
+  },
+  connectedContainer: {
+    flex: 1,
+  },
+  notConnectedContainer: {
+    flex: 1,
   },
   statusCard: {
     backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 30,
+    padding: 30,
     alignItems: 'center',
-    marginBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 3,
-  },
-  statusCardConnected: {
-    backgroundColor: '#E8F5E9',
-  },
-  statusCardConnecting: {
-    backgroundColor: '#FFF3E0',
-  },
-  statusText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 10,
-  },
-  connectedDeviceName: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 5,
-  },
-  bioAgeCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
+    elevation: 5,
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
   },
-  bioAgeLabel: {
-    fontSize: 16,
-    color: '#666',
+  statusIcon: {
+    fontSize: 48,
     marginBottom: 10,
   },
-  bioAgeValue: {
-    fontSize: 48,
+  statusText: {
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#FF8C00',
-    marginBottom: 15,
+    color: '#2C3E50',
   },
-  syncButton: {
-    flexDirection: 'row',
-    backgroundColor: '#00CFC1',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 25,
-    alignItems: 'center',
-  },
-  syncButtonText: {
-    color: '#FFF',
+  deviceNameText: {
     fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  actionsContainer: {
-    marginBottom: 20,
-  },
-  disconnectButton: {
-    flexDirection: 'row',
-    backgroundColor: '#F44336',
-    paddingVertical: 15,
-    paddingHorizontal: 24,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  disconnectButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+    color: '#7F8C8D',
+    marginTop: 5,
   },
   scanButton: {
-    flexDirection: 'row',
     backgroundColor: '#00CFC1',
-    paddingVertical: 15,
-    paddingHorizontal: 24,
     borderRadius: 25,
+    padding: 18,
     alignItems: 'center',
+    shadowColor: '#00CFC1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+    flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: 20,
   },
-  scanButtonActive: {
-    backgroundColor: '#FF8C00',
+  scanningButton: {
+    backgroundColor: '#95E4DC',
   },
-  scanButtonText: {
+  disconnectButton: {
+    backgroundColor: '#E74C3C',
+    borderRadius: 25,
+    padding: 18,
+    alignItems: 'center',
+    shadowColor: '#E74C3C',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  buttonText: {
     color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+    fontSize: 18,
+    fontWeight: 'bold',
   },
-  deviceListContainer: {
+  buttonLoader: {
+    marginRight: 10,
+  },
+  devicesContainer: {
+    marginTop: 20,
     flex: 1,
   },
-  deviceListTitle: {
+  devicesTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 15,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    marginBottom: 10,
   },
   deviceList: {
     flex: 1,
   },
-  deviceCard: {
-    flexDirection: 'row',
+  deviceItem: {
     backgroundColor: '#FFF',
     borderRadius: 15,
     padding: 15,
     marginBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 2,
-  },
-  deviceIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#F0F9FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 15,
+    elevation: 3,
   },
   deviceInfo: {
     flex: 1,
   },
   deviceName: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+    fontWeight: 'bold',
+    color: '#2C3E50',
   },
   deviceId: {
     fontSize: 12,
-    color: '#999',
-    marginBottom: 2,
+    color: '#95A5A6',
+    marginTop: 4,
   },
-  deviceRSSI: {
-    fontSize: 12,
-    color: '#666',
+  connectText: {
+    color: '#00CFC1',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-  },
-  emptyStateText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#999',
+  noDevicesText: {
+    textAlign: 'center',
+    color: '#95A5A6',
+    fontSize: 16,
     marginTop: 20,
   },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: '#CCC',
-    marginTop: 10,
-    textAlign: 'center',
-    paddingHorizontal: 40,
-  },
-  infoBox: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(0, 207, 193, 0.1)',
+  infoCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: 15,
     padding: 15,
-    marginTop: 20,
+    flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 20,
+  },
+  infoIcon: {
+    fontSize: 24,
+    marginRight: 10,
   },
   infoText: {
     flex: 1,
     fontSize: 14,
-    color: '#666',
-    marginLeft: 10,
-    lineHeight: 20,
+    color: '#7F8C8D',
+  },
+  firmwareNotice: {
+    backgroundColor: 'rgba(0, 207, 193, 0.1)',
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#00CFC1',
+    padding: 15,
+    marginTop: 10,
+  },
+  firmwareText: {
+    fontSize: 12,
+    color: '#2C3E50',
+    textAlign: 'center',
   },
 });
-
-export default WatchScreen;
