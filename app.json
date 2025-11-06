@@ -16,11 +16,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.praxiom.health",
-      "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to your PineTime watch and sync your Bio-Age data.",
-        "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to connect to your PineTime watch and sync your Bio-Age data."
-      }
+      "bundleIdentifier": "com.praxiom.health"
     },
     "android": {
       "adaptiveIcon": {
@@ -29,12 +25,11 @@
       },
       "package": "com.praxiom.health",
       "permissions": [
-        "android.permission.BLUETOOTH",
-        "android.permission.BLUETOOTH_ADMIN",
-        "android.permission.BLUETOOTH_SCAN",
-        "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION"
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_SCAN",
+        "ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
