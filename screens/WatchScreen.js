@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  PermissionsAndroid,
 } from 'react-native';
 import { BleManager } from 'react-native-ble-plx';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,9 +21,9 @@ export default function WatchScreen() {
   const [connectedDevice, setConnectedDevice] = useState(null);
   const [bleState, setBleState] = useState('Unknown');
   const [isInitializing, setIsInitializing] = useState(true);
+  const [hasPermissions, setHasPermissions] = useState(false);
 
   useEffect(() => {
-    // Graceful BLE initialization with retry logic
     initializeBluetooth();
 
     return () => {
@@ -71,26 +72,54 @@ export default function WatchScreen() {
     } catch (error) {
       console.log('BLE initialization:', error);
       setIsInitializing(false);
-      // Don't show error - let user try scanning anyway
     }
   };
 
   const requestPermissions = async () => {
     if (Platform.OS === 'android') {
       try {
-        const granted = await PermissionsAndroid.requestMultiple([
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        ]);
-        return Object.values(granted).every(
-          permission => permission === PermissionsAndroid.RESULTS.GRANTED
-        );
+        if (Platform.Version >= 31) {
+          // Android 12+ (API 31+)
+          const granted = await PermissionsAndroid.requestMultiple([
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          ]);
+          
+          const allGranted = 
+            granted['android.permission.BLUETOOTH_SCAN'] === PermissionsAndroid.RESULTS.GRANTED &&
+            granted['android.permission.BLUETOOTH_CONNECT'] === PermissionsAndroid.RESULTS.GRANTED &&
+            granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED;
+          
+          setHasPermissions(allGranted);
+          return allGranted;
+        } else {
+          // Android 11 and below
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+            {
+              title: 'Location Permission',
+              message: 'Bluetooth scanning requires location permission on Android.',
+              buttonPositive: 'OK',
+            }
+          );
+          
+          const isGranted = granted === PermissionsAndroid.RESULTS.GRANTED;
+          setHasPermissions(isGranted);
+          return isGranted;
+        }
       } catch (err) {
-        console.warn(err);
+        console.warn('Permission error:', err);
+        Alert.alert(
+          'Permission Error',
+          'There was an error requesting permissions. Please grant Bluetooth and Location permissions in Settings.',
+          [{ text: 'OK' }]
+        );
         return false;
       }
     }
+    // iOS doesn't need explicit permission request
+    setHasPermissions(true);
     return true;
   };
 
@@ -106,12 +135,29 @@ export default function WatchScreen() {
       return;
     }
 
+    // Request permissions
     const hasPermission = await requestPermissions();
     if (!hasPermission) {
       Alert.alert(
         'Permissions Required',
-        'Bluetooth permissions are required to scan for devices.',
-        [{ text: 'OK' }]
+        'Bluetooth and Location permissions are required to scan for devices. Please grant them in your device settings if you denied them.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Open Settings', 
+            onPress: () => {
+              if (Platform.OS === 'android') {
+                // On Android, we can try to open app settings
+                try {
+                  const { Linking } = require('react-native');
+                  Linking.openSettings();
+                } catch (e) {
+                  console.log('Cannot open settings');
+                }
+              }
+            }
+          }
+        ]
       );
       return;
     }
@@ -123,6 +169,15 @@ export default function WatchScreen() {
       if (error) {
         console.error(error);
         setIsScanning(false);
+        
+        // Check if it's a permission error
+        if (error.message && error.message.includes('permission')) {
+          Alert.alert(
+            'Permission Denied',
+            'Bluetooth permissions were denied. Please enable them in Settings.',
+            [{ text: 'OK' }]
+          );
+        }
         return;
       }
 
@@ -260,7 +315,9 @@ export default function WatchScreen() {
                 </View>
               ) : (
                 !isScanning && (
-                  <Text style={styles.noDevicesText}>No watches found</Text>
+                  <Text style={styles.noDevicesText}>
+                    {hasPermissions ? 'No watches found' : 'Tap "Scan for Watch" to start'}
+                  </Text>
                 )
               )}
             </View>
