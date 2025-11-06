@@ -1,291 +1,283 @@
+// services/WearableService.js
 import { BleManager } from 'react-native-ble-plx';
 import { Platform, PermissionsAndroid, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Buffer } from 'buffer';
 
 class WearableService {
   constructor() {
-    this.bleManager = new BleManager();
-    this.connectedDevice = null;
-    this.scanSubscription = null;
-    
-    // PineTime/Praxiom Watch BLE UUIDs
-    this.PINETIME_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-    this.BIOAGE_CHAR_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
-    this.HEALTH_DATA_CHAR_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
-    
-    // Standard Heart Rate Service
-    this.HR_SERVICE_UUID = '0000180d-0000-1000-8000-00805f9b34fb';
-    this.HR_CHAR_UUID = '00002a37-0000-1000-8000-00805f9b34fb';
-    
-    // Callbacks
-    this.onConnectionChange = null;
-    this.onLiveDataUpdate = null;
+    this.manager = new BleManager();
+    this.device = null;
+    this.isScanning = false;
   }
 
-  // ==================== PERMISSIONS ====================
-  
-  async requestBluetoothPermissions() {
+  // Request all necessary permissions for BLE
+  async requestPermissions() {
     if (Platform.OS === 'android') {
-      try {
-        const granted = await PermissionsAndroid.requestMultiple([
+      if (Platform.Version >= 31) {
+        // Android 12+ (API 31+)
+        const permissions = [
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        ]);
-        
-        return Object.values(granted).every(
-          g => g === PermissionsAndroid.RESULTS.GRANTED
+        ];
+
+        const granted = await PermissionsAndroid.requestMultiple(permissions);
+
+        const allGranted = Object.values(granted).every(
+          status => status === PermissionsAndroid.RESULTS.GRANTED
         );
-      } catch (err) {
-        console.error('Permission error:', err);
-        return false;
+
+        if (!allGranted) {
+          Alert.alert(
+            'Permissions Required',
+            'Bluetooth and Location permissions are required to connect to your PineTime watch. Please grant all permissions.',
+            [{ text: 'OK' }]
+          );
+          return false;
+        }
+      } else {
+        // Android 11 and below
+        const locationPermission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          {
+            title: 'Location Permission',
+            message: 'Bluetooth scanning requires location permission on Android.',
+            buttonPositive: 'OK',
+          }
+        );
+
+        if (locationPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert(
+            'Permission Required',
+            'Location permission is required for Bluetooth scanning on Android.',
+            [{ text: 'OK' }]
+          );
+          return false;
+        }
       }
     }
-    return true; // iOS doesn't need these permissions
-  }
 
-  // ==================== SCANNING ====================
-  
-  async scanForPineTime(onDeviceFound, timeoutMs = 10000) {
-    const hasPermission = await this.requestBluetoothPermissions();
-    if (!hasPermission) {
+    // Check if Bluetooth is powered on
+    const state = await this.manager.state();
+    if (state !== 'PoweredOn') {
       Alert.alert(
-        'Permission Required',
-        'Bluetooth permissions are needed to scan for your watch'
+        'Bluetooth Disabled',
+        'Please turn on Bluetooth to connect to your PineTime watch.',
+        [{ text: 'OK' }]
       );
-      return;
-    }
-
-    console.log('Starting PineTime scan...');
-    
-    this.scanSubscription = this.bleManager.startDeviceScan(
-      null, // Scan for all devices
-      { allowDuplicates: false },
-      (error, device) => {
-        if (error) {
-          console.error('Scan error:', error);
-          return;
-        }
-
-        // Look for PineTime, InfiniTime, or Praxiom in device name
-        const name = device.name || '';
-        if (
-          name.toLowerCase().includes('pinetime') ||
-          name.toLowerCase().includes('infintime') ||
-          name.toLowerCase().includes('praxiom')
-        ) {
-          console.log('Found PineTime:', device.name, device.id);
-          onDeviceFound(device);
-        }
-      }
-    );
-
-    // Auto-stop scan after timeout
-    setTimeout(() => {
-      this.stopScan();
-    }, timeoutMs);
-  }
-
-  stopScan() {
-    if (this.scanSubscription) {
-      this.bleManager.stopDeviceScan();
-      this.scanSubscription = null;
-      console.log('Scan stopped');
-    }
-  }
-
-  // ==================== CONNECTION ====================
-  
-  async connectToDevice(device) {
-    try {
-      console.log('Connecting to device:', device.id);
-      
-      const connected = await device.connect();
-      console.log('Connected! Discovering services...');
-      
-      await connected.discoverAllServicesAndCharacteristics();
-      console.log('Services discovered');
-      
-      this.connectedDevice = connected;
-      
-      // Set up disconnect handler
-      this.connectedDevice.onDisconnected((error, device) => {
-        console.log('Device disconnected:', device.id);
-        this.connectedDevice = null;
-        if (this.onConnectionChange) {
-          this.onConnectionChange(false);
-        }
-      });
-
-      // Start monitoring heart rate
-      this.monitorHeartRate();
-      
-      if (this.onConnectionChange) {
-        this.onConnectionChange(true);
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('Connection error:', error);
-      Alert.alert('Connection Failed', 'Could not connect to watch');
       return false;
     }
+
+    return true;
   }
 
-  async disconnect() {
-    if (this.connectedDevice) {
-      try {
-        await this.connectedDevice.cancelConnection();
-        this.connectedDevice = null;
-        if (this.onConnectionChange) {
-          this.onConnectionChange(false);
-        }
-      } catch (error) {
-        console.error('Disconnect error:', error);
-      }
-    }
-  }
-
-  isConnected() {
-    return this.connectedDevice !== null;
-  }
-
-  getDeviceName() {
-    return this.connectedDevice?.name || 'Unknown';
-  }
-
-  // ==================== HEART RATE MONITORING ====================
-  
-  async monitorHeartRate() {
-    if (!this.connectedDevice) return;
-
+  // Start scanning for PineTime watches
+  async startScan(onDeviceFound) {
     try {
-      this.connectedDevice.monitorCharacteristicForService(
-        this.HR_SERVICE_UUID,
-        this.HR_CHAR_UUID,
-        (error, characteristic) => {
+      // Request permissions first
+      const hasPermissions = await this.requestPermissions();
+      if (!hasPermissions) {
+        return;
+      }
+
+      this.isScanning = true;
+
+      // Stop any existing scan
+      await this.manager.stopDeviceScan();
+
+      console.log('Starting BLE scan for PineTime watches...');
+
+      // Scan for devices with PineTime in name or specific service UUID
+      this.manager.startDeviceScan(
+        null, // Scan for all devices
+        { allowDuplicates: false },
+        (error, device) => {
           if (error) {
-            console.error('HR monitoring error:', error);
+            console.error('Scan error:', error);
+            Alert.alert('Scan Error', error.message);
+            this.isScanning = false;
             return;
           }
 
-          if (characteristic?.value) {
-            const data = Buffer.from(characteristic.value, 'base64');
-            const heartRate = data[1]; // Heart rate value is at byte 1
-            
-            if (this.onLiveDataUpdate) {
-              this.onLiveDataUpdate({ heartRate });
-            }
+          // Filter for PineTime watches
+          if (
+            device.name &&
+            (device.name.includes('InfiniTime') ||
+              device.name.includes('PineTime') ||
+              device.name.includes('Pinetime'))
+          ) {
+            console.log('Found PineTime watch:', device.name, device.id);
+            onDeviceFound(device);
           }
         }
       );
+
+      // Stop scanning after 10 seconds
+      setTimeout(() => {
+        this.stopScan();
+      }, 10000);
     } catch (error) {
-      console.error('Failed to start HR monitoring:', error);
+      console.error('Failed to start scan:', error);
+      Alert.alert('Error', `Failed to start scanning: ${error.message}`);
+      this.isScanning = false;
     }
   }
 
-  // ==================== BIO-AGE SYNC ====================
-  
-  async sendBioAgeToWatch(bioAge) {
-    if (!this.connectedDevice) {
-      Alert.alert('Not Connected', 'Please connect to your watch first');
+  // Stop scanning
+  async stopScan() {
+    try {
+      await this.manager.stopDeviceScan();
+      this.isScanning = false;
+      console.log('Stopped BLE scan');
+    } catch (error) {
+      console.error('Error stopping scan:', error);
+    }
+  }
+
+  // Connect to a device
+  async connect(deviceId) {
+    try {
+      console.log('Connecting to device:', deviceId);
+
+      // Connect to the device
+      this.device = await this.manager.connectToDevice(deviceId, {
+        timeout: 15000,
+      });
+
+      console.log('Connected to:', this.device.name);
+
+      // Discover services and characteristics
+      await this.device.discoverAllServicesAndCharacteristics();
+      console.log('Discovered services');
+
+      // Save connected device ID
+      await AsyncStorage.setItem('connectedWatchId', deviceId);
+
+      return true;
+    } catch (error) {
+      console.error('Connection error:', error);
+      Alert.alert('Connection Failed', error.message);
+      return false;
+    }
+  }
+
+  // Disconnect from device
+  async disconnect() {
+    try {
+      if (this.device) {
+        await this.device.cancelConnection();
+        this.device = null;
+        await AsyncStorage.removeItem('connectedWatchId');
+        console.log('Disconnected from watch');
+      }
+    } catch (error) {
+      console.error('Disconnect error:', error);
+    }
+  }
+
+  // Check if connected
+  isConnected() {
+    return this.device !== null;
+  }
+
+  // Get connected device name
+  getDeviceName() {
+    return this.device ? this.device.name : null;
+  }
+
+  // Send Bio-Age to watch
+  async sendBioAge(bioAge) {
+    if (!this.device) {
+      Alert.alert('Error', 'No watch connected');
       return false;
     }
 
     try {
-      console.log('Sending Bio-Age to watch:', bioAge);
-      
-      // Encode bio-age as 2 bytes (age * 10 to preserve decimal)
-      const ageValue = Math.round(parseFloat(bioAge) * 10);
-      const buffer = Buffer.alloc(2);
-      buffer.writeUInt16LE(ageValue, 0);
-      const base64Data = buffer.toString('base64');
+      // Praxiom Service UUIDs
+      const SERVICE_UUID = '19000000-78fc-48fe-8e23-433b3a1942d0';
+      const WRITE_CHAR_UUID = '19000001-78fc-48fe-8e23-433b3a1942d0';
 
-      await this.connectedDevice.writeCharacteristicWithResponseForService(
-        this.PINETIME_SERVICE_UUID,
-        this.BIOAGE_CHAR_UUID,
-        base64Data
+      // Convert Bio-Age to 4-byte buffer (uint32_t, little-endian)
+      const ageBuffer = Buffer.alloc(4);
+      ageBuffer.writeUInt32LE(bioAge, 0);
+
+      // Encode to base64 for BLE transmission
+      const ageBase64 = ageBuffer.toString('base64');
+
+      console.log(`Sending Bio-Age ${bioAge} to watch...`);
+
+      // Write to characteristic
+      await this.device.writeCharacteristicWithResponseForService(
+        SERVICE_UUID,
+        WRITE_CHAR_UUID,
+        ageBase64
       );
 
       console.log('Bio-Age sent successfully');
-      
-      // Verify by reading back
-      await new Promise(resolve => setTimeout(resolve, 500)); // Wait for watch to process
-      
-      const characteristic = await this.connectedDevice.readCharacteristicForService(
-        this.PINETIME_SERVICE_UUID,
-        this.BIOAGE_CHAR_UUID
-      );
-
-      if (characteristic?.value) {
-        const receivedBuffer = Buffer.from(characteristic.value, 'base64');
-        const receivedAge = receivedBuffer.readUInt16LE(0) / 10;
-        
-        console.log('Verified Bio-Age on watch:', receivedAge);
-        
-        // Check if it matches (within 0.1 year tolerance)
-        if (Math.abs(receivedAge - parseFloat(bioAge)) < 0.2) {
-          return true; // Success!
-        }
-      }
-      
-      return false;
+      Alert.alert('Success', `Bio-Age ${bioAge} sent to watch!`);
+      return true;
     } catch (error) {
       console.error('Error sending Bio-Age:', error);
-      Alert.alert('Sync Failed', 'Could not send Bio-Age to watch');
+      Alert.alert('Error', `Failed to send Bio-Age: ${error.message}`);
       return false;
     }
   }
 
-  async sendHealthDataToWatch(oralHealth, systemicHealth, fitnessScore) {
-    if (!this.connectedDevice) {
-      return false;
+  // Listen for Bio-Age updates from watch (notifications)
+  async subscribeToUpdates(callback) {
+    if (!this.device) {
+      console.error('No device connected');
+      return;
     }
 
     try {
-      // Package health data: [oral, systemic, fitness]
-      const buffer = Buffer.alloc(3);
-      buffer.writeUInt8(Math.round(oralHealth), 0);
-      buffer.writeUInt8(Math.round(systemicHealth), 1);
-      buffer.writeUInt8(Math.round(fitnessScore), 2);
-      const base64Data = buffer.toString('base64');
+      const SERVICE_UUID = '19000000-78fc-48fe-8e23-433b3a1942d0';
+      const NOTIFY_CHAR_UUID = '19000002-78fc-48fe-8e23-433b3a1942d0';
 
-      await this.connectedDevice.writeCharacteristicWithResponseForService(
-        this.PINETIME_SERVICE_UUID,
-        this.HEALTH_DATA_CHAR_UUID,
-        base64Data
+      // Subscribe to notifications
+      this.device.monitorCharacteristicForService(
+        SERVICE_UUID,
+        NOTIFY_CHAR_UUID,
+        (error, characteristic) => {
+          if (error) {
+            console.error('Notification error:', error);
+            return;
+          }
+
+          // Decode Bio-Age from base64
+          const buffer = Buffer.from(characteristic.value, 'base64');
+          const bioAge = buffer.readUInt32LE(0);
+
+          console.log('Received Bio-Age update from watch:', bioAge);
+          callback(bioAge);
+        }
       );
 
-      console.log('Health data sent to watch');
-      return true;
+      console.log('Subscribed to Bio-Age updates');
     } catch (error) {
-      console.error('Error sending health data:', error);
+      console.error('Error subscribing to updates:', error);
+    }
+  }
+
+  // Reconnect to last connected device
+  async reconnectToLastDevice() {
+    try {
+      const deviceId = await AsyncStorage.getItem('connectedWatchId');
+      if (deviceId) {
+        console.log('Attempting to reconnect to:', deviceId);
+        return await this.connect(deviceId);
+      }
+      return false;
+    } catch (error) {
+      console.error('Reconnection error:', error);
       return false;
     }
   }
 
-  // ==================== LIVE DATA FROM WATCH ====================
-  
-  async getStepsFromWatch() {
-    // This would require the watch firmware to expose a steps characteristic
-    // For now, return placeholder
-    return 0;
-  }
-
-  async getOxygenFromWatch() {
-    // This would require SpO2 sensor support in firmware
-    // For now, return placeholder
-    return 0;
-  }
-
-  // ==================== CLEANUP ====================
-  
+  // Clean up
   destroy() {
-    this.stopScan();
-    if (this.connectedDevice) {
-      this.connectedDevice.cancelConnection();
-    }
-    this.bleManager.destroy();
+    this.manager.destroy();
   }
 }
 
