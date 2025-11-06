@@ -313,7 +313,7 @@ export default function DashboardScreen({ navigation }) {
               <Text style={[styles.scoreValue, { color: getScoreColor(oralHealthScore) }]}>
                 {oralHealthScore > 0 ? `${oralHealthScore.toFixed(0)}%` : '--'}
               </Text>
-              <Text style={styles.scoreTarget}>Target: >85%</Text>
+              <Text style={styles.scoreTarget}>Target: {'>'}85%</Text>
             </View>
 
             <View style={[styles.scoreCard, { backgroundColor: 'rgba(255, 255, 255, 0.9)' }]}>
@@ -321,7 +321,7 @@ export default function DashboardScreen({ navigation }) {
               <Text style={[styles.scoreValue, { color: getScoreColor(systemicHealthScore) }]}>
                 {systemicHealthScore > 0 ? `${systemicHealthScore.toFixed(0)}%` : '--'}
               </Text>
-              <Text style={styles.scoreTarget}>Target: >85%</Text>
+              <Text style={styles.scoreTarget}>Target: {'>'}85%</Text>
             </View>
           </View>
 
@@ -330,7 +330,7 @@ export default function DashboardScreen({ navigation }) {
             <Text style={[styles.scoreValue, { color: getScoreColor(fitnessScore) }]}>
               {fitnessScore > 0 ? `${fitnessScore.toFixed(0)}%` : '--'}
             </Text>
-            <Text style={styles.scoreTarget}>Target: >85%</Text>
+            <Text style={styles.scoreTarget}>Target: {'>'}85%</Text>
           </View>
         </View>
 
@@ -349,7 +349,7 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.wearableValue}>
                 {hrv || '--'} <Text style={styles.wearableUnit}>ms</Text>
               </Text>
-              <Text style={styles.wearableTarget}>Optimal: >70 ms</Text>
+              <Text style={styles.wearableTarget}>Optimal: {'>'}70 ms</Text>
             </View>
 
             <View style={styles.wearableCard}>
@@ -357,7 +357,7 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.wearableValue}>
                 {sleepEfficiency || '--'}<Text style={styles.wearableUnit}>%</Text>
               </Text>
-              <Text style={styles.wearableTarget}>Optimal: >85%</Text>
+              <Text style={styles.wearableTarget}>Optimal: {'>'}85%</Text>
             </View>
 
             <View style={styles.wearableCard}>
@@ -365,7 +365,7 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.wearableValue}>
                 {dailySteps || '--'}
               </Text>
-              <Text style={styles.wearableTarget}>Optimal: >8000</Text>
+              <Text style={styles.wearableTarget}>Optimal: {'>'}8000</Text>
             </View>
           </View>
 
@@ -444,7 +444,7 @@ export default function DashboardScreen({ navigation }) {
                 keyboardType="decimal-pad"
               />
 
-              <Text style={styles.inputLabel}>Active MMP-8 (Optimal: <60 ng/mL)</Text>
+              <Text style={styles.inputLabel}>Active MMP-8 (Optimal: {'<'}60 ng/mL)</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g., 45"
@@ -453,7 +453,7 @@ export default function DashboardScreen({ navigation }) {
                 keyboardType="decimal-pad"
               />
 
-              <Text style={styles.inputLabel}>Salivary Flow Rate (Optimal: >1.5 mL/min)</Text>
+              <Text style={styles.inputLabel}>Salivary Flow Rate (Optimal: {'>'}1.5 mL/min)</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g., 1.8"
@@ -464,7 +464,7 @@ export default function DashboardScreen({ navigation }) {
 
               <Text style={styles.sectionTitle}>Systemic Health Biomarkers</Text>
 
-              <Text style={styles.inputLabel}>hs-CRP (Optimal: <1.0 mg/L)</Text>
+              <Text style={styles.inputLabel}>hs-CRP (Optimal: {'<'}1.0 mg/L)</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g., 0.8"
@@ -473,7 +473,7 @@ export default function DashboardScreen({ navigation }) {
                 keyboardType="decimal-pad"
               />
 
-              <Text style={styles.inputLabel}>Omega-3 Index (Optimal: >8.0%)</Text>
+              <Text style={styles.inputLabel}>Omega-3 Index (Optimal: {'>'}8.0%)</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g., 8.5"
@@ -482,7 +482,7 @@ export default function DashboardScreen({ navigation }) {
                 keyboardType="decimal-pad"
               />
 
-              <Text style={styles.inputLabel}>HbA1c (Optimal: <5.7%)</Text>
+              <Text style={styles.inputLabel}>HbA1c (Optimal: {'<'}5.7%)</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g., 5.4"
@@ -491,7 +491,7 @@ export default function DashboardScreen({ navigation }) {
                 keyboardType="decimal-pad"
               />
 
-              <Text style={styles.inputLabel}>GDF-15 (Optimal: <1200 pg/mL)</Text>
+              <Text style={styles.inputLabel}>GDF-15 (Optimal: {'<'}1200 pg/mL)</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g., 950"
@@ -500,7 +500,7 @@ export default function DashboardScreen({ navigation }) {
                 keyboardType="decimal-pad"
               />
 
-              <Text style={styles.inputLabel}>Vitamin D (25-OH) (Optimal: >30 ng/mL)</Text>
+              <Text style={styles.inputLabel}>Vitamin D (25-OH) (Optimal: {'>'}30 ng/mL)</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g., 35"
@@ -533,7 +533,7 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.modalTitle}>Update Wearable Data</Text>
               <Text style={styles.modalHint}>Enter your latest metrics</Text>
 
-              <Text style={styles.inputLabel}>HRV (RMSSD) in ms (Optimal: >70)</Text>
+              <Text style={styles.inputLabel}>HRV (RMSSD) in ms (Optimal: {'>'}70)</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g., 75"
@@ -542,7 +542,7 @@ export default function DashboardScreen({ navigation }) {
                 keyboardType="decimal-pad"
               />
 
-              <Text style={styles.inputLabel}>Sleep Efficiency % (Optimal: >85)</Text>
+              <Text style={styles.inputLabel}>Sleep Efficiency % (Optimal: {'>'}85)</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g., 88"
@@ -551,7 +551,7 @@ export default function DashboardScreen({ navigation }) {
                 keyboardType="decimal-pad"
               />
 
-              <Text style={styles.inputLabel}>Daily Steps (Optimal: >8000)</Text>
+              <Text style={styles.inputLabel}>Daily Steps (Optimal: {'>'}8000)</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g., 9500"
