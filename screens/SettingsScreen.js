@@ -1,13 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Switch } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Switch,
+  Alert,
+  Linking,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SettingsScreen() {
-  const [dateOfBirth, setDateOfBirth] = useState('');
-  const [notifications, setNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [dataBackupEnabled, setDataBackupEnabled] = useState(true);
+  const [userName, setUserName] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -15,33 +23,75 @@ export default function SettingsScreen() {
 
   const loadSettings = async () => {
     try {
-      const dob = await AsyncStorage.getItem('dateOfBirth');
-      if (dob) setDateOfBirth(dob);
+      const storedNotifications = await AsyncStorage.getItem('notificationsEnabled');
+      const storedBackup = await AsyncStorage.getItem('dataBackupEnabled');
+      const storedName = await AsyncStorage.getItem('userName');
+
+      if (storedNotifications !== null) {
+        setNotificationsEnabled(storedNotifications === 'true');
+      }
+      if (storedBackup !== null) {
+        setDataBackupEnabled(storedBackup === 'true');
+      }
+      if (storedName) {
+        setUserName(storedName);
+      }
     } catch (error) {
       console.error('Error loading settings:', error);
     }
   };
 
-  const saveDateOfBirth = async () => {
+  const toggleNotifications = async (value) => {
+    setNotificationsEnabled(value);
     try {
-      if (dateOfBirth) {
-        await AsyncStorage.setItem('dateOfBirth', dateOfBirth);
-        
-        // Calculate chronological age
-        const birthDate = new Date(dateOfBirth);
-        const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const monthDiff = today.getMonth() - birthDate.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-          age--;
-        }
-        
-        await AsyncStorage.setItem('chronologicalAge', age.toString());
-        alert('Date of birth saved!');
-      }
+      await AsyncStorage.setItem('notificationsEnabled', value.toString());
     } catch (error) {
-      console.error('Error saving date of birth:', error);
+      Alert.alert('Error', 'Failed to save notification setting');
     }
+  };
+
+  const toggleBackup = async (value) => {
+    setDataBackupEnabled(value);
+    try {
+      await AsyncStorage.setItem('dataBackupEnabled', value.toString());
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save backup setting');
+    }
+  };
+
+  const clearAllData = () => {
+    Alert.alert(
+      'Clear All Data',
+      'Are you sure you want to delete all your health data? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete All',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AsyncStorage.clear();
+              Alert.alert('Success', 'All data has been cleared');
+              loadSettings(); // Reload default settings
+            } catch (error) {
+              Alert.alert('Error', 'Failed to clear data');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const exportData = () => {
+    Alert.alert(
+      'Export Data',
+      'Export functionality will be available in the next update. Your data will be exported as a JSON file.',
+      [{ text: 'OK' }]
+    );
+  };
+
+  const contactSupport = () => {
+    Linking.openURL('mailto:support@praxiomhealth.com');
   };
 
   return (
@@ -49,73 +99,136 @@ export default function SettingsScreen() {
       colors={['rgba(255, 140, 0, 0.15)', 'rgba(0, 207, 193, 0.15)']}
       style={styles.container}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Settings</Text>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.headerTitle}>PRAXIOM{'\n'}HEALTH</Text>
 
         {/* Profile Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            <Ionicons name="person" size={20} color="#00CFC1" /> Profile
-          </Text>
-          
-          <Text style={styles.label}>Date of Birth (YYYY-MM-DD)</Text>
-          <TextInput
-            style={styles.input}
-            value={dateOfBirth}
-            onChangeText={setDateOfBirth}
-            placeholder="1980-01-15"
-            placeholderTextColor="#666"
-          />
-          <TouchableOpacity
-            style={styles.saveButton}
-            onPress={saveDateOfBirth}
-          >
-            <Text style={styles.saveButtonText}>Save Date of Birth</Text>
-          </TouchableOpacity>
+          <Text style={styles.sectionTitle}>👤 Profile</Text>
+          <View style={styles.card}>
+            <View style={styles.profileRow}>
+              <Text style={styles.profileLabel}>User</Text>
+              <Text style={styles.profileValue}>{userName || 'Guest User'}</Text>
+            </View>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.profileRow}>
+              <Text style={styles.profileLabel}>Edit Profile</Text>
+              <Text style={styles.arrow}>›</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Preferences Section */}
+        {/* Health Data Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            <Ionicons name="options" size={20} color="#FF8C00" /> Preferences
-          </Text>
-          
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Notifications</Text>
-              <Text style={styles.settingDescription}>Receive health alerts</Text>
+          <Text style={styles.sectionTitle}>📊 Health Data</Text>
+          <View style={styles.card}>
+            <View style={styles.settingRow}>
+              <View style={styles.settingLeft}>
+                <Text style={styles.settingLabel}>Data Backup</Text>
+                <Text style={styles.settingDescription}>
+                  Automatically backup your health data
+                </Text>
+              </View>
+              <Switch
+                value={dataBackupEnabled}
+                onValueChange={toggleBackup}
+                trackColor={{ false: '#D1D1D6', true: '#00CFC1' }}
+                thumbColor="#FFF"
+              />
             </View>
-            <Switch
-              value={notifications}
-              onValueChange={setNotifications}
-              trackColor={{ false: '#767577', true: '#00CFC1' }}
-              thumbColor={notifications ? '#FFFFFF' : '#f4f3f4'}
-            />
-          </View>
 
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Dark Mode</Text>
-              <Text style={styles.settingDescription}>Use dark theme</Text>
+            <View style={styles.divider} />
+
+            <TouchableOpacity style={styles.buttonRow} onPress={exportData}>
+              <Text style={styles.buttonLabel}>Export Data</Text>
+              <Text style={styles.arrow}>›</Text>
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity style={styles.buttonRow} onPress={clearAllData}>
+              <Text style={[styles.buttonLabel, { color: '#F44336' }]}>Clear All Data</Text>
+              <Text style={[styles.arrow, { color: '#F44336' }]}>›</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Notifications Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🔔 Notifications</Text>
+          <View style={styles.card}>
+            <View style={styles.settingRow}>
+              <View style={styles.settingLeft}>
+                <Text style={styles.settingLabel}>Push Notifications</Text>
+                <Text style={styles.settingDescription}>
+                  Receive reminders and health insights
+                </Text>
+              </View>
+              <Switch
+                value={notificationsEnabled}
+                onValueChange={toggleNotifications}
+                trackColor={{ false: '#D1D1D6', true: '#00CFC1' }}
+                thumbColor="#FFF"
+              />
             </View>
-            <Switch
-              value={darkMode}
-              onValueChange={setDarkMode}
-              trackColor={{ false: '#767577', true: '#00CFC1' }}
-              thumbColor={darkMode ? '#FFFFFF' : '#f4f3f4'}
-            />
+          </View>
+        </View>
+
+        {/* Watch Integration Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>⌚ Watch Settings</Text>
+          <View style={styles.card}>
+            <TouchableOpacity style={styles.buttonRow}>
+              <Text style={styles.buttonLabel}>Auto-sync to Watch</Text>
+              <Text style={styles.arrow}>›</Text>
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity style={styles.buttonRow}>
+              <Text style={styles.buttonLabel}>Watch Display Preferences</Text>
+              <Text style={styles.arrow}>›</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
         {/* About Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            <Ionicons name="information-circle" size={20} color="#9D4EDD" /> About
-          </Text>
-          
-          <Text style={styles.aboutText}>Praxiom Health v1.0.0</Text>
-          <Text style={styles.aboutDescription}>
-            Advanced biological age assessment through integrated oral-systemic biomarker analysis.
+          <Text style={styles.sectionTitle}>ℹ️ About</Text>
+          <View style={styles.card}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Version</Text>
+              <Text style={styles.infoValue}>1.0.0</Text>
+            </View>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity style={styles.buttonRow} onPress={contactSupport}>
+              <Text style={styles.buttonLabel}>Contact Support</Text>
+              <Text style={styles.arrow}>›</Text>
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity style={styles.buttonRow}>
+              <Text style={styles.buttonLabel}>Privacy Policy</Text>
+              <Text style={styles.arrow}>›</Text>
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity style={styles.buttonRow}>
+              <Text style={styles.buttonLabel}>Terms of Service</Text>
+              <Text style={styles.arrow}>›</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>
+            Praxiom Health © 2025{'\n'}
+            Precision Longevity Medicine
           </Text>
         </View>
       </ScrollView>
@@ -127,82 +240,119 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollView: {
+    flex: 1,
+  },
   scrollContent: {
     padding: 20,
-    paddingTop: 60,
+    paddingBottom: 40,
   },
-  title: {
-    fontSize: 32,
+  headerTitle: {
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 24,
+    color: '#2C3E50',
+    textAlign: 'center',
+    marginBottom: 30,
+    lineHeight: 20,
   },
   section: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
+    marginBottom: 25,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    color: '#CCCCCC',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 207, 193, 0.3)',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: '#FFFFFF',
+    color: '#2C3E50',
     marginBottom: 12,
   },
-  saveButton: {
-    backgroundColor: '#00CFC1',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
+  card: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 15,
+    padding: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  saveButtonText: {
-    color: '#FFFFFF',
+  profileRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+  },
+  profileLabel: {
+    fontSize: 16,
+    color: '#7F8C8D',
+  },
+  profileValue: {
     fontSize: 16,
     fontWeight: '600',
+    color: '#2C3E50',
   },
   settingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    padding: 16,
   },
-  settingInfo: {
+  settingLeft: {
     flex: 1,
+    marginRight: 12,
   },
   settingLabel: {
     fontSize: 16,
-    color: '#FFFFFF',
     fontWeight: '600',
+    color: '#2C3E50',
     marginBottom: 4,
   },
   settingDescription: {
-    fontSize: 14,
-    color: '#AAAAAA',
+    fontSize: 13,
+    color: '#7F8C8D',
   },
-  aboutText: {
-    fontSize: 18,
-    color: '#FFFFFF',
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+  },
+  buttonLabel: {
+    fontSize: 16,
+    color: '#2C3E50',
+  },
+  arrow: {
+    fontSize: 24,
+    color: '#7F8C8D',
+    fontWeight: '300',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+  },
+  infoLabel: {
+    fontSize: 16,
+    color: '#7F8C8D',
+  },
+  infoValue: {
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: 8,
+    color: '#2C3E50',
   },
-  aboutDescription: {
-    fontSize: 14,
-    color: '#CCCCCC',
+  divider: {
+    height: 1,
+    backgroundColor: '#E0E0E0',
+    marginHorizontal: 16,
+  },
+  footer: {
+    marginTop: 30,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 13,
+    color: '#7F8C8D',
+    textAlign: 'center',
     lineHeight: 20,
   },
 });

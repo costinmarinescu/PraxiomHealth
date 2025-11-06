@@ -12,10 +12,13 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function DashboardScreen({ navigation }) {
   // State for user data
   const [dateOfBirth, setDateOfBirth] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [chronologicalAge, setChronologicalAge] = useState(0);
   const [praxiomAge, setPraxiomAge] = useState(0);
   const [oralHealthScore, setOralHealthScore] = useState(0);
@@ -108,15 +111,27 @@ export default function DashboardScreen({ navigation }) {
     setChronologicalAge(age);
   };
 
+  const onDateChange = (event, date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    if (date) {
+      setSelectedDate(date);
+      const formattedDate = date.toISOString().split('T')[0];
+      setDateOfBirth(formattedDate);
+    }
+  };
+
   const saveDOB = async () => {
     if (!dateOfBirth) {
-      Alert.alert('Error', 'Please enter your date of birth');
+      Alert.alert('Error', 'Please select your date of birth');
       return;
     }
     try {
       await AsyncStorage.setItem('dateOfBirth', dateOfBirth);
       calculateChronologicalAge(dateOfBirth);
       setShowDOBModal(false);
+      setShowDatePicker(false);
       Alert.alert('Success', 'Date of birth saved!');
     } catch (error) {
       Alert.alert('Error', 'Failed to save date of birth');
@@ -398,20 +413,38 @@ export default function DashboardScreen({ navigation }) {
         <Modal visible={showDOBModal} transparent animationType="slide">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Enter Date of Birth</Text>
-              <Text style={styles.modalHint}>Format: YYYY-MM-DD</Text>
+              <Text style={styles.modalTitle}>Select Date of Birth</Text>
+              <Text style={styles.modalHint}>
+                {dateOfBirth ? `Selected: ${dateOfBirth}` : 'Choose your birth date'}
+              </Text>
               
-              <TextInput
-                style={styles.input}
-                placeholder="1990-01-15"
-                value={dateOfBirth}
-                onChangeText={setDateOfBirth}
-              />
+              <TouchableOpacity 
+                style={styles.datePickerButton}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text style={styles.datePickerButtonText}>
+                  📅 {dateOfBirth || 'Pick Date'}
+                </Text>
+              </TouchableOpacity>
+
+              {showDatePicker && (
+                <DateTimePicker
+                  value={selectedDate}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onDateChange}
+                  maximumDate={new Date()}
+                  minimumDate={new Date(1920, 0, 1)}
+                />
+              )}
 
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={[styles.modalButton, styles.cancelButton]}
-                  onPress={() => setShowDOBModal(false)}
+                  onPress={() => {
+                    setShowDOBModal(false);
+                    setShowDatePicker(false);
+                  }}
                 >
                   <Text style={styles.buttonText}>Cancel</Text>
                 </TouchableOpacity>
@@ -427,8 +460,8 @@ export default function DashboardScreen({ navigation }) {
         </Modal>
 
         {/* Biomarker Input Modal */}
-        <Modal visible={showBiomarkerModal} transparent animationType="slide">
-          <View style={styles.modalOverlay}>
+        <Modal visible={showBiomarkerModal} animationType="slide">
+          <View style={styles.biomarkerModalContainer}>
             <ScrollView style={styles.fullScreenModal} contentContainerStyle={styles.modalScroll}>
               <Text style={styles.modalTitle}>Tier 1 Biomarker Input</Text>
               <Text style={styles.modalHint}>Enter your latest test results</Text>
@@ -848,11 +881,17 @@ const styles = StyleSheet.create({
     width: '90%',
     maxHeight: '80%',
   },
+  biomarkerModalContainer: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+  },
   fullScreenModal: {
     flex: 1,
+    backgroundColor: '#F5F5F5',
   },
   modalScroll: {
     padding: 20,
+    paddingBottom: 40,
   },
   modalTitle: {
     fontSize: 24,
@@ -883,6 +922,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#2C3E50',
     marginBottom: 10,
+  },
+  datePickerButton: {
+    backgroundColor: '#00CFC1',
+    borderRadius: 15,
+    padding: 20,
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  datePickerButtonText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   modalButtons: {
     flexDirection: 'row',
