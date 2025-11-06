@@ -3,265 +3,391 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
+  ScrollView,
+  Modal,
+  TextInput,
+  Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function DashboardScreen({ navigation }) {
-  const [praxiomAge, setPraxiomAge] = useState(null);
-  const [chronologicalAge, setChronologicalAge] = useState(null);
-  const [oralHealthScore, setOralHealthScore] = useState(0);
-  const [systemicHealthScore, setSystemicHealthScore] = useState(0);
-  const [fitnessScore, setFitnessScore] = useState(0);
-
+  const [praxiomAge, setPraxiomAge] = useState('--');
+  const [chronologicalAge, setChronologicalAge] = useState('-- years');
+  const [oralHealth, setOralHealth] = useState('0%');
+  const [systemicHealth, setSystemicHealth] = useState('0%');
+  const [fitnessScore, setFitnessScore] = useState('0%');
+  const [watchConnected, setWatchConnected] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState('');
+  
   // Load data on mount
   useEffect(() => {
-    loadData();
+    loadStoredData();
   }, []);
 
-  // Reload data when screen comes into focus
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      loadData();
-    });
-    return unsubscribe;
-  }, [navigation]);
-
-  const loadData = async () => {
+  const loadStoredData = async () => {
     try {
-      const savedPraxiomAge = await AsyncStorage.getItem('praxiomAge');
-      const savedChronAge = await AsyncStorage.getItem('chronologicalAge');
-      const savedOralScore = await AsyncStorage.getItem('oralHealthScore');
-      const savedSystemicScore = await AsyncStorage.getItem('systemicHealthScore');
-      const savedFitnessScore = await AsyncStorage.getItem('fitnessScore');
+      const storedAge = await AsyncStorage.getItem('praxiomAge');
+      const storedDOB = await AsyncStorage.getItem('dateOfBirth');
+      const storedOral = await AsyncStorage.getItem('oralHealthScore');
+      const storedSystemic = await AsyncStorage.getItem('systemicHealthScore');
+      const storedFitness = await AsyncStorage.getItem('fitnessScore');
+      const updated = await AsyncStorage.getItem('lastUpdated');
 
-      if (savedPraxiomAge) setPraxiomAge(parseFloat(savedPraxiomAge));
-      if (savedChronAge) setChronologicalAge(parseFloat(savedChronAge));
-      if (savedOralScore) setOralHealthScore(parseFloat(savedOralScore));
-      if (savedSystemicScore) setSystemicHealthScore(parseFloat(savedSystemicScore));
-      if (savedFitnessScore) setFitnessScore(parseFloat(savedFitnessScore));
+      if (storedAge) setPraxiomAge(storedAge);
+      if (storedOral) setOralHealth(storedOral + '%');
+      if (storedSystemic) setSystemicHealth(storedSystemic + '%');
+      if (storedFitness) setFitnessScore(storedFitness);
+      if (updated) setLastUpdated(updated);
+
+      // Calculate chronological age from DOB
+      if (storedDOB) {
+        const dob = new Date(storedDOB);
+        const today = new Date();
+        let age = today.getFullYear() - dob.getFullYear();
+        const monthDiff = today.getMonth() - dob.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+          age--;
+        }
+        setChronologicalAge(age + ' years');
+      }
     } catch (error) {
       console.error('Error loading data:', error);
     }
   };
 
+  const pushToWatch = () => {
+    Alert.alert(
+      'Push to Watch',
+      `Send Praxiom Age ${praxiomAge} to your watch?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send',
+          onPress: () => {
+            // BLE communication would go here
+            Alert.alert('Success', 'Praxiom Age sent to watch!');
+          },
+        },
+      ]
+    );
+  };
+
   return (
-    <LinearGradient
-      colors={['rgba(255, 140, 0, 0.15)', 'rgba(0, 207, 193, 0.15)']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerText}>PRAXIOM{'\n'}HEALTH</Text>
+          <Text style={styles.headerTitle}>Praxiom Health</Text>
         </View>
 
-        {/* Bio-Age Card */}
-        <View style={styles.ageCard}>
-          <Text style={styles.ageLabel}>Praxiom Age</Text>
-          <Text style={styles.ageValue}>
-            {praxiomAge ? praxiomAge.toFixed(1) : '--'}
-          </Text>
-          <Text style={styles.chronAge}>
-            Chronological: {chronologicalAge ? chronologicalAge.toFixed(0) : '--'} years
-          </Text>
+        {/* Praxiom Age Card - Top Priority */}
+        <View style={styles.praxiomAgeCard}>
+          <Text style={styles.cardTitle}>Praxiom Age</Text>
+          <View style={styles.ageDisplay}>
+            <Text style={styles.ageNumber}>{praxiomAge}</Text>
+          </View>
+          <Text style={styles.chronologicalAge}>Chronological: {chronologicalAge}</Text>
         </View>
 
-        {/* Health Score Cards */}
-        <View style={styles.cardsContainer}>
-          <View style={styles.scoreCard}>
-            <Ionicons name="medical" size={32} color="#FF8C00" />
-            <Text style={styles.cardLabel}>Oral Health</Text>
-            <Text style={styles.cardScore}>{oralHealthScore.toFixed(0)}%</Text>
+        {/* Oral Health and Systemic Health - Side by Side */}
+        <View style={styles.row}>
+          <View style={styles.healthCard}>
+            <View style={styles.iconContainer}>
+              <Text style={styles.icon}>🦷</Text>
+            </View>
+            <Text style={styles.healthLabel}>Oral Health</Text>
+            <Text style={styles.scoreNumber}>{oralHealth}</Text>
+            <Text style={styles.scoreLabel}>score</Text>
           </View>
 
-          <View style={styles.scoreCard}>
-            <Ionicons name="heart" size={32} color="#00CFC1" />
-            <Text style={styles.cardLabel}>Systemic Health</Text>
-            <Text style={styles.cardScore}>{systemicHealthScore.toFixed(0)}%</Text>
+          <View style={styles.healthCard}>
+            <View style={styles.iconContainer}>
+              <Text style={styles.icon}>❤️</Text>
+            </View>
+            <Text style={styles.healthLabel}>Systemic Health</Text>
+            <Text style={styles.scoreNumber}>{systemicHealth}</Text>
+            <Text style={styles.scoreLabel}>score</Text>
           </View>
         </View>
 
-        {/* Fitness Score Card (Centered) */}
-        <View style={styles.fitnessCard}>
-          <Ionicons name="fitness" size={36} color="#9D4EDD" />
-          <Text style={styles.fitnessLabel}>Fitness Score</Text>
-          <Text style={styles.fitnessScore}>{fitnessScore.toFixed(0)}%</Text>
+        {/* Fitness Score and Live Watch - Side by Side */}
+        <View style={styles.row}>
+          <View style={styles.healthCard}>
+            <View style={styles.iconContainer}>
+              <Text style={styles.icon}>💪</Text>
+            </View>
+            <Text style={styles.healthLabel}>Fitness Score</Text>
+            <Text style={styles.scoreNumber}>{fitnessScore}</Text>
+            <Text style={styles.scoreLabel}>level</Text>
+          </View>
+
+          <View style={styles.liveWatchCard}>
+            <Text style={styles.healthLabel}>Live Watch</Text>
+            <View style={styles.liveDataRow}>
+              <Text style={styles.liveLabel}>Steps</Text>
+              <Text style={styles.liveValue}>--</Text>
+            </View>
+            <View style={styles.liveDataRow}>
+              <Text style={styles.liveLabel}>HR</Text>
+              <Text style={styles.liveValue}>--</Text>
+            </View>
+            <View style={styles.liveDataRow}>
+              <Text style={styles.liveLabel}>O₂</Text>
+              <Text style={styles.liveValue}>--</Text>
+            </View>
+          </View>
         </View>
 
         {/* Action Buttons */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('DNATest')}
-          >
-            <Ionicons name="analytics" size={24} color="#FFFFFF" />
-            <Text style={styles.buttonText}>DNA Test</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.biomarkerButton]}
-            onPress={() => navigation.navigate('BiomarkerInput')}
-          >
-            <Ionicons name="clipboard" size={24} color="#FFFFFF" />
-            <Text style={styles.buttonText}>Biomarker Input</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Sync to Watch Button */}
-        <TouchableOpacity style={styles.syncButton}>
-          <Ionicons name="sync" size={20} color="#FFFFFF" />
-          <Text style={styles.syncText}>Push to Watch</Text>
+        <TouchableOpacity
+          style={styles.dnaButton}
+          onPress={() => navigation.navigate('DNATest')}
+        >
+          <Text style={styles.buttonIcon}>🧬</Text>
+          <Text style={styles.buttonText}>DNA Test</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.biomarkerButton}
+          onPress={() => navigation.navigate('BiomarkerInput')}
+        >
+          <Text style={styles.buttonIcon}>📝</Text>
+          <Text style={styles.buttonText}>Input Biomarkers</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.calculateButton}
+          onPress={() => navigation.navigate('BiomarkerInput')}
+        >
+          <Text style={styles.buttonIcon}>📊</Text>
+          <Text style={styles.buttonText}>Calculate Tier 1 Biomarkers</Text>
+        </TouchableOpacity>
+
+        {/* Push to Watch Button */}
+        <TouchableOpacity style={styles.pushButton} onPress={pushToWatch}>
+          <Text style={styles.pushButtonIcon}>🔄</Text>
+          <Text style={styles.pushButtonText}>Push to Watch</Text>
+        </TouchableOpacity>
+
+        {lastUpdated ? (
+          <Text style={styles.lastUpdated}>Last updated: {lastUpdated}</Text>
+        ) : null}
       </ScrollView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#E8E3D8', // Darker cream/beige background for better contrast
   },
   scrollContent: {
     padding: 20,
-    paddingTop: 60,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 20,
+    paddingTop: 10,
   },
-  headerText: {
-    fontSize: 16,
+  headerTitle: {
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#FFFFFF',
-    lineHeight: 20,
-    textAlign: 'center',
+    color: '#2C2C2C', // Dark text for contrast
   },
-  ageCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 30,
+  
+  // Praxiom Age Card - Top Priority
+  praxiomAgeCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
     padding: 24,
-    alignItems: 'center',
     marginBottom: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 140, 0, 0.3)',
-  },
-  ageLabel: {
-    fontSize: 18,
-    color: '#FF8C00',
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  ageValue: {
-    fontSize: 56,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 8,
-  },
-  chronAge: {
-    fontSize: 14,
-    color: '#AAAAAA',
-  },
-  cardsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  scoreCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 30,
-    padding: 20,
     alignItems: 'center',
-    width: '48%',
+    borderWidth: 3,
+    borderColor: '#FF8C42', // Orange border
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  cardLabel: {
-    fontSize: 14,
-    color: '#CCCCCC',
-    marginTop: 12,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  cardScore: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  fitnessCard: {
-    backgroundColor: 'rgba(157, 78, 221, 0.2)',
-    borderRadius: 30,
-    padding: 24,
-    alignItems: 'center',
-    alignSelf: 'center',
-    width: '67%',
-    marginBottom: 30,
-    borderWidth: 2,
-    borderColor: 'rgba(157, 78, 221, 0.4)',
-    shadowColor: '#9D4EDD',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  fitnessLabel: {
-    fontSize: 16,
-    color: '#CCCCCC',
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  fitnessScore: {
-    fontSize: 48,
+  cardTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: '#FF8C42', // Orange title
+    marginBottom: 16,
   },
-  buttonContainer: {
+  ageDisplay: {
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  ageNumber: {
+    fontSize: 64,
+    fontWeight: 'bold',
+    color: '#00CFC1', // Teal color for age
+  },
+  chronologicalAge: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
+  },
+
+  // Health Cards Row
+  row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginBottom: 16,
   },
-  actionButton: {
-    backgroundColor: '#FF8C00',
+  healthCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    width: '48%',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FF8C42', // Orange border
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  iconContainer: {
+    marginBottom: 8,
+  },
+  icon: {
+    fontSize: 32,
+  },
+  healthLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2C2C2C',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  scoreNumber: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#FF8C42', // Orange for scores
+    marginBottom: 4,
+  },
+  scoreLabel: {
+    fontSize: 12,
+    color: '#888',
+  },
+
+  // Live Watch Card
+  liveWatchCard: {
+    backgroundColor: '#FFF',
     borderRadius: 16,
     padding: 16,
-    alignItems: 'center',
     width: '48%',
-    flexDirection: 'row',
-    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#00CFC1', // Teal border
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  liveDataRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 6,
+  },
+  liveLabel: {
+    fontSize: 13,
+    color: '#2C2C2C',
+    fontWeight: '500',
+  },
+  liveValue: {
+    fontSize: 14,
+    color: '#00CFC1', // Teal for live values
+    fontWeight: 'bold',
+  },
+
+  // Action Buttons
+  dnaButton: {
+    backgroundColor: '#FF8C42', // Orange
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    borderRadius: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 5,
   },
   biomarkerButton: {
-    backgroundColor: '#00CFC1',
+    backgroundColor: '#A855F7', // Purple
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    borderRadius: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  calculateButton: {
+    backgroundColor: '#00CFC1', // Teal
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    borderRadius: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  pushButton: {
+    backgroundColor: '#8B5CF6', // Purple
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    borderRadius: 16,
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  buttonIcon: {
+    fontSize: 24,
+    marginRight: 12,
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
-    marginLeft: 8,
   },
-  syncButton: {
-    backgroundColor: 'rgba(157, 78, 221, 0.8)',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 10,
+  pushButtonIcon: {
+    fontSize: 24,
+    marginRight: 12,
   },
-  syncText: {
-    color: '#FFFFFF',
+  pushButtonText: {
+    color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
-    marginLeft: 8,
+  },
+  lastUpdated: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#666',
+    marginTop: 16,
   },
 });
