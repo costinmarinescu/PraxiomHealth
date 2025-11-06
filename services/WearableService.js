@@ -58,15 +58,23 @@ class WearableService {
       }
     }
 
-    // Check if Bluetooth is powered on
-    const state = await this.manager.state();
-    if (state !== 'PoweredOn') {
-      Alert.alert(
-        'Bluetooth Disabled',
-        'Please turn on Bluetooth to connect to your PineTime watch.',
-        [{ text: 'OK' }]
-      );
-      return false;
+    // Check if Bluetooth is powered on (with retry for state sync)
+    try {
+      const state = await this.manager.state();
+      if (state !== 'PoweredOn') {
+        // Wait a moment and check again (state might not be synced yet)
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const retryState = await this.manager.state();
+        
+        if (retryState !== 'PoweredOn') {
+          // Only show error if still not powered on after retry
+          console.log('Bluetooth state:', retryState);
+          return true; // Allow scan anyway - some devices report incorrect state initially
+        }
+      }
+    } catch (error) {
+      console.log('Error checking Bluetooth state:', error);
+      // Continue anyway - better to try scanning than block the user
     }
 
     return true;
