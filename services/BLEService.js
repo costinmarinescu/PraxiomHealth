@@ -1,5 +1,5 @@
 /**
- * Praxiom-PineTime BLE Communication Service
+ * Praxiom-PineTime BLE Communication Svc
  * Implements the InfiniTime BLE protocol for seamless watch integration
  * 
  * Based on the official InfiniTime BLE specification:
