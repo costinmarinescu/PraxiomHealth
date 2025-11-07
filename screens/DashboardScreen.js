@@ -8,45 +8,45 @@ import {
   Modal,
   TextInput,
   Alert,
-  Dimensions,
-  Image,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-export default function DashboardScreen() {
-  // User profile
-  const [dateOfBirth, setDateOfBirth] = useState(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [chronologicalAge, setChronologicalAge] = useState(null);
-  const [userName, setUserName] = useState('');
-  const [userEmail, setUserEmail] = useState('');
-  
-  // Bio-Age data
+export default function DashboardScreen({ navigation, wearableService }) {
+  // State for dashboard data
   const [praxiomAge, setPraxiomAge] = useState(null);
-  const [dnaMethylationAge, setDnaMethylationAge] = useState(null);
-  
-  // Health scores
+  const [chronologicalAge, setChronologicalAge] = useState(null);
   const [oralHealthScore, setOralHealthScore] = useState(null);
   const [systemicHealthScore, setSystemicHealthScore] = useState(null);
   const [fitnessScore, setFitnessScore] = useState(null);
+  const [dateOfBirth, setDateOfBirth] = useState(null);
   
-  // Modals
-  const [dnaModalVisible, setDnaModalVisible] = useState(false);
+  // State for dates of last updates
+  const [lastBiomarkerUpdate, setLastBiomarkerUpdate] = useState(null);
+  const [lastDNAUpdate, setLastDNAUpdate] = useState(null);
+  
+  // State for wearable data
+  const [heartRate, setHeartRate] = useState(null);
+  const [hrvScore, setHrvScore] = useState(null);
+  const [dailySteps, setDailySteps] = useState(null);
+  const [sleepEfficiency, setSleepEfficiency] = useState(null);
+  
+  // State for watch connection
+  const [isWatchConnected, setIsWatchConnected] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState(null);
+  const [pushingToWatch, setPushingToWatch] = useState(false);
+  
+  // Modal states
   const [biomarkerModalVisible, setBiomarkerModalVisible] = useState(false);
-  const [personInfoModalVisible, setPersonInfoModalVisible] = useState(false);
+  const [dnaModalVisible, setDnaModalVisible] = useState(false);
+  const [dobPickerVisible, setDobPickerVisible] = useState(false);
   const [showTier2, setShowTier2] = useState(false);
   
-  // DNA Methylation Test data
-  const [dunedinPACE, setDunedinPACE] = useState('');
-  const [elovl2Age, setElovl2Age] = useState('');
-  const [intrinsicCapacity, setIntrinsicCapacity] = useState('');
-  
-  // Biomarkers - Tier 1
-  const [salivarPH, setSalivarPH] = useState('');
+  // Biomarker inputs - Tier 1
+  const [salivaryPH, setSalivaryPH] = useState('');
   const [mmp8, setMmp8] = useState('');
   const [flowRate, setFlowRate] = useState('');
   const [hsCRP, setHsCRP] = useState('');
@@ -55,716 +55,826 @@ export default function DashboardScreen() {
   const [gdf15, setGdf15] = useState('');
   const [vitaminD, setVitaminD] = useState('');
   
-  // Biomarkers - Tier 2
-  const [il6, setIL6] = useState('');
-  const [tnfAlpha, setTnfAlpha] = useState('');
-  const [ldlParticles, setLdlParticles] = useState('');
-  const [apoB, setApoB] = useState('');
+  // Biomarker inputs - Tier 2
+  const [ldlCholesterol, setLdlCholesterol] = useState('');
+  const [hdlCholesterol, setHdlCholesterol] = useState('');
+  const [triglycerides, setTriglycerides] = useState('');
   const [homocysteine, setHomocysteine] = useState('');
-  const [ferritin, setFerritin] = useState('');
+  const [interleukin6, setInterleukin6] = useState('');
   
-  // Wearable data - HRV, Heart Rate, Steps  
-  const [wearableData, setWearableData] = useState({
-    hrv: '--',
-    heartRate: '--',
-    dailySteps: '--',
-  });
-
-  // Tier status
-  const [currentTier, setCurrentTier] = useState(1);
-
+  // DNA Methylation inputs
+  const [dunedinPACE, setDunedinPACE] = useState('');
+  const [elovl2Age, setElovl2Age] = useState('');
+  
   useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+    loadStoredData();
+    
+    // Set up wearable data listener
+    if (wearableService) {
+      const unsubscribe = wearableService.onDataUpdate((data) => {
+        if (data.heartRate) setHeartRate(data.heartRate);
+        if (data.hrv) setHrvScore(data.hrv);
+        if (data.steps) setDailySteps(data.steps);
+        if (data.sleepEfficiency) setSleepEfficiency(data.sleepEfficiency);
+      });
+      
+      // Check connection status
+      wearableService.isConnected().then(setIsWatchConnected);
+      
+      return unsubscribe;
+    }
+  }, [wearableService]);
+  
+  const loadStoredData = async () => {
     try {
-      const savedData = await AsyncStorage.getItem('healthData');
-      if (savedData) {
-        const data = JSON.parse(savedData);
-        setChronologicalAge(data.chronologicalAge);
-        setDnaMethylationAge(data.dnaMethylationAge);
+      const storedData = await AsyncStorage.getItem('praxiomHealthData');
+      if (storedData) {
+        const data = JSON.parse(storedData);
         setPraxiomAge(data.praxiomAge);
+        setChronologicalAge(data.chronologicalAge);
         setOralHealthScore(data.oralHealthScore);
         setSystemicHealthScore(data.systemicHealthScore);
         setFitnessScore(data.fitnessScore);
-      }
-
-      const savedProfile = await AsyncStorage.getItem('userProfile');
-      if (savedProfile) {
-        const profile = JSON.parse(savedProfile);
-        setUserName(profile.name || '');
-        setUserEmail(profile.email || '');
-        if (profile.dateOfBirth) {
-          setDateOfBirth(new Date(profile.dateOfBirth));
-          calculateChronologicalAge(new Date(profile.dateOfBirth));
-        }
-      }
-
-      const savedTier = await AsyncStorage.getItem('currentTier');
-      if (savedTier) {
-        setCurrentTier(parseInt(savedTier));
+        setDateOfBirth(data.dateOfBirth ? new Date(data.dateOfBirth) : null);
+        setLastBiomarkerUpdate(data.lastBiomarkerUpdate);
+        setLastDNAUpdate(data.lastDNAUpdate);
       }
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('Error loading stored data:', error);
     }
   };
-
-  const saveData = async () => {
-    try {
-      const data = {
-        chronologicalAge,
-        dnaMethylationAge,
-        praxiomAge,
-        oralHealthScore,
-        systemicHealthScore,
-        fitnessScore,
-      };
-      await AsyncStorage.setItem('healthData', JSON.stringify(data));
-    } catch (error) {
-      console.error('Error saving data:', error);
-    }
-  };
-
+  
   const calculateChronologicalAge = (dob) => {
+    if (!dob) return null;
     const today = new Date();
     const birthDate = new Date(dob);
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
-    
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
       age--;
     }
-    
-    setChronologicalAge(age);
+    const decimal = (today - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 
+                   (365.25 * 24 * 60 * 60 * 1000);
+    return age + decimal;
   };
-
-  const onDateChange = (event, selectedDate) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      setDateOfBirth(selectedDate);
-      calculateChronologicalAge(selectedDate);
-    }
+  
+  const calculateOralHealthScore = (ph, mmp8Level, flow, chronAge) => {
+    // Age-dependent coefficients
+    const ageGroup = chronAge < 40 ? 'young' : chronAge < 60 ? 'middle' : 'senior';
+    const weights = {
+      young: { ph: 0.45, mmp8: 0.35, flow: 0.20 },
+      middle: { ph: 0.40, mmp8: 0.40, flow: 0.20 },
+      senior: { ph: 0.35, mmp8: 0.45, flow: 0.20 }
+    };
+    
+    const w = weights[ageGroup];
+    
+    // Normalize pH (optimal 7.0-7.5)
+    const phScore = ph >= 7.0 && ph <= 7.5 ? 100 : 
+                   ph < 7.0 ? Math.max(0, 100 - (7.0 - ph) * 40) :
+                   Math.max(0, 100 - (ph - 7.5) * 40);
+    
+    // Normalize MMP-8 (lower is better, >250 ng/mL is high risk)
+    const mmp8Score = mmp8Level <= 100 ? 100 :
+                     mmp8Level <= 250 ? 100 - ((mmp8Level - 100) / 150) * 40 :
+                     Math.max(0, 60 - ((mmp8Level - 250) / 250) * 60);
+    
+    // Normalize flow rate (optimal 1.0-2.0 mL/min)
+    const flowScore = flow >= 1.0 && flow <= 2.0 ? 100 :
+                     flow < 1.0 ? Math.max(0, flow * 100) :
+                     Math.max(0, 100 - (flow - 2.0) * 25);
+    
+    return (phScore * w.ph + mmp8Score * w.mmp8 + flowScore * w.flow);
   };
-
-  const handleDNATest = () => {
-    if (!dunedinPACE || !elovl2Age || !intrinsicCapacity) {
-      Alert.alert('Error', 'Please enter all DNA methylation values');
-      return;
-    }
-
-    // Calculate DNA methylation age
-    const dunedin = parseFloat(dunedinPACE);
-    const elovl2 = parseFloat(elovl2Age);
-    const intrinsic = parseFloat(intrinsicCapacity);
-
-    // DunedinPACE formula: Predicted age = chronological age + (DunedinPACE - 1) × 10
-    const dunedinAge = chronologicalAge + (dunedin - 1) * 10;
+  
+  const calculateSystemicHealthScore = (crp, omega, a1c, gdf, vd, chronAge, tier2Data = {}) => {
+    // Age-dependent coefficients
+    const ageGroup = chronAge < 40 ? 'young' : chronAge < 60 ? 'middle' : 'senior';
     
-    // Average with ELOVL2 age
-    const avgAge = (dunedinAge + elovl2) / 2;
+    // Base weights for Tier 1
+    const baseWeights = {
+      young: { crp: 0.25, omega: 0.20, a1c: 0.25, gdf: 0.15, vd: 0.15 },
+      middle: { crp: 0.25, omega: 0.15, a1c: 0.30, gdf: 0.15, vd: 0.15 },
+      senior: { crp: 0.20, omega: 0.15, a1c: 0.30, gdf: 0.20, vd: 0.15 }
+    };
     
-    // Adjust for intrinsic capacity (lower capacity = older biological age)
-    const capacityAdjustment = (100 - intrinsic) / 10;
-    const calculatedDnaMethylationAge = avgAge + capacityAdjustment;
-
-    setDnaMethylationAge(calculatedDnaMethylationAge);
-    setDnaModalVisible(false);
+    let w = baseWeights[ageGroup];
     
-    Alert.alert(
-      'DNA Methylation Age Calculated',
-      `Your DNA methylation age is ${calculatedDnaMethylationAge.toFixed(1)} years`,
-      [{ text: 'OK' }]
-    );
-  };
-
-  const calculateBiomarkers = () => {
-    // Validate inputs
-    if (!salivarPH || !mmp8 || !flowRate || !hsCRP || !omega3 || !hba1c || !gdf15) {
-      Alert.alert('Error', 'Please enter all Tier 1 biomarker values');
-      return;
-    }
-
-    // Parse values
-    const pH = parseFloat(salivarPH);
-    const mmp8Val = parseFloat(mmp8);
-    const flow = parseFloat(flowRate);
-    const crp = parseFloat(hsCRP);
-    const omega3Val = parseFloat(omega3);
-    const hba1cVal = parseFloat(hba1c);
-    const gdf15Val = parseFloat(gdf15);
-
-    // Calculate Oral Health Score (0-100%)
-    let oralScore = 100;
-    if (pH < 6.5 || pH > 7.2) oralScore -= 15;
-    if (mmp8Val > 60) oralScore -= 20;
-    if (flow < 1.5) oralScore -= 15;
-    oralScore = Math.max(0, oralScore);
-
-    // Calculate Systemic Health Score (0-100%)
-    let systemicScore = 100;
-    if (crp > 1.0) systemicScore -= 15;
-    if (omega3Val < 8.0) systemicScore -= 15;
-    if (hba1cVal > 5.7) systemicScore -= 20;
-    if (gdf15Val > 1200) systemicScore -= 20;
-    systemicScore = Math.max(0, systemicScore);
-
-    // Calculate Fitness Score (based on health scores)
-    const avgHealth = (oralScore + systemicScore) / 2;
-    let fitness;
-    if (avgHealth >= 85) fitness = 90;
-    else if (avgHealth >= 70) fitness = 75;
-    else fitness = 60;
-
-    // Calculate Praxiom Age
-    let bioAge = dnaMethylationAge || chronologicalAge || 40;
-    
-    // Age adjustments based on biomarkers
-    if (crp > 1.0) bioAge += 2;
-    if (omega3Val < 8.0) bioAge += 1;
-    if (hba1cVal > 5.7) bioAge += 1.5;
-    if (gdf15Val > 1200) bioAge += 3;
-    if (pH < 6.5 || pH > 7.2) bioAge += 1;
-    if (mmp8Val > 60) bioAge += 2;
-    if (flow < 1.5) bioAge += 0.5;
-
-    // Tier 2 adjustments if entered
-    if (showTier2 && il6 && tnfAlpha && apoB && homocysteine) {
-      const il6Val = parseFloat(il6);
-      const tnfVal = parseFloat(tnfAlpha);
-      const apoBVal = parseFloat(apoB);
-      const homocyVal = parseFloat(homocysteine);
-
-      if (il6Val > 3) bioAge += 2;
-      if (tnfVal > 5) bioAge += 1.5;
-      if (apoBVal > 100) bioAge += 2;
-      if (homocyVal > 12) bioAge += 1.5;
-      
-      // Better tier 2 compliance means lower age
-      if (il6Val <= 3 && tnfVal <= 5 && apoBVal <= 100 && homocyVal <= 12) {
-        bioAge -= 2; // Reward for good tier 2 biomarkers
-      }
-    }
-
-    setOralHealthScore(Math.round(oralScore));
-    setSystemicHealthScore(Math.round(systemicScore));
-    setFitnessScore(Math.round(fitness));
-    setPraxiomAge(parseFloat(bioAge.toFixed(1)));
-
-    setBiomarkerModalVisible(false);
-    saveData();
-
-    Alert.alert(
-      'Biomarkers Calculated',
-      `Oral Health: ${Math.round(oralScore)}%\n` +
-      `Systemic Health: ${Math.round(systemicScore)}%\n` +
-      `Fitness Score: ${Math.round(fitness)}%\n` +
-      `Praxiom Age: ${bioAge.toFixed(1)} years`,
-      [{ text: 'OK' }]
-    );
-  };
-
-  const savePersonInfo = async () => {
-    try {
-      const profile = {
-        name: userName,
-        email: userEmail,
-        dateOfBirth: dateOfBirth ? dateOfBirth.toISOString() : null,
+    // Adjust weights if Tier 2 data available
+    if (tier2Data.ldl || tier2Data.hdl || tier2Data.trig || tier2Data.hcy || tier2Data.il6) {
+      w = {
+        crp: 0.15, omega: 0.12, a1c: 0.18, gdf: 0.10, vd: 0.10,
+        ldl: 0.10, hdl: 0.08, trig: 0.07, hcy: 0.05, il6: 0.05
       };
-      await AsyncStorage.setItem('userProfile', JSON.stringify(profile));
-      setPersonInfoModalVisible(false);
-      Alert.alert('Success', 'Profile information saved');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to save profile information');
     }
+    
+    // Normalize hs-CRP (lower is better, >3 mg/L is high risk)
+    const crpScore = crp <= 1 ? 100 :
+                    crp <= 3 ? 100 - ((crp - 1) / 2) * 30 :
+                    Math.max(0, 70 - ((crp - 3) / 7) * 70);
+    
+    // Normalize Omega-3 Index (higher is better, >8% is optimal)
+    const omegaScore = omega >= 8 ? 100 :
+                      omega >= 4 ? 50 + ((omega - 4) / 4) * 50 :
+                      Math.max(0, (omega / 4) * 50);
+    
+    // Normalize HbA1c (lower is better, <5.7% is optimal)
+    const a1cScore = a1c <= 5.7 ? 100 :
+                    a1c <= 6.4 ? 100 - ((a1c - 5.7) / 0.7) * 40 :
+                    Math.max(0, 60 - ((a1c - 6.4) / 2.6) * 60);
+    
+    // Normalize GDF-15 (lower is better, >1800 pg/mL is high risk)
+    const gdfScore = gdf <= 800 ? 100 :
+                    gdf <= 1800 ? 100 - ((gdf - 800) / 1000) * 30 :
+                    Math.max(0, 70 - ((gdf - 1800) / 1200) * 70);
+    
+    // Normalize Vitamin D (optimal 40-60 ng/mL)
+    const vdScore = vd >= 40 && vd <= 60 ? 100 :
+                   vd < 40 ? Math.max(0, (vd / 40) * 100) :
+                   Math.max(0, 100 - ((vd - 60) / 40) * 50);
+    
+    let totalScore = crpScore * w.crp + omegaScore * w.omega + a1cScore * w.a1c + 
+                    gdfScore * w.gdf + vdScore * w.vd;
+    
+    // Add Tier 2 scores if available
+    if (tier2Data.ldl) {
+      const ldlScore = tier2Data.ldl <= 100 ? 100 :
+                      tier2Data.ldl <= 130 ? 100 - ((tier2Data.ldl - 100) / 30) * 30 :
+                      Math.max(0, 70 - ((tier2Data.ldl - 130) / 90) * 70);
+      totalScore += ldlScore * w.ldl;
+    }
+    
+    if (tier2Data.hdl) {
+      const hdlScore = tier2Data.hdl >= 60 ? 100 :
+                      tier2Data.hdl >= 40 ? 50 + ((tier2Data.hdl - 40) / 20) * 50 :
+                      Math.max(0, (tier2Data.hdl / 40) * 50);
+      totalScore += hdlScore * w.hdl;
+    }
+    
+    if (tier2Data.trig) {
+      const trigScore = tier2Data.trig <= 100 ? 100 :
+                       tier2Data.trig <= 150 ? 100 - ((tier2Data.trig - 100) / 50) * 30 :
+                       Math.max(0, 70 - ((tier2Data.trig - 150) / 350) * 70);
+      totalScore += trigScore * w.trig;
+    }
+    
+    if (tier2Data.hcy) {
+      const hcyScore = tier2Data.hcy <= 10 ? 100 :
+                      tier2Data.hcy <= 15 ? 100 - ((tier2Data.hcy - 10) / 5) * 40 :
+                      Math.max(0, 60 - ((tier2Data.hcy - 15) / 15) * 60);
+      totalScore += hcyScore * w.hcy;
+    }
+    
+    if (tier2Data.il6) {
+      const il6Score = tier2Data.il6 <= 2 ? 100 :
+                      tier2Data.il6 <= 5 ? 100 - ((tier2Data.il6 - 2) / 3) * 40 :
+                      Math.max(0, 60 - ((tier2Data.il6 - 5) / 10) * 60);
+      totalScore += il6Score * w.il6;
+    }
+    
+    return totalScore;
   };
-
-  const handleTierUpgrade = () => {
-    if (currentTier === 1) {
-      // Check if Tier 1 biomarkers are entered
-      if (!salivarPH || !mmp8 || !flowRate || !hsCRP || !omega3 || !hba1c || !gdf15) {
-        Alert.alert(
-          'Complete Tier 1 First',
-          'Please complete all Tier 1 biomarker inputs before upgrading to Tier 2.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-      
-      setShowTier2(true);
-      setCurrentTier(2);
-      AsyncStorage.setItem('currentTier', '2');
-      
+  
+  const calculateBioAge = (oralScore, systemicScore, fitnessScoreVal, chronAge, dnaData = {}) => {
+    // Base calculation from scores
+    const avgScore = (oralScore + systemicScore + (fitnessScoreVal || 75)) / 3;
+    const scoreDeviation = (avgScore - 75) / 75; // Normalized deviation from baseline
+    
+    // Age-dependent acceleration factors
+    const ageGroup = chronAge < 40 ? 0.15 : chronAge < 60 ? 0.25 : 0.35;
+    
+    let bioAge = chronAge - (scoreDeviation * chronAge * ageGroup);
+    
+    // Apply DNA methylation adjustments if available
+    if (dnaData.dunedinPACE) {
+      // DunedinPACE represents pace of aging (1.0 = normal)
+      const paceAdjustment = (dnaData.dunedinPACE - 1.0) * chronAge * 0.3;
+      bioAge += paceAdjustment;
+    }
+    
+    if (dnaData.elovl2Age) {
+      // ELOVL2 gives predicted age directly
+      const elovlDiff = dnaData.elovl2Age - chronAge;
+      bioAge += elovlDiff * 0.2; // Weight the ELOVL2 age difference
+    }
+    
+    return Math.max(18, Math.min(bioAge, chronAge + 20)); // Cap at +20 years max
+  };
+  
+  const handleCalculateBiomarkers = () => {
+    if (!dateOfBirth) {
+      Alert.alert('Missing Data', 'Please set your date of birth first.');
+      return;
+    }
+    
+    const chronAge = calculateChronologicalAge(dateOfBirth);
+    setChronologicalAge(chronAge);
+    
+    // Validate Tier 1 inputs
+    if (!salivaryPH || !mmp8 || !flowRate || !hsCRP || !omega3 || !hba1c || !gdf15 || !vitaminD) {
+      Alert.alert('Missing Data', 'Please fill in all Tier 1 biomarkers.');
+      return;
+    }
+    
+    // Calculate scores
+    const oralScore = calculateOralHealthScore(
+      parseFloat(salivaryPH),
+      parseFloat(mmp8),
+      parseFloat(flowRate),
+      chronAge
+    );
+    
+    const tier2Data = showTier2 && ldlCholesterol && hdlCholesterol && triglycerides && homocysteine && interleukin6 ? {
+      ldl: parseFloat(ldlCholesterol),
+      hdl: parseFloat(hdlCholesterol),
+      trig: parseFloat(triglycerides),
+      hcy: parseFloat(homocysteine),
+      il6: parseFloat(interleukin6)
+    } : {};
+    
+    const systemicScore = calculateSystemicHealthScore(
+      parseFloat(hsCRP),
+      parseFloat(omega3),
+      parseFloat(hba1c),
+      parseFloat(gdf15),
+      parseFloat(vitaminD),
+      chronAge,
+      tier2Data
+    );
+    
+    // Use wearable data for fitness score if available, otherwise use default
+    const fitness = fitnessScore || 75;
+    
+    const dnaData = dunedinPACE && elovl2Age ? {
+      dunedinPACE: parseFloat(dunedinPACE),
+      elovl2Age: parseFloat(elovl2Age)
+    } : {};
+    
+    const bioAge = calculateBioAge(oralScore, systemicScore, fitness, chronAge, dnaData);
+    
+    // Update state
+    setOralHealthScore(oralScore);
+    setSystemicHealthScore(systemicScore);
+    setPraxiomAge(bioAge);
+    
+    const now = new Date().toISOString();
+    setLastBiomarkerUpdate(now);
+    
+    // Save to storage
+    const dataToSave = {
+      praxiomAge: bioAge,
+      chronologicalAge: chronAge,
+      oralHealthScore: oralScore,
+      systemicHealthScore: systemicScore,
+      fitnessScore: fitness,
+      dateOfBirth: dateOfBirth.toISOString(),
+      lastBiomarkerUpdate: now,
+      lastDNAUpdate: lastDNAUpdate
+    };
+    
+    AsyncStorage.setItem('praxiomHealthData', JSON.stringify(dataToSave));
+    
+    setBiomarkerModalVisible(false);
+    
+    // Check if Tier 2 should be triggered
+    if (!showTier2 && (oralScore < 75 || systemicScore < 75)) {
       Alert.alert(
-        'Tier 2 Unlocked! 🎉',
-        'You can now input advanced biomarkers:\n\n' +
-        '• IL-6 (Inflammatory marker)\n' +
-        '• TNF-α (Tumor necrosis factor)\n' +
-        '• LDL Particles\n' +
-        '• ApoB (Cardiovascular)\n' +
-        '• Homocysteine\n' +
-        '• Ferritin',
-        [{ text: 'Got it!' }]
+        'Tier 2 Recommended',
+        'Your health scores indicate that advanced biomarker testing (Tier 2) may provide more accurate results. Would you like to add Tier 2 biomarkers?',
+        [
+          { text: 'Not Now', style: 'cancel' },
+          { text: 'Add Tier 2', onPress: () => { setShowTier2(true); setBiomarkerModalVisible(true); } }
+        ]
       );
     }
+    
+    // Auto-push to watch after calculation
+    if (isWatchConnected && wearableService) {
+      setTimeout(() => {
+        handlePushToWatch();
+      }, 500);
+    }
   };
-
-  const getScoreColor = (score) => {
-    if (score >= 85) return '#4CAF50'; // Green
-    if (score >= 70) return '#FFC107'; // Yellow/Orange
-    return '#F44336'; // Red
+  
+  const handlePushToWatch = async () => {
+    if (!isWatchConnected || !wearableService) {
+      Alert.alert('Not Connected', 'Please connect to your Praxiom watch first.');
+      return;
+    }
+    
+    if (!praxiomAge) {
+      Alert.alert('No Data', 'Please calculate your Praxiom Age first.');
+      return;
+    }
+    
+    Alert.alert(
+      'Push to Watch',
+      `Send your Praxiom Age (${praxiomAge.toFixed(1)}) to your watch?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send',
+          onPress: async () => {
+            try {
+              setPushingToWatch(true);
+              await wearableService.sendBioAge(praxiomAge);
+              setLastSyncTime(new Date());
+              Alert.alert('Success', 'Data sent to your watch!');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to send data to watch: ' + error.message);
+            } finally {
+              setPushingToWatch(false);
+            }
+          }
+        }
+      ]
+    );
   };
-
+  
+  const handleDNASubmit = () => {
+    if (!dunedinPACE || !elovl2Age) {
+      Alert.alert('Missing Data', 'Please fill in all DNA methylation data.');
+      return;
+    }
+    
+    // Recalculate with DNA data
+    if (praxiomAge && chronologicalAge) {
+      const dnaData = {
+        dunedinPACE: parseFloat(dunedinPACE),
+        elovl2Age: parseFloat(elovl2Age)
+      };
+      
+      const updatedBioAge = calculateBioAge(
+        oralHealthScore,
+        systemicHealthScore,
+        fitnessScore || 75,
+        chronologicalAge,
+        dnaData
+      );
+      
+      setPraxiomAge(updatedBioAge);
+      
+      const now = new Date().toISOString();
+      setLastDNAUpdate(now);
+      
+      // Save to storage
+      const dataToSave = {
+        praxiomAge: updatedBioAge,
+        chronologicalAge,
+        oralHealthScore,
+        systemicHealthScore,
+        fitnessScore: fitnessScore || 75,
+        dateOfBirth: dateOfBirth.toISOString(),
+        lastBiomarkerUpdate,
+        lastDNAUpdate: now
+      };
+      
+      AsyncStorage.setItem('praxiomHealthData', JSON.stringify(dataToSave));
+    }
+    
+    setDnaModalVisible(false);
+    
+    // Auto-push to watch after DNA update
+    if (isWatchConnected && wearableService) {
+      setTimeout(() => {
+        handlePushToWatch();
+      }, 500);
+    }
+  };
+  
+  const handleDOBChange = (event, selectedDate) => {
+    if (Platform.OS === 'android') {
+      setDobPickerVisible(false);
+    }
+    
+    if (selectedDate) {
+      setDateOfBirth(selectedDate);
+      const chronAge = calculateChronologicalAge(selectedDate);
+      setChronologicalAge(chronAge);
+      
+      // Save DOB
+      AsyncStorage.getItem('praxiomHealthData').then(data => {
+        const existing = data ? JSON.parse(data) : {};
+        existing.dateOfBirth = selectedDate.toISOString();
+        existing.chronologicalAge = chronAge;
+        AsyncStorage.setItem('praxiomHealthData', JSON.stringify(existing));
+      });
+    }
+  };
+  
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Never';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+  
   return (
-    <LinearGradient
-      colors={['rgba(255, 140, 0, 0.15)', 'rgba(0, 207, 193, 0.15)']}
-      style={styles.container}
-    >
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header with Logo and Person Info */}
+    <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Header */}
         <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <View style={styles.logoPlaceholder}>
-              <Text style={styles.logoText}>PH</Text>
+          <Text style={styles.headerText}>PRAXIOM HEALTH</Text>
+        </View>
+        
+        {/* Bio-Age Overview Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Bio-Age Overview</Text>
+          <View style={styles.ageRow}>
+            <View style={styles.ageColumn}>
+              <Text style={styles.ageLabel}>Praxiom Age</Text>
+              <Text style={styles.ageNumber}>
+                {praxiomAge ? praxiomAge.toFixed(1) : '--'}
+              </Text>
             </View>
-            <Text style={styles.headerTitle}>PRAXIOM{'\n'}HEALTH</Text>
+            <View style={styles.ageDivider} />
+            <View style={styles.ageColumn}>
+              <Text style={styles.ageLabel}>Chronological Age</Text>
+              <Text style={styles.ageNumber}>
+                {chronologicalAge ? chronologicalAge.toFixed(1) : '--'}
+              </Text>
+            </View>
           </View>
-          <TouchableOpacity
-            style={styles.personInfoButton}
-            onPress={() => setPersonInfoModalVisible(true)}
-          >
-            <Text style={styles.personInfoIcon}>👤</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Background Logo */}
-        <View style={styles.backgroundLogoContainer}>
-          <Text style={styles.backgroundLogo}>PH</Text>
-        </View>
-
-        {/* Date of Birth / Chronological Age */}
-        <View style={styles.dobSection}>
-          <TouchableOpacity
-            style={styles.dobButton}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <Text style={styles.dobButtonText}>
-              📅 {dateOfBirth ? dateOfBirth.toLocaleDateString() : 'Set Date of Birth'}
+          
+          {lastBiomarkerUpdate && (
+            <Text style={styles.updateText}>
+              Biomarkers: {formatDate(lastBiomarkerUpdate)}
             </Text>
-          </TouchableOpacity>
-          {chronologicalAge !== null && (
-            <Text style={styles.chronoAgeText}>Chronological Age: {chronologicalAge} years</Text>
+          )}
+          {lastDNAUpdate && (
+            <Text style={styles.updateText}>
+              DNA: {formatDate(lastDNAUpdate)}
+            </Text>
+          )}
+          
+          {isWatchConnected && lastSyncTime && (
+            <View style={styles.syncIndicator}>
+              <Text style={styles.syncText}>
+                ✓ Synced {lastSyncTime.toLocaleTimeString()}
+              </Text>
+            </View>
           )}
         </View>
-
-        {showDatePicker && (
-          <DateTimePicker
-            value={dateOfBirth || new Date()}
-            mode="date"
-            display="default"
-            onChange={onDateChange}
-            maximumDate={new Date()}
-          />
+        
+        {/* Push to Watch Button */}
+        {isWatchConnected && praxiomAge && (
+          <TouchableOpacity
+            style={styles.pushButton}
+            onPress={handlePushToWatch}
+            disabled={pushingToWatch}
+          >
+            {pushingToWatch ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.pushButtonText}>📡 Push to Watch</Text>
+            )}
+          </TouchableOpacity>
         )}
-
-        {/* Bio-Age Card */}
-        <View style={styles.bioAgeCard}>
-          <Text style={styles.cardLabel}>Praxiom Age</Text>
-          <Text style={styles.bioAgeValue}>
-            {praxiomAge !== null ? praxiomAge.toFixed(1) : '--'}
+        
+        {/* Health Score Summary */}
+        <Text style={styles.sectionTitle}>Health Score Summary</Text>
+        <View style={styles.scoreRow}>
+          <View style={[styles.scoreCard, { backgroundColor: 'rgba(255, 140, 0, 0.15)' }]}>
+            <Text style={styles.scoreLabel}>Oral Health</Text>
+            <Text style={styles.scoreNumber}>
+              {oralHealthScore ? `${oralHealthScore.toFixed(0)}%` : '--'}
+            </Text>
+          </View>
+          
+          <View style={[styles.scoreCard, { backgroundColor: 'rgba(0, 207, 193, 0.15)' }]}>
+            <Text style={styles.scoreLabel}>Systemic Health</Text>
+            <Text style={styles.scoreNumber}>
+              {systemicHealthScore ? `${systemicHealthScore.toFixed(0)}%` : '--'}
+            </Text>
+          </View>
+        </View>
+        
+        <View style={[styles.scoreCard, styles.fitnessCard, { backgroundColor: 'rgba(155, 89, 182, 0.15)' }]}>
+          <Text style={styles.scoreLabel}>Fitness Score</Text>
+          <Text style={styles.scoreNumber}>
+            {fitnessScore ? `${fitnessScore.toFixed(0)}%` : '75%'}
           </Text>
-          <Text style={styles.cardUnit}>years</Text>
-          {praxiomAge !== null && chronologicalAge !== null && (
-            <Text style={styles.deviationText}>
-              {praxiomAge < chronologicalAge ? '✅ ' : '⚠️ '}
-              {Math.abs(praxiomAge - chronologicalAge).toFixed(1)} years{' '}
-              {praxiomAge < chronologicalAge ? 'younger' : 'older'}
-            </Text>
-          )}
         </View>
-
-        {/* Health Scores Row 1 */}
-        <View style={styles.scoresRow}>
-          <View style={[styles.scoreCard, { borderColor: '#FF8C00' }]}>
-            <Text style={styles.cardLabel}>Oral Health</Text>
-            <Text style={[styles.scoreValue, { color: oralHealthScore !== null ? getScoreColor(oralHealthScore) : '#999' }]}>
-              {oralHealthScore !== null ? oralHealthScore : '--'}
-            </Text>
-            <Text style={styles.scoreUnit}>%</Text>
-          </View>
-
-          <View style={[styles.scoreCard, { borderColor: '#FF8C00' }]}>
-            <Text style={styles.cardLabel}>Systemic Health</Text>
-            <Text style={[styles.scoreValue, { color: systemicHealthScore !== null ? getScoreColor(systemicHealthScore) : '#999' }]}>
-              {systemicHealthScore !== null ? systemicHealthScore : '--'}
-            </Text>
-            <Text style={styles.scoreUnit}>%</Text>
-          </View>
-        </View>
-
-        {/* Health Scores Row 2 */}
-        <View style={styles.scoresRow}>
-          <View style={[styles.scoreCard, { borderColor: '#00CFC1' }]}>
-            <Text style={styles.cardLabel}>Fitness Score</Text>
-            <Text style={[styles.scoreValue, { color: fitnessScore !== null ? getScoreColor(fitnessScore) : '#999' }]}>
-              {fitnessScore !== null ? fitnessScore : '--'}
-            </Text>
-            <Text style={styles.scoreUnit}>%</Text>
-          </View>
-
-          <View style={[styles.scoreCard, { borderColor: '#00CFC1' }]}>
-            <Text style={styles.cardLabel}>Live Watch Data</Text>
-            <View style={styles.wearableDataContainer}>
-              <Text style={styles.wearableDataText}>💓 {wearableData.heartRate} bpm</Text>
-              <Text style={styles.wearableDataText}>🚶 {wearableData.dailySteps} steps</Text>
-              <Text style={styles.wearableDataText}>📊 HRV: {wearableData.hrv} ms</Text>
+        
+        {/* Wearable Data (if connected) */}
+        {isWatchConnected && (
+          <>
+            <Text style={styles.sectionTitle}>Live Wearable Data</Text>
+            <View style={styles.wearableGrid}>
+              <View style={styles.wearableItem}>
+                <Text style={styles.wearableLabel}>Heart Rate</Text>
+                <Text style={styles.wearableValue}>
+                  {heartRate ? `${heartRate} bpm` : '--'}
+                </Text>
+              </View>
+              
+              <View style={styles.wearableItem}>
+                <Text style={styles.wearableLabel}>HRV</Text>
+                <Text style={styles.wearableValue}>
+                  {hrvScore ? hrvScore : '--'}
+                </Text>
+              </View>
+              
+              <View style={styles.wearableItem}>
+                <Text style={styles.wearableLabel}>Daily Steps</Text>
+                <Text style={styles.wearableValue}>
+                  {dailySteps ? dailySteps.toLocaleString() : '--'}
+                </Text>
+              </View>
+              
+              <View style={styles.wearableItem}>
+                <Text style={styles.wearableLabel}>Sleep</Text>
+                <Text style={styles.wearableValue}>
+                  {sleepEfficiency ? `${sleepEfficiency}%` : '--'}
+                </Text>
+              </View>
             </View>
-          </View>
-        </View>
-
+          </>
+        )}
+        
         {/* Action Buttons */}
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.dnaButton]}
-            onPress={() => setDnaModalVisible(true)}
-          >
-            <Text style={styles.actionButtonText}>🧬 DNA Methylation Test</Text>
-          </TouchableOpacity>
-
+        <View style={styles.actionButtons}>
           <TouchableOpacity
             style={[styles.actionButton, styles.biomarkerButton]}
             onPress={() => setBiomarkerModalVisible(true)}
           >
-            <Text style={styles.actionButtonText}>📊 Input Biomarkers</Text>
+            <Text style={styles.actionButtonText}>🧬 Input Biomarkers</Text>
           </TouchableOpacity>
-
+          
           <TouchableOpacity
-            style={[styles.actionButton, styles.calculateButton]}
-            onPress={calculateBiomarkers}
+            style={[styles.actionButton, styles.dnaButton]}
+            onPress={() => setDnaModalVisible(true)}
           >
-            <Text style={styles.actionButtonText}>🔬 Calculate Tier 1 Biomarkers</Text>
+            <Text style={styles.actionButtonText}>🔬 DNA Methylation Test</Text>
           </TouchableOpacity>
-        </View>
-
-        {/* Tier Status */}
-        <View style={styles.tierStatusContainer}>
-          <Text style={styles.tierStatusText}>Current Tier: {currentTier}</Text>
-          {currentTier === 1 && (
-            <Text style={styles.tierStatusHint}>Complete Tier 1 to unlock Tier 2</Text>
+          
+          <TouchableOpacity
+            style={[styles.actionButton, styles.dobButton]}
+            onPress={() => setDobPickerVisible(true)}
+          >
+            <Text style={styles.actionButtonText}>
+              📅 {dateOfBirth ? 'Update' : 'Set'} Date of Birth
+            </Text>
+          </TouchableOpacity>
+          
+          {dateOfBirth && (
+            <Text style={styles.dobDisplay}>
+              DOB: {dateOfBirth.toLocaleDateString()}
+            </Text>
           )}
         </View>
       </ScrollView>
-
-      {/* DNA Methylation Modal */}
-      <Modal
-        visible={dnaModalVisible}
-        animationType="slide"
-        transparent={false}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>DNA Methylation Test</Text>
-            <TouchableOpacity onPress={() => setDnaModalVisible(false)}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.modalScroll}>
-            <View style={styles.modalSection}>
-              <Text style={styles.sectionTitle}>Enter Test Results</Text>
-              
-              <Text style={styles.inputLabel}>DunedinPACE</Text>
-              <Text style={styles.inputHint}>Typical range: 0.6-1.4</Text>
-              <TextInput
-                style={styles.input}
-                value={dunedinPACE}
-                onChangeText={setDunedinPACE}
-                keyboardType="numeric"
-                placeholder="e.g., 1.0"
-              />
-
-              <Text style={styles.inputLabel}>ELOVL2 Methylation Age</Text>
-              <Text style={styles.inputHint}>Predicted biological age (years)</Text>
-              <TextInput
-                style={styles.input}
-                value={elovl2Age}
-                onChangeText={setElovl2Age}
-                keyboardType="numeric"
-                placeholder="e.g., 45"
-              />
-
-              <Text style={styles.inputLabel}>Intrinsic Capacity Score</Text>
-              <Text style={styles.inputHint}>Overall functional capacity (0-100%)</Text>
-              <TextInput
-                style={styles.input}
-                value={intrinsicCapacity}
-                onChangeText={setIntrinsicCapacity}
-                keyboardType="numeric"
-                placeholder="e.g., 85"
-              />
-
-              <TouchableOpacity
-                style={styles.submitButton}
-                onPress={handleDNATest}
-              >
-                <Text style={styles.submitButtonText}>Calculate DNA Age</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
-
+      
       {/* Biomarker Input Modal */}
       <Modal
         visible={biomarkerModalVisible}
         animationType="slide"
-        transparent={false}
+        onRequestClose={() => setBiomarkerModalVisible(false)}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Biomarker Input</Text>
-            <TouchableOpacity onPress={() => setBiomarkerModalVisible(false)}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
           <ScrollView style={styles.modalScroll}>
-            {/* Tier 1 - Oral Health */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Biomarker Input</Text>
+              <TouchableOpacity onPress={() => setBiomarkerModalVisible(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
             <View style={styles.modalSection}>
-              <Text style={styles.sectionTitle}>Tier 1: Oral Health</Text>
+              <Text style={styles.sectionTitle}>Tier 1: Foundation Assessment</Text>
+              
+              {/* Oral Health Biomarkers */}
+              <Text style={styles.subsectionTitle}>Oral Health</Text>
               
               <Text style={styles.inputLabel}>Salivary pH</Text>
-              <Text style={styles.inputHint}>Target: 6.5-7.2</Text>
+              <Text style={styles.inputHint}>Normal: 7.0-7.5</Text>
               <TextInput
                 style={styles.input}
-                value={salivarPH}
-                onChangeText={setSalivarPH}
-                keyboardType="numeric"
-                placeholder="e.g., 6.8"
+                placeholder="Enter value"
+                value={salivaryPH}
+                onChangeText={setSalivaryPH}
+                keyboardType="decimal-pad"
               />
-
-              <Text style={styles.inputLabel}>MMP-8 (ng/mL)</Text>
-              <Text style={styles.inputHint}>Target: &lt;60</Text>
+              
+              <Text style={styles.inputLabel}>MMP-8 Level (ng/mL)</Text>
+              <Text style={styles.inputHint}>Normal: &lt;100</Text>
               <TextInput
                 style={styles.input}
+                placeholder="Enter value"
                 value={mmp8}
                 onChangeText={setMmp8}
-                keyboardType="numeric"
-                placeholder="e.g., 45"
+                keyboardType="decimal-pad"
               />
-
-              <Text style={styles.inputLabel}>Flow Rate (mL/min)</Text>
-              <Text style={styles.inputHint}>Target: &gt;1.5</Text>
+              
+              <Text style={styles.inputLabel}>Salivary Flow Rate (mL/min)</Text>
+              <Text style={styles.inputHint}>Normal: 1.0-2.0</Text>
               <TextInput
                 style={styles.input}
+                placeholder="Enter value"
                 value={flowRate}
                 onChangeText={setFlowRate}
-                keyboardType="numeric"
-                placeholder="e.g., 1.8"
+                keyboardType="decimal-pad"
               />
-            </View>
-
-            {/* Tier 1 - Systemic Health */}
-            <View style={styles.modalSection}>
-              <Text style={styles.sectionTitle}>Tier 1: Systemic Health</Text>
+              
+              {/* Systemic Health Biomarkers */}
+              <Text style={styles.subsectionTitle}>Systemic Health</Text>
               
               <Text style={styles.inputLabel}>hs-CRP (mg/L)</Text>
-              <Text style={styles.inputHint}>Target: &lt;1.0</Text>
+              <Text style={styles.inputHint}>Normal: &lt;1.0</Text>
               <TextInput
                 style={styles.input}
+                placeholder="Enter value"
                 value={hsCRP}
                 onChangeText={setHsCRP}
-                keyboardType="numeric"
-                placeholder="e.g., 0.8"
+                keyboardType="decimal-pad"
               />
-
+              
               <Text style={styles.inputLabel}>Omega-3 Index (%)</Text>
-              <Text style={styles.inputHint}>Target: &gt;8.0</Text>
+              <Text style={styles.inputHint}>Optimal: &gt;8%</Text>
               <TextInput
                 style={styles.input}
+                placeholder="Enter value"
                 value={omega3}
                 onChangeText={setOmega3}
-                keyboardType="numeric"
-                placeholder="e.g., 8.5"
+                keyboardType="decimal-pad"
               />
-
+              
               <Text style={styles.inputLabel}>HbA1c (%)</Text>
-              <Text style={styles.inputHint}>Target: &lt;5.7</Text>
+              <Text style={styles.inputHint}>Normal: &lt;5.7%</Text>
               <TextInput
                 style={styles.input}
+                placeholder="Enter value"
                 value={hba1c}
                 onChangeText={setHba1c}
-                keyboardType="numeric"
-                placeholder="e.g., 5.4"
+                keyboardType="decimal-pad"
               />
-
+              
               <Text style={styles.inputLabel}>GDF-15 (pg/mL)</Text>
-              <Text style={styles.inputHint}>Target: &lt;1200</Text>
+              <Text style={styles.inputHint}>Normal: &lt;800</Text>
               <TextInput
                 style={styles.input}
+                placeholder="Enter value"
                 value={gdf15}
                 onChangeText={setGdf15}
-                keyboardType="numeric"
-                placeholder="e.g., 1000"
+                keyboardType="decimal-pad"
               />
-
+              
               <Text style={styles.inputLabel}>Vitamin D (ng/mL)</Text>
-              <Text style={styles.inputHint}>Target: &gt;30</Text>
+              <Text style={styles.inputHint}>Optimal: 40-60</Text>
               <TextInput
                 style={styles.input}
+                placeholder="Enter value"
                 value={vitaminD}
                 onChangeText={setVitaminD}
-                keyboardType="numeric"
-                placeholder="e.g., 40"
+                keyboardType="decimal-pad"
               />
-            </View>
-
-            {/* Tier 2 Upgrade Button */}
-            {!showTier2 && (
-              <TouchableOpacity
-                style={styles.tier2UpgradeButton}
-                onPress={handleTierUpgrade}
-              >
-                <Text style={styles.tier2ButtonText}>⬆️ Upgrade to Tier 2</Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Tier 2 - Advanced Biomarkers */}
-            {showTier2 && (
-              <View style={styles.modalSection}>
-                <Text style={styles.sectionTitle}>Tier 2: Advanced Biomarkers</Text>
-                
-                <Text style={styles.inputLabel}>IL-6 (pg/mL)</Text>
-                <Text style={styles.inputHint}>Target: &lt;3</Text>
-                <TextInput
-                  style={styles.input}
-                  value={il6}
-                  onChangeText={setIL6}
-                  keyboardType="numeric"
-                  placeholder="e.g., 2.5"
-                />
-
-                <Text style={styles.inputLabel}>TNF-α (pg/mL)</Text>
-                <Text style={styles.inputHint}>Target: &lt;5</Text>
-                <TextInput
-                  style={styles.input}
-                  value={tnfAlpha}
-                  onChangeText={setTnfAlpha}
-                  keyboardType="numeric"
-                  placeholder="e.g., 4.2"
-                />
-
-                <Text style={styles.inputLabel}>LDL Particles (nmol/L)</Text>
-                <Text style={styles.inputHint}>Target: &lt;1000</Text>
-                <TextInput
-                  style={styles.input}
-                  value={ldlParticles}
-                  onChangeText={setLdlParticles}
-                  keyboardType="numeric"
-                  placeholder="e.g., 850"
-                />
-
-                <Text style={styles.inputLabel}>ApoB (mg/dL)</Text>
-                <Text style={styles.inputHint}>Target: &lt;100</Text>
-                <TextInput
-                  style={styles.input}
-                  value={apoB}
-                  onChangeText={setApoB}
-                  keyboardType="numeric"
-                  placeholder="e.g., 90"
-                />
-
-                <Text style={styles.inputLabel}>Homocysteine (μmol/L)</Text>
-                <Text style={styles.inputHint}>Target: &lt;12</Text>
-                <TextInput
-                  style={styles.input}
-                  value={homocysteine}
-                  onChangeText={setHomocysteine}
-                  keyboardType="numeric"
-                  placeholder="e.g., 10"
-                />
-
-                <Text style={styles.inputLabel}>Ferritin (ng/mL)</Text>
-                <Text style={styles.inputHint}>Target: 30-200</Text>
-                <TextInput
-                  style={styles.input}
-                  value={ferritin}
-                  onChangeText={setFerritin}
-                  keyboardType="numeric"
-                  placeholder="e.g., 80"
-                />
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={styles.submitButton}
-              onPress={calculateBiomarkers}
-            >
-              <Text style={styles.submitButtonText}>
-                Calculate {showTier2 ? 'Tier 1 + 2' : 'Tier 1'} Biomarkers
-              </Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </Modal>
-
-      {/* Person Info Modal */}
-      <Modal
-        visible={personInfoModalVisible}
-        animationType="slide"
-        transparent={false}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Personal Information</Text>
-            <TouchableOpacity onPress={() => setPersonInfoModalVisible(false)}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.modalScroll}>
-            <View style={styles.modalSection}>
-              <Text style={styles.inputLabel}>Full Name</Text>
-              <TextInput
-                style={styles.input}
-                value={userName}
-                onChangeText={setUserName}
-                placeholder="Enter your name"
-              />
-
-              <Text style={styles.inputLabel}>Email</Text>
-              <TextInput
-                style={styles.input}
-                value={userEmail}
-                onChangeText={setUserEmail}
-                keyboardType="email-address"
-                placeholder="Enter your email"
-              />
-
-              <Text style={styles.inputLabel}>Date of Birth</Text>
-              <TouchableOpacity
-                style={styles.dobPickerButton}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Text style={styles.dobPickerText}>
-                  {dateOfBirth ? dateOfBirth.toLocaleDateString() : 'Select Date of Birth'}
-                </Text>
-              </TouchableOpacity>
-
+              
+              {/* Tier 2 Section */}
+              {!showTier2 && (
+                <TouchableOpacity
+                  style={styles.tier2UpgradeButton}
+                  onPress={() => setShowTier2(true)}
+                >
+                  <Text style={styles.tier2ButtonText}>+ Add Tier 2 Biomarkers</Text>
+                </TouchableOpacity>
+              )}
+              
+              {showTier2 && (
+                <>
+                  <Text style={styles.sectionTitle}>Tier 2: Advanced Assessment</Text>
+                  
+                  <Text style={styles.inputLabel}>LDL Cholesterol (mg/dL)</Text>
+                  <Text style={styles.inputHint}>Optimal: &lt;100</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter value"
+                    value={ldlCholesterol}
+                    onChangeText={setLdlCholesterol}
+                    keyboardType="decimal-pad"
+                  />
+                  
+                  <Text style={styles.inputLabel}>HDL Cholesterol (mg/dL)</Text>
+                  <Text style={styles.inputHint}>Optimal: &gt;60</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter value"
+                    value={hdlCholesterol}
+                    onChangeText={setHdlCholesterol}
+                    keyboardType="decimal-pad"
+                  />
+                  
+                  <Text style={styles.inputLabel}>Triglycerides (mg/dL)</Text>
+                  <Text style={styles.inputHint}>Normal: &lt;150</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter value"
+                    value={triglycerides}
+                    onChangeText={setTriglycerides}
+                    keyboardType="decimal-pad"
+                  />
+                  
+                  <Text style={styles.inputLabel}>Homocysteine (μmol/L)</Text>
+                  <Text style={styles.inputHint}>Normal: &lt;10</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter value"
+                    value={homocysteine}
+                    onChangeText={setHomocysteine}
+                    keyboardType="decimal-pad"
+                  />
+                  
+                  <Text style={styles.inputLabel}>Interleukin-6 (pg/mL)</Text>
+                  <Text style={styles.inputHint}>Normal: &lt;2</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter value"
+                    value={interleukin6}
+                    onChangeText={setInterleukin6}
+                    keyboardType="decimal-pad"
+                  />
+                </>
+              )}
+              
               <TouchableOpacity
                 style={styles.submitButton}
-                onPress={savePersonInfo}
+                onPress={handleCalculateBiomarkers}
               >
-                <Text style={styles.submitButtonText}>Save Information</Text>
+                <Text style={styles.submitButtonText}>Calculate Praxiom Age</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
         </View>
       </Modal>
+      
+      {/* DNA Methylation Modal */}
+      <Modal
+        visible={dnaModalVisible}
+        animationType="slide"
+        onRequestClose={() => setDnaModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <ScrollView style={styles.modalScroll}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>DNA Methylation Test</Text>
+              <TouchableOpacity onPress={() => setDnaModalVisible(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.modalSection}>
+              <Text style={styles.sectionTitle}>Epigenetic Age Markers</Text>
+              
+              <Text style={styles.inputLabel}>DunedinPACE</Text>
+              <Text style={styles.inputHint}>Pace of aging (1.0 = normal, &gt;1.0 = faster)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter value (e.g., 0.95)"
+                value={dunedinPACE}
+                onChangeText={setDunedinPACE}
+                keyboardType="decimal-pad"
+              />
+              
+              <Text style={styles.inputLabel}>ELOVL2 Predicted Age</Text>
+              <Text style={styles.inputHint}>Biological age from ELOVL2 marker</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter age (e.g., 42.5)"
+                value={elovl2Age}
+                onChangeText={setElovl2Age}
+                keyboardType="decimal-pad"
+              />
+              
+              <TouchableOpacity
+                style={styles.submitButton}
+                onPress={handleDNASubmit}
+              >
+                <Text style={styles.submitButtonText}>Update Bio-Age with DNA Data</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+      
+      {/* Date Picker */}
+      {dobPickerVisible && (
+        <DateTimePicker
+          value={dateOfBirth || new Date()}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={handleDOBChange}
+          maximumDate={new Date()}
+        />
+      )}
+      
+      {Platform.OS === 'ios' && dobPickerVisible && (
+        <View style={styles.iosPickerContainer}>
+          <TouchableOpacity
+            style={styles.iosPickerButton}
+            onPress={() => setDobPickerVisible(false)}
+          >
+            <Text style={styles.iosPickerButtonText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </LinearGradient>
   );
 }
@@ -773,167 +883,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollView: {
-    flex: 1,
-  },
   scrollContent: {
     padding: 20,
-    paddingBottom: 40,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
     marginTop: 10,
   },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logoPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 140, 0, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  logoText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FF8C00',
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    lineHeight: 20,
-  },
-  personInfoButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 207, 193, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  personInfoIcon: {
+  headerText: {
     fontSize: 24,
-  },
-  backgroundLogoContainer: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: [{ translateX: -100 }, { translateY: -100 }],
-    opacity: 0.12,
-    zIndex: -1,
-  },
-  backgroundLogo: {
-    fontSize: 200,
     fontWeight: 'bold',
-    color: '#FF8C00',
+    color: '#fff',
+    letterSpacing: 2,
   },
-  dobSection: {
-    marginBottom: 20,
-  },
-  dobButton: {
-    backgroundColor: 'rgba(155, 89, 182, 0.2)',
-    padding: 12,
+  card: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 20,
-    alignItems: 'center',
-  },
-  dobButtonText: {
-    fontSize: 14,
-    color: '#9B59B6',
-    fontWeight: '600',
-  },
-  chronoAgeText: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  bioAgeCard: {
-    backgroundColor: 'rgba(0, 207, 193, 0.15)',
-    borderRadius: 30,
-    borderWidth: 3,
-    borderColor: '#00CFC1',
-    padding: 25,
-    alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  bioAgeValue: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#00CFC1',
-    marginVertical: 5,
-  },
-  deviationText: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 8,
-  },
-  scoresRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 15,
-  },
-  scoreCard: {
-    flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    borderRadius: 30,
-    borderWidth: 3,
     padding: 20,
-    alignItems: 'center',
-    marginHorizontal: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  cardLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  scoreValue: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    marginVertical: 5,
-  },
-  cardUnit: {
-    fontSize: 16,
-    color: '#666',
-  },
-  scoreUnit: {
-    fontSize: 16,
-    color: '#666',
-  },
-  wearableDataContainer: {
-    alignItems: 'center',
-    marginTop: 5,
-  },
-  wearableDataText: {
-    fontSize: 11,
-    color: '#666',
-    marginVertical: 2,
-  },
-  actionsContainer: {
-    marginTop: 20,
-  },
-  actionButton: {
-    padding: 18,
-    borderRadius: 30,
-    alignItems: 'center',
     marginBottom: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -941,40 +908,176 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  ageRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  ageColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  ageDivider: {
+    width: 1,
+    height: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    marginHorizontal: 10,
+  },
+  ageLabel: {
+    fontSize: 14,
+    color: '#ccc',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  ageNumber: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  updateText: {
+    fontSize: 11,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  syncIndicator: {
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    padding: 8,
+    borderRadius: 12,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  syncText: {
+    fontSize: 12,
+    color: '#4CAF50',
+  },
+  pushButton: {
+    backgroundColor: '#2196F3',
+    padding: 16,
+    borderRadius: 25,
+    alignItems: 'center',
+    marginBottom: 20,
+    shadowColor: '#2196F3',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  pushButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 10,
+    marginBottom: 15,
+  },
+  scoreRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  scoreCard: {
+    flex: 1,
+    borderRadius: 15,
+    padding: 15,
+    marginHorizontal: 5,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  fitnessCard: {
+    marginHorizontal: 0,
+  },
+  scoreLabel: {
+    fontSize: 14,
+    color: '#fff',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  scoreNumber: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  wearableGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  wearableItem: {
+    width: '48%',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  wearableLabel: {
+    fontSize: 12,
+    color: '#ccc',
+    marginBottom: 6,
+  },
+  wearableValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  actionButtons: {
+    marginTop: 10,
+  },
+  actionButton: {
+    padding: 18,
+    borderRadius: 25,
+    alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  biomarkerButton: {
+    backgroundColor: '#00CFC1',
+  },
   dnaButton: {
     backgroundColor: '#FF8C00',
   },
-  biomarkerButton: {
+  dobButton: {
     backgroundColor: '#9B59B6',
-  },
-  calculateButton: {
-    backgroundColor: '#00CFC1',
   },
   actionButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  tierStatusContainer: {
-    backgroundColor: 'rgba(155, 89, 182, 0.1)',
-    padding: 15,
-    borderRadius: 20,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  tierStatusText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#9B59B6',
-  },
-  tierStatusHint: {
-    fontSize: 12,
-    color: '#666',
+  dobDisplay: {
+    fontSize: 14,
+    color: '#ccc',
+    textAlign: 'center',
     marginTop: 5,
   },
   modalContainer: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  modalScroll: {
+    flex: 1,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -995,17 +1098,15 @@ const styles = StyleSheet.create({
     color: '#999',
     fontWeight: '300',
   },
-  modalScroll: {
-    flex: 1,
-  },
   modalSection: {
     padding: 20,
   },
-  sectionTitle: {
-    fontSize: 20,
+  subsectionTitle: {
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#00CFC1',
+    color: '#666',
+    marginTop: 15,
+    marginBottom: 10,
   },
   inputLabel: {
     fontSize: 16,
@@ -1027,40 +1128,48 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     backgroundColor: '#f9f9f9',
   },
-  submitButton: {
-    backgroundColor: '#00CFC1',
-    padding: 18,
-    borderRadius: 30,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
   tier2UpgradeButton: {
     backgroundColor: '#9B59B6',
-    padding: 18,
-    borderRadius: 30,
+    padding: 16,
+    borderRadius: 25,
     alignItems: 'center',
-    margin: 20,
+    marginVertical: 20,
   },
   tier2ButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  dobPickerButton: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 15,
-    padding: 15,
-    backgroundColor: '#f9f9f9',
-    marginBottom: 20,
+  submitButton: {
+    backgroundColor: '#00CFC1',
+    padding: 18,
+    borderRadius: 25,
+    alignItems: 'center',
+    marginTop: 20,
+    shadowColor: '#00CFC1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  dobPickerText: {
-    fontSize: 16,
-    color: '#333',
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  iosPickerContainer: {
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+    padding: 10,
+  },
+  iosPickerButton: {
+    alignItems: 'center',
+    padding: 12,
+  },
+  iosPickerButtonText: {
+    fontSize: 18,
+    color: '#007AFF',
+    fontWeight: '600',
   },
 });
