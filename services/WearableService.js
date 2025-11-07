@@ -1,293 +1,570 @@
-// services/WearableService.js
 import { BleManager } from 'react-native-ble-plx';
-import { Platform, PermissionsAndroid, Alert } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Buffer } from 'buffer';
+import { Platform, PermissionsAndroid } from 'react-native';
+import base64 from 'react-native-base64';
 
-class WearableService {
+// BLE Service UUIDs
+const HEART_RATE_SERVICE = '0000180D-0000-1000-8000-00805F9B34FB';
+const HEART_RATE_MEASUREMENT = '00002A37-0000-1000-8000-00805F9B34FB';
+
+const MOTION_SERVICE = '00030000-78fc-48fe-8e23-433b3a1942d0';
+const STEP_COUNT_CHAR = '00030001-78fc-48fe-8e23-433b3a1942d0';
+
+const BATTERY_SERVICE = '0000180F-0000-1000-8000-00805F9B34FB';
+const BATTERY_LEVEL = '00002A19-0000-1000-8000-00805F9B34FB';
+
+const CURRENT_TIME_SERVICE = '00001805-0000-1000-8000-00805F9B34FB';
+const CURRENT_TIME_CHAR = '00002A2B-0000-1000-8000-00805F9B34FB';
+
+// Custom Praxiom Health Service
+const PRAXIOM_SERVICE = 'ABCD0000-1234-5678-9ABC-DEF012345678';
+const BIO_AGE_CHAR = 'ABCD0001-1234-5678-9ABC-DEF012345678';
+const HEALTH_REQUEST_CHAR = 'ABCD0002-1234-5678-9ABC-DEF012345678';
+
+export default class WearableService {
   constructor() {
-    this.manager = new BleManager();
-    this.device = null;
+    this.bleManager = new BleManager();
+    this.connectedDevice = null;
     this.isScanning = false;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 5;
+    this.reconnectDelay = 2000;
+    
+    // Data listeners
+    this.dataUpdateListeners = [];
+    this.connectionListeners = [];
+    
+    // Cached data
+    this.latestData = {
+      heartRate: null,
+      steps: null,
+      battery: null,
+      hrv: null,
+      sleepEfficiency: null,
+    };
+    
+    // Initialize BLE manager with retry logic
+    this.initializeBLE();
   }
-
-  // Request all necessary permissions for BLE
+  
+  async initializeBLE() {
+    try {
+      const state = await this.bleManager.state();
+      console.log('Initial BLE state:', state);
+      
+      if (state !== 'PoweredOn') {
+        console.log('Waiting for Bluetooth to be ready...');
+        await new Promise((resolve) => {
+          const subscription = this.bleManager.onStateChange((newState) => {
+            console.log('BLE state changed:', newState);
+            if (newState === 'PoweredOn') {
+              subscription.remove();
+              resolve();
+            }
+          }, true);
+        });
+      }
+      
+      console.log('BLE Manager initialized successfully');
+    } catch (error) {
+      console.error('BLE initialization error:', error);
+    }
+  }
+  
   async requestPermissions() {
     if (Platform.OS === 'android') {
       if (Platform.Version >= 31) {
-        // Android 12+ (API 31+)
-        const permissions = [
+        // Android 12+
+        const permissions = await PermissionsAndroid.requestMultiple([
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        ];
-
-        const granted = await PermissionsAndroid.requestMultiple(permissions);
-
-        const allGranted = Object.values(granted).every(
-          status => status === PermissionsAndroid.RESULTS.GRANTED
+        ]);
+        
+        return (
+          permissions['android.permission.BLUETOOTH_SCAN'] === 'granted' &&
+          permissions['android.permission.BLUETOOTH_CONNECT'] === 'granted' &&
+          permissions['android.permission.ACCESS_FINE_LOCATION'] === 'granted'
         );
-
-        if (!allGranted) {
-          Alert.alert(
-            'Permissions Required',
-            'Bluetooth and Location permissions are required to connect to your PineTime watch. Please grant all permissions.',
-            [{ text: 'OK' }]
-          );
-          return false;
-        }
       } else {
         // Android 11 and below
-        const locationPermission = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-          {
-            title: 'Location Permission',
-            message: 'Bluetooth scanning requires location permission on Android.',
-            buttonPositive: 'OK',
-          }
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
         );
-
-        if (locationPermission !== PermissionsAndroid.RESULTS.GRANTED) {
-          Alert.alert(
-            'Permission Required',
-            'Location permission is required for Bluetooth scanning on Android.',
-            [{ text: 'OK' }]
-          );
-          return false;
-        }
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
       }
     }
-
-    // Check if Bluetooth is powered on (with retry for state sync)
-    try {
-      const state = await this.manager.state();
-      if (state !== 'PoweredOn') {
-        // Wait a moment and check again (state might not be synced yet)
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const retryState = await this.manager.state();
+    return true; // iOS handles permissions automatically
+  }
+  
+  async scanForDevices(duration = 10000) {
+    const hasPermissions = await this.requestPermissions();
+    if (!hasPermissions) {
+      throw new Error('Bluetooth permissions not granted');
+    }
+    
+    const state = await this.bleManager.state();
+    if (state !== 'PoweredOn') {
+      throw new Error('Bluetooth is not powered on');
+    }
+    
+    const devices = [];
+    this.isScanning = true;
+    
+    return new Promise((resolve, reject) => {
+      this.bleManager.startDeviceScan(null, null, (error, device) => {
+        if (error) {
+          console.error('Scan error:', error);
+          this.isScanning = false;
+          reject(error);
+          return;
+        }
         
-        if (retryState !== 'PoweredOn') {
-          // Only show error if still not powered on after retry
-          console.log('Bluetooth state:', retryState);
-          return true; // Allow scan anyway - some devices report incorrect state initially
-        }
-      }
-    } catch (error) {
-      console.log('Error checking Bluetooth state:', error);
-      // Continue anyway - better to try scanning than block the user
-    }
-
-    return true;
-  }
-
-  // Start scanning for PineTime watches
-  async startScan(onDeviceFound) {
-    try {
-      // Request permissions first
-      const hasPermissions = await this.requestPermissions();
-      if (!hasPermissions) {
-        return;
-      }
-
-      this.isScanning = true;
-
-      // Stop any existing scan
-      await this.manager.stopDeviceScan();
-
-      console.log('Starting BLE scan for PineTime watches...');
-
-      // Scan for devices with PineTime in name or specific service UUID
-      this.manager.startDeviceScan(
-        null, // Scan for all devices
-        { allowDuplicates: false },
-        (error, device) => {
-          if (error) {
-            console.error('Scan error:', error);
-            Alert.alert('Scan Error', error.message);
-            this.isScanning = false;
-            return;
-          }
-
-          // Filter for PineTime watches
-          if (
-            device.name &&
-            (device.name.includes('InfiniTime') ||
-              device.name.includes('PineTime') ||
-              device.name.includes('Pinetime'))
-          ) {
-            console.log('Found PineTime watch:', device.name, device.id);
-            onDeviceFound(device);
+        if (device && device.name) {
+          const name = device.name.toLowerCase();
+          // Look for InfiniTime watches (PineTime, Sealed, etc.)
+          if (name.includes('infini') || name.includes('pine') || name.includes('sealed')) {
+            const exists = devices.find(d => d.id === device.id);
+            if (!exists) {
+              console.log('Found watch:', device.name, device.id);
+              devices.push({
+                id: device.id,
+                name: device.name,
+                rssi: device.rssi,
+              });
+            }
           }
         }
-      );
-
-      // Stop scanning after 10 seconds
+      });
+      
       setTimeout(() => {
-        this.stopScan();
-      }, 10000);
-    } catch (error) {
-      console.error('Failed to start scan:', error);
-      Alert.alert('Error', `Failed to start scanning: ${error.message}`);
-      this.isScanning = false;
-    }
+        this.bleManager.stopDeviceScan();
+        this.isScanning = false;
+        console.log(`Scan complete. Found ${devices.length} device(s)`);
+        resolve(devices);
+      }, duration);
+    });
   }
-
-  // Stop scanning
-  async stopScan() {
-    try {
-      await this.manager.stopDeviceScan();
-      this.isScanning = false;
-      console.log('Stopped BLE scan');
-    } catch (error) {
-      console.error('Error stopping scan:', error);
-    }
-  }
-
-  // Connect to a device
-  async connect(deviceId) {
+  
+  async connectToDevice(deviceId) {
     try {
       console.log('Connecting to device:', deviceId);
-
-      // Connect to the device
-      this.device = await this.manager.connectToDevice(deviceId, {
-        timeout: 15000,
+      
+      // Connect to device
+      const device = await this.bleManager.connectToDevice(deviceId, {
+        autoConnect: false,
+        requestMTU: 256,
       });
-
-      console.log('Connected to:', this.device.name);
-
-      // Discover services and characteristics
-      await this.device.discoverAllServicesAndCharacteristics();
-      console.log('Discovered services');
-
-      // Save connected device ID
-      await AsyncStorage.setItem('connectedWatchId', deviceId);
-
+      
+      console.log('Connected, discovering services...');
+      await device.discoverAllServicesAndCharacteristics();
+      
+      this.connectedDevice = device;
+      this.reconnectAttempts = 0;
+      this.notifyConnectionChange(true);
+      
+      // Set up disconnect handler
+      device.onDisconnected((error, disconnectedDevice) => {
+        console.log('Device disconnected:', error);
+        this.handleDisconnection();
+      });
+      
+      // Sync time first
+      await this.syncTime(device);
+      
+      // Subscribe to all services
+      await this.subscribeToServices(device);
+      
+      console.log('All services subscribed successfully');
       return true;
     } catch (error) {
       console.error('Connection error:', error);
-      Alert.alert('Connection Failed', error.message);
-      return false;
+      this.connectedDevice = null;
+      this.notifyConnectionChange(false);
+      throw error;
     }
   }
-
-  // Disconnect from device
-  async disconnect() {
+  
+  async syncTime(device) {
     try {
-      if (this.device) {
-        await this.device.cancelConnection();
-        this.device = null;
-        await AsyncStorage.removeItem('connectedWatchId');
-        console.log('Disconnected from watch');
+      console.log('Syncing time...');
+      
+      const now = new Date();
+      const timeData = new Uint8Array(10);
+      
+      // Year (little-endian)
+      const year = now.getFullYear();
+      timeData[0] = year & 0xFF;
+      timeData[1] = (year >> 8) & 0xFF;
+      
+      // Month (1-12)
+      timeData[2] = now.getMonth() + 1;
+      
+      // Day
+      timeData[3] = now.getDate();
+      
+      // Hour
+      timeData[4] = now.getHours();
+      
+      // Minute
+      timeData[5] = now.getMinutes();
+      
+      // Second
+      timeData[6] = now.getSeconds();
+      
+      // Day of week (1=Monday, 7=Sunday)
+      const dayOfWeek = ((now.getDay() + 6) % 7) + 1;
+      timeData[7] = dayOfWeek;
+      
+      // Fractions256
+      timeData[8] = 0;
+      
+      // Adjust reason (0 = manual)
+      timeData[9] = 0;
+      
+      const base64Data = base64.encode(String.fromCharCode(...timeData));
+      
+      await device.writeCharacteristicWithResponseForService(
+        CURRENT_TIME_SERVICE,
+        CURRENT_TIME_CHAR,
+        base64Data
+      );
+      
+      console.log('Time synchronized successfully');
+    } catch (error) {
+      console.error('Time sync error:', error);
+      // Non-critical error, continue with connection
+    }
+  }
+  
+  async subscribeToServices(device) {
+    // Subscribe to Heart Rate
+    try {
+      device.monitorCharacteristicForService(
+        HEART_RATE_SERVICE,
+        HEART_RATE_MEASUREMENT,
+        (error, characteristic) => {
+          if (error) {
+            console.error('HR monitoring error:', error);
+            return;
+          }
+          if (characteristic?.value) {
+            this.handleHeartRateData(characteristic.value);
+          }
+        }
+      );
+      console.log('Subscribed to Heart Rate');
+    } catch (error) {
+      console.error('Failed to subscribe to HR:', error);
+    }
+    
+    // Subscribe to Steps
+    try {
+      device.monitorCharacteristicForService(
+        MOTION_SERVICE,
+        STEP_COUNT_CHAR,
+        (error, characteristic) => {
+          if (error) {
+            console.error('Steps monitoring error:', error);
+            return;
+          }
+          if (characteristic?.value) {
+            this.handleStepData(characteristic.value);
+          }
+        }
+      );
+      console.log('Subscribed to Step Count');
+    } catch (error) {
+      console.error('Failed to subscribe to steps:', error);
+    }
+    
+    // Subscribe to Battery
+    try {
+      device.monitorCharacteristicForService(
+        BATTERY_SERVICE,
+        BATTERY_LEVEL,
+        (error, characteristic) => {
+          if (error) {
+            console.error('Battery monitoring error:', error);
+            return;
+          }
+          if (characteristic?.value) {
+            this.handleBatteryData(characteristic.value);
+          }
+        }
+      );
+      console.log('Subscribed to Battery Level');
+    } catch (error) {
+      console.error('Failed to subscribe to battery:', error);
+    }
+    
+    // Subscribe to Health Request (if watch supports it)
+    try {
+      device.monitorCharacteristicForService(
+        PRAXIOM_SERVICE,
+        HEALTH_REQUEST_CHAR,
+        (error, characteristic) => {
+          if (error) {
+            console.error('Health request monitoring error:', error);
+            return;
+          }
+          if (characteristic?.value) {
+            console.log('Watch requested Bio-Age update');
+            // Notify app that watch wants fresh data
+            this.notifyDataUpdate({ requestUpdate: true });
+          }
+        }
+      );
+      console.log('Subscribed to Health Request');
+    } catch (error) {
+      console.log('Custom Praxiom service not available (expected on stock InfiniTime)');
+    }
+  }
+  
+  handleHeartRateData(base64Value) {
+    try {
+      const data = base64.decode(base64Value);
+      const bytes = new Uint8Array(data.length);
+      for (let i = 0; i < data.length; i++) {
+        bytes[i] = data.charCodeAt(i);
+      }
+      
+      const flags = bytes[0];
+      const isUint16 = (flags & 0x01) !== 0;
+      
+      let heartRate;
+      if (isUint16) {
+        heartRate = bytes[1] | (bytes[2] << 8);
+      } else {
+        heartRate = bytes[1];
+      }
+      
+      this.latestData.heartRate = heartRate;
+      this.notifyDataUpdate({ heartRate });
+      
+      // Parse RR intervals for HRV if present
+      if ((flags & 0x10) !== 0 && bytes.length > 3) {
+        const rrIntervals = [];
+        let offset = isUint16 ? 3 : 2;
+        
+        while (offset < bytes.length - 1) {
+          const rr = bytes[offset] | (bytes[offset + 1] << 8);
+          const rrMs = (rr / 1024.0) * 1000;
+          rrIntervals.append(rrMs);
+          offset += 2;
+        }
+        
+        if (rrIntervals.length > 0) {
+          // Calculate simple HRV score (RMSSD)
+          const hrv = this.calculateHRV(rrIntervals);
+          this.latestData.hrv = hrv;
+          this.notifyDataUpdate({ hrv });
+        }
       }
     } catch (error) {
-      console.error('Disconnect error:', error);
+      console.error('Error parsing HR data:', error);
     }
   }
-
-  // Check if connected
-  isConnected() {
-    return this.device !== null;
-  }
-
-  // Get connected device name
-  getDeviceName() {
-    return this.device ? this.device.name : null;
-  }
-
-  // Send Bio-Age to watch
-  async sendBioAge(bioAge) {
-    if (!this.device) {
-      Alert.alert('Error', 'No watch connected');
-      return false;
-    }
-
+  
+  handleStepData(base64Value) {
     try {
-      // Praxiom Service UUIDs
-      const SERVICE_UUID = '19000000-78fc-48fe-8e23-433b3a1942d0';
-      const WRITE_CHAR_UUID = '19000001-78fc-48fe-8e23-433b3a1942d0';
-
-      // Convert Bio-Age to 4-byte buffer (uint32_t, little-endian)
-      const ageBuffer = Buffer.alloc(4);
-      ageBuffer.writeUInt32LE(bioAge, 0);
-
-      // Encode to base64 for BLE transmission
-      const ageBase64 = ageBuffer.toString('base64');
-
-      console.log(`Sending Bio-Age ${bioAge} to watch...`);
-
-      // Write to characteristic
-      await this.device.writeCharacteristicWithResponseForService(
-        SERVICE_UUID,
-        WRITE_CHAR_UUID,
-        ageBase64
+      const data = base64.decode(base64Value);
+      const bytes = new Uint8Array(data.length);
+      for (let i = 0; i < data.length; i++) {
+        bytes[i] = data.charCodeAt(i);
+      }
+      
+      const steps = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24);
+      
+      this.latestData.steps = steps;
+      this.notifyDataUpdate({ steps });
+    } catch (error) {
+      console.error('Error parsing step data:', error);
+    }
+  }
+  
+  handleBatteryData(base64Value) {
+    try {
+      const data = base64.decode(base64Value);
+      const battery = data.charCodeAt(0);
+      
+      this.latestData.battery = battery;
+      this.notifyDataUpdate({ battery });
+    } catch (error) {
+      console.error('Error parsing battery data:', error);
+    }
+  }
+  
+  calculateHRV(rrIntervals) {
+    if (rrIntervals.length < 2) return null;
+    
+    // Calculate RMSSD (Root Mean Square of Successive Differences)
+    let sumSquaredDiffs = 0;
+    for (let i = 1; i < rrIntervals.length; i++) {
+      const diff = rrIntervals[i] - rrIntervals[i - 1];
+      sumSquaredDiffs += diff * diff;
+    }
+    
+    const rmssd = Math.sqrt(sumSquaredDiffs / (rrIntervals.length - 1));
+    
+    // Convert to HRV score (0-100)
+    // Typical RMSSD: 20-80ms, higher is better
+    const hrvScore = Math.min(100, Math.max(0, (rmssd / 80) * 100));
+    
+    return Math.round(hrvScore);
+  }
+  
+  async sendBioAge(data) {
+    if (!this.connectedDevice) {
+      throw new Error('No device connected');
+    }
+    
+    try {
+      const { praxiomAge, chronologicalAge, oralHealthScore, systemicHealthScore, fitnessScore } = data;
+      
+      // Create 12-byte data packet
+      const buffer = new ArrayBuffer(12);
+      const view = new DataView(buffer);
+      
+      // Pack data (little-endian)
+      view.setFloat32(0, praxiomAge, true);
+      view.setFloat32(4, chronologicalAge, true);
+      view.setUint8(8, Math.round(oralHealthScore));
+      view.setUint8(9, Math.round(systemicHealthScore));
+      view.setUint8(10, Math.round(fitnessScore));
+      view.setUint8(11, 0x01); // Valid flag
+      
+      // Convert to base64
+      const bytes = new Uint8Array(buffer);
+      const base64Data = base64.encode(String.fromCharCode(...bytes));
+      
+      console.log('Sending Bio-Age data to watch:', data);
+      
+      await this.connectedDevice.writeCharacteristicWithResponseForService(
+        PRAXIOM_SERVICE,
+        BIO_AGE_CHAR,
+        base64Data
       );
-
-      console.log('Bio-Age sent successfully');
-      Alert.alert('Success', `Bio-Age ${bioAge} sent to watch!`);
+      
+      console.log('Bio-Age data sent successfully');
       return true;
     } catch (error) {
       console.error('Error sending Bio-Age:', error);
-      Alert.alert('Error', `Failed to send Bio-Age: ${error.message}`);
-      return false;
-    }
-  }
-
-  // Listen for Bio-Age updates from watch (notifications)
-  async subscribeToUpdates(callback) {
-    if (!this.device) {
-      console.error('No device connected');
-      return;
-    }
-
-    try {
-      const SERVICE_UUID = '19000000-78fc-48fe-8e23-433b3a1942d0';
-      const NOTIFY_CHAR_UUID = '19000002-78fc-48fe-8e23-433b3a1942d0';
-
-      // Subscribe to notifications
-      this.device.monitorCharacteristicForService(
-        SERVICE_UUID,
-        NOTIFY_CHAR_UUID,
-        (error, characteristic) => {
-          if (error) {
-            console.error('Notification error:', error);
-            return;
-          }
-
-          // Decode Bio-Age from base64
-          const buffer = Buffer.from(characteristic.value, 'base64');
-          const bioAge = buffer.readUInt32LE(0);
-
-          console.log('Received Bio-Age update from watch:', bioAge);
-          callback(bioAge);
-        }
-      );
-
-      console.log('Subscribed to Bio-Age updates');
-    } catch (error) {
-      console.error('Error subscribing to updates:', error);
-    }
-  }
-
-  // Reconnect to last connected device
-  async reconnectToLastDevice() {
-    try {
-      const deviceId = await AsyncStorage.getItem('connectedWatchId');
-      if (deviceId) {
-        console.log('Attempting to reconnect to:', deviceId);
-        return await this.connect(deviceId);
+      
+      // If service not found, it means watch doesn't have custom firmware yet
+      if (error.message && error.message.includes('not found')) {
+        throw new Error('Watch firmware does not support Praxiom Health Service. Please update your watch firmware.');
       }
-      return false;
+      
+      throw error;
+    }
+  }
+  
+  async disconnect() {
+    if (this.connectedDevice) {
+      try {
+        await this.bleManager.cancelDeviceConnection(this.connectedDevice.id);
+        this.connectedDevice = null;
+        this.notifyConnectionChange(false);
+        console.log('Disconnected successfully');
+      } catch (error) {
+        console.error('Disconnect error:', error);
+      }
+    }
+  }
+  
+  handleDisconnection() {
+    this.connectedDevice = null;
+    this.notifyConnectionChange(false);
+    
+    // Attempt reconnection if not at max attempts
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++;
+      console.log(`Attempting reconnection ${this.reconnectAttempts}/${this.maxReconnectAttempts}...`);
+      
+      setTimeout(() => {
+        this.attemptReconnection();
+      }, this.reconnectDelay * this.reconnectAttempts);
+    } else {
+      console.log('Max reconnection attempts reached');
+    }
+  }
+  
+  async attemptReconnection() {
+    try {
+      const devices = await this.scanForDevices(5000);
+      if (devices.length > 0) {
+        await this.connectToDevice(devices[0].id);
+      }
     } catch (error) {
-      console.error('Reconnection error:', error);
+      console.error('Reconnection failed:', error);
+    }
+  }
+  
+  async isConnected() {
+    if (!this.connectedDevice) return false;
+    
+    try {
+      const connected = await this.connectedDevice.isConnected();
+      return connected;
+    } catch {
       return false;
     }
   }
-
-  // Clean up
+  
+  getLatestData() {
+    return { ...this.latestData };
+  }
+  
+  // Listener management
+  onDataUpdate(callback) {
+    this.dataUpdateListeners.push(callback);
+    
+    // Return unsubscribe function
+    return () => {
+      this.dataUpdateListeners = this.dataUpdateListeners.filter(cb => cb !== callback);
+    };
+  }
+  
+  onConnectionChange(callback) {
+    this.connectionListeners.push(callback);
+    
+    return () => {
+      this.connectionListeners = this.connectionListeners.filter(cb => cb !== callback);
+    };
+  }
+  
+  notifyDataUpdate(data) {
+    this.dataUpdateListeners.forEach(callback => {
+      try {
+        callback(data);
+      } catch (error) {
+        console.error('Error in data update listener:', error);
+      }
+    });
+  }
+  
+  notifyConnectionChange(isConnected) {
+    this.connectionListeners.forEach(callback => {
+      try {
+        callback(isConnected);
+      } catch (error) {
+        console.error('Error in connection change listener:', error);
+      }
+    });
+  }
+  
+  // Cleanup
   destroy() {
-    this.manager.destroy();
+    if (this.isScanning) {
+      this.bleManager.stopDeviceScan();
+    }
+    
+    if (this.connectedDevice) {
+      this.disconnect();
+    }
+    
+    this.bleManager.destroy();
+    this.dataUpdateListeners = [];
+    this.connectionListeners = [];
   }
 }
-
-// Export singleton instance
-export default new WearableService();
