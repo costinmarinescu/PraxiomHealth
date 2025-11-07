@@ -39,7 +39,6 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.header}>PRAXIOM{'\n'}HEALTH</Text>
 
-        {/* Profile Section */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Profile</Text>
           <TouchableOpacity style={styles.settingRow}>
@@ -48,7 +47,6 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Notifications Section */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Notifications</Text>
           <View style={styles.settingRow}>
@@ -62,7 +60,6 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Data Management Section */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Data Management</Text>
           
@@ -87,7 +84,6 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* About Section */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>About</Text>
           
