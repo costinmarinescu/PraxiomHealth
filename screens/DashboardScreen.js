@@ -13,7 +13,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import BLEService from './BLEService';
+import BLEService from './services/BLEService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
