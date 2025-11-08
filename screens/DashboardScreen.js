@@ -13,6 +13,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import BLEService from './BLEService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -218,31 +219,51 @@ export default function DashboardScreen() {
   };
 
   const handlePushToWatch = async () => {
-    try {
-      const connectionStatus = await AsyncStorage.getItem('watchConnectionStatus');
-      if (connectionStatus === 'connected') {
-        Alert.alert(
-          'Push to Watch',
-          `Send Bio-Age ${praxiomAge} years to PineTime watch?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Send', 
-              onPress: async () => {
-                // Store Bio-Age for watch to read
-                await AsyncStorage.setItem('bioAgeForWatch', praxiomAge.toString());
-                Alert.alert('Sent!', `Bio-Age ${praxiomAge} years sent to watch.`);
-              }
-            }
-          ]
-        );
-      } else {
-        Alert.alert('Watch Not Connected', 'Please connect to your PineTime watch first.');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to send data to watch.');
+  try {
+    if (!BLEService.isConnected()) {
+      Alert.alert(
+        'Watch Not Connected',
+        'Please go to the Watch tab and connect to your PineTime watch first.',
+        [{ text: 'OK' }]
+      );
+      return;
     }
-  };
+
+    Alert.alert(
+      'Push to Watch',
+      `Send Bio-Age ${praxiomAge} years to PineTime watch?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send',
+          onPress: async () => {
+            try {
+              console.log('📤 Dashboard: Attempting to send Bio-Age to watch...');
+              await BLEService.sendPraxiomAge(parseFloat(praxiomAge));
+              await AsyncStorage.setItem('bioAgeForWatch', praxiomAge.toString());
+              console.log('✅ Dashboard: Bio-Age sent successfully!');
+              Alert.alert(
+                'Success!',
+                `Bio-Age ${praxiomAge} years sent to watch successfully.\n\nCheck your watch - the age should update within 1-2 seconds!`
+              );
+            } catch (error) {
+              console.error('❌ Dashboard: Send error:', error);
+              Alert.alert(
+                'Error',
+                `Failed to send Bio-Age: ${error.message}\n\nMake sure your watch is still connected.`
+              );
+            }
+          },
+        },
+      ]
+    );
+  } 
+  
+  catch (error) {
+    console.error('Error in handlePushToWatch:', error);
+    Alert.alert('Error', 'Failed to send data to watch.');
+  }
+};
 
   const getScoreColor = (score) => {
     if (score >= 85) return '#4CAF50';
