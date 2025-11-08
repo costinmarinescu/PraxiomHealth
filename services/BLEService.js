@@ -1,5 +1,5 @@
 /**
- * Praxiom-PineTime BLE Communication Svc
+ * Praxiom-PineTime BLE Communication Service
  * Implements the InfiniTime BLE protocol for seamless watch integration
  * 
  * Based on the official InfiniTime BLE specification:
@@ -35,8 +35,8 @@ const INFINTIME_SERVICES = {
   NAVIGATION: '00010000-78fc-48fe-8e23-433b3a1942d0',
   MOTION: '00030000-78fc-48fe-8e23-433b3a1942d0',
   WEATHER: '00050000-78fc-48fe-8e23-433b3a1942d0',
-  // Praxiom custom service for biological age
-  PRAXIOM: '00060000-78fc-48fe-8e23-433b3a1942d0',
+  // ✅ FIXED: Praxiom custom service UUID (matching firmware: 0x1900)
+  PRAXIOM: '00001900-78fc-48fe-8e23-433b3a1942d0',
 };
 
 // Custom InfiniTime Characteristics
@@ -44,8 +44,8 @@ const INFINTIME_CHARACTERISTICS = {
   STEP_COUNT: '00030001-78fc-48fe-8e23-433b3a1942d0',
   MUSIC_EVENT: '00000001-78fc-48fe-8e23-433b3a1942d0',
   WEATHER_DATA: '00050001-78fc-48fe-8e23-433b3a1942d0',
-  // Praxiom custom characteristic for biological age
-  PRAXIOM_AGE: '00060001-78fc-48fe-8e23-433b3a1942d0',
+  // ✅ FIXED: Praxiom custom characteristic UUID (matching firmware: 0x1901)
+  PRAXIOM_AGE: '00001901-78fc-48fe-8e23-433b3a1942d0',
 };
 
 class BLEService {
@@ -58,13 +58,9 @@ class BLEService {
     this.characteristics = {};
   }
 
-  /**
-   * Request necessary BLE permissions (Android)
-   */
   async requestPermissions() {
     if (Platform.OS === 'android') {
       if (Platform.Version >= 31) {
-        // Android 12+
         const granted = await PermissionsAndroid.requestMultiple([
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
@@ -76,23 +72,17 @@ class BLEService {
           granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
         );
       } else {
-        // Android 11 and below
         const granted = await PermissionsAndroid.requestMultiple([
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADMIN,
         ]);
-        return (
-          granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
-        );
+        return granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED;
       }
     }
-    return true; // iOS permissions handled by Info.plist
+    return true;
   }
 
-  /**
-   * Scan for PineTime/InfiniTime devices
-   */
   async scanForDevices(onDeviceFound) {
     const hasPermission = await this.requestPermissions();
     if (!hasPermission) {
@@ -106,7 +96,6 @@ class BLEService {
 
     this.scanning = true;
     const devices = [];
-
     this.manager.startDeviceScan(null, null, (error, device) => {
       if (error) {
         console.error('Scan error:', error);
@@ -115,7 +104,6 @@ class BLEService {
       }
 
       if (device && device.name) {
-        // Look for InfiniTime or PineTime devices
         if (
           device.name.includes('InfiniTime') ||
           device.name.includes('Pinetime') ||
@@ -130,53 +118,36 @@ class BLEService {
       }
     });
 
-    // Stop scan after 10 seconds
     setTimeout(() => {
       this.stopScan();
     }, 10000);
-
     return devices;
   }
 
-  /**
-   * Stop BLE scanning
-   */
   stopScan() {
     this.manager.stopDeviceScan();
     this.scanning = false;
   }
 
-  /**
-   * Connect to a PineTime device
-   */
   async connectToDevice(device) {
     try {
       console.log(`Connecting to ${device.name} (${device.id})...`);
-      
       this.device = await this.manager.connectToDevice(device.id, {
         autoConnect: true,
-        requestMTU: 512, // Request larger MTU for better performance
+        requestMTU: 512,
       });
-
       await this.device.discoverAllServicesAndCharacteristics();
       this.connected = true;
 
-      // Cache device ID for auto-reconnect
       await AsyncStorage.setItem('lastDeviceId', device.id);
       await AsyncStorage.setItem('lastDeviceName', device.name || 'Unknown');
       await AsyncStorage.setItem('watchConnected', 'true');
 
-      // Discover and cache characteristics
       await this.discoverCharacteristics();
-
-      // Sync time on connection
       await this.syncTime();
-
-      // Enable notifications for heart rate and steps
       await this.enableHeartRateNotifications();
       await this.enableStepNotifications();
 
-      // Monitor disconnection
       this.device.onDisconnected((error, device) => {
         console.log('Device disconnected:', device?.name);
         this.connected = false;
@@ -186,7 +157,6 @@ class BLEService {
       });
 
       this.notifyListeners({ type: 'connected', device: this.device });
-
       return this.device;
     } catch (error) {
       console.error('Connection error:', error);
@@ -195,27 +165,18 @@ class BLEService {
     }
   }
 
-  /**
-   * Discover and cache all characteristics
-   */
   async discoverCharacteristics() {
     if (!this.device) return;
-
     const services = await this.device.services();
-    
     for (const service of services) {
       const characteristics = await service.characteristics();
       for (const char of characteristics) {
         this.characteristics[char.uuid] = char;
       }
     }
-
     console.log('Discovered characteristics:', Object.keys(this.characteristics).length);
   }
 
-  /**
-   * Auto-reconnect to last connected device
-   */
   async autoReconnect() {
     const lastDeviceId = await AsyncStorage.getItem('lastDeviceId');
     if (!lastDeviceId) return false;
@@ -232,9 +193,6 @@ class BLEService {
     }
   }
 
-  /**
-   * Disconnect from device
-   */
   async disconnect() {
     if (this.device) {
       try {
@@ -249,45 +207,35 @@ class BLEService {
     }
   }
 
-  /**
-   * Sync time with watch (InfiniTime Current Time Service)
-   */
   async syncTime() {
     if (!this.device) return;
 
     try {
       const now = new Date();
-      
-      // CTS time format: year(uint16) month day hours minutes seconds dayOfWeek fractions256
       const timeData = new Uint8Array(10);
       const year = now.getFullYear();
-      
       timeData[0] = year & 0xFF;
       timeData[1] = (year >> 8) & 0xFF;
-      timeData[2] = now.getMonth() + 1; // Month (1-12)
-      timeData[3] = now.getDate(); // Day
+      timeData[2] = now.getMonth() + 1;
+      timeData[3] = now.getDate();
       timeData[4] = now.getHours();
       timeData[5] = now.getMinutes();
       timeData[6] = now.getSeconds();
-      timeData[7] = now.getDay(); // Day of week (0-6)
-      timeData[8] = 0; // Fractions256
-      timeData[9] = 1; // Adjust reason (manual time update)
+      timeData[7] = now.getDay();
+      timeData[8] = 0;
+      timeData[9] = 1;
 
       await this.writeCharacteristic(
         SERVICES.CURRENT_TIME,
         CHARACTERISTICS.CURRENT_TIME,
         Array.from(timeData)
       );
-
       console.log('Time synced with watch');
     } catch (error) {
       console.log('Time sync not available:', error.message);
     }
   }
 
-  /**
-   * Enable heart rate notifications
-   */
   async enableHeartRateNotifications() {
     try {
       await this.subscribeToCharacteristic(
@@ -309,9 +257,6 @@ class BLEService {
     }
   }
 
-  /**
-   * Enable step count notifications
-   */
   async enableStepNotifications() {
     try {
       await this.subscribeToCharacteristic(
@@ -333,9 +278,6 @@ class BLEService {
     }
   }
 
-  /**
-   * Parse heart rate data (BLE Heart Rate Service format)
-   */
   parseHeartRateData(base64Value) {
     const data = Buffer.from(base64Value, 'base64');
     const flags = data[0];
@@ -348,13 +290,12 @@ class BLEService {
       heartRate = data[1];
     }
 
-    // Parse RR intervals for HRV if present
     const rrIntervals = [];
     if ((flags & 0x10) !== 0) {
       let offset = isUint16 ? 3 : 2;
       while (offset < data.length - 1) {
         const rr = data.readUInt16LE(offset);
-        rrIntervals.push((rr / 1024.0) * 1000); // Convert to ms
+        rrIntervals.push((rr / 1024.0) * 1000);
         offset += 2;
       }
     }
@@ -366,24 +307,17 @@ class BLEService {
     };
   }
 
-  /**
-   * Parse step count data (InfiniTime format: uint32, little-endian)
-   */
   parseStepData(base64Value) {
     const data = Buffer.from(base64Value, 'base64');
     return data.readUInt32LE(0);
   }
 
-  /**
-   * Send notification to watch (Alert Notification Service)
-   */
   async sendNotification(category, title, message) {
     if (!this.device) return;
 
     try {
-      // Category codes: 0=simple, 3=call, 5=sms, 9=instant message
       const notificationText = `${title}\x00${message}`;
-      const data = Buffer.from([category, 1]); // category + number of alerts
+      const data = Buffer.from([category, 1]);
       const textData = Buffer.from(notificationText, 'utf-8');
       const fullData = Buffer.concat([data, textData]);
 
@@ -392,7 +326,6 @@ class BLEService {
         CHARACTERISTICS.NEW_ALERT,
         Array.from(fullData)
       );
-
       console.log('Notification sent to watch');
     } catch (error) {
       console.log('Notification not sent:', error.message);
@@ -401,7 +334,7 @@ class BLEService {
 
   /**
    * Send Praxiom Age to watch
-   * This writes to a custom Praxiom characteristic in the InfiniTime firmware
+   * ✅ FIXED: Now sends 4-byte uint32 (little-endian) to match firmware expectation
    */
   async sendPraxiomAge(age) {
     if (!this.device) {
@@ -409,30 +342,35 @@ class BLEService {
     }
 
     try {
-      // Send age as uint8 (biological age in years)
-      const ageData = new Uint8Array([age]);
+      console.log(`📤 Sending Praxiom Age: ${age}`);
+      console.log(`🔧 Service UUID: ${INFINTIME_SERVICES.PRAXIOM}`);
+      console.log(`🔧 Characteristic UUID: ${INFINTIME_CHARACTERISTICS.PRAXIOM_AGE}`);
+
+      // ✅ FIXED: Send age as uint32 (4 bytes, little-endian) to match firmware
+      const ageData = new Uint32Array([Math.round(age)]);
+      const buffer = new Uint8Array(ageData.buffer);
 
       await this.writeCharacteristic(
         INFINTIME_SERVICES.PRAXIOM,
         INFINTIME_CHARACTERISTICS.PRAXIOM_AGE,
-        Array.from(ageData)
+        Array.from(buffer)
       );
 
-      console.log(`Praxiom Age ${age} sent to watch`);
-      
-      // Also send a notification for immediate feedback
-      await this.sendNotification(9, 'Praxiom Health', `Bio-Age updated: ${age} years`);
-      
+      console.log(`✅ Praxiom Age ${age} sent successfully to watch`);
+
+      try {
+        await this.sendNotification(9, 'Praxiom Health', `Bio-Age updated: ${Math.round(age)} years`);
+      } catch (notifError) {
+        console.log('Notification not sent (non-critical)');
+      }
+
       return true;
     } catch (error) {
-      console.error('Failed to send Praxiom Age:', error);
+      console.error('❌ Failed to send Praxiom Age:', error);
       throw error;
     }
   }
 
-  /**
-   * Read battery level
-   */
   async readBatteryLevel() {
     try {
       const characteristic = await this.readCharacteristic(
@@ -441,7 +379,6 @@ class BLEService {
       );
       const data = Buffer.from(characteristic.value, 'base64');
       const batteryLevel = data[0];
-      
       this.notifyListeners({ type: 'battery', data: batteryLevel });
       return batteryLevel;
     } catch (error) {
@@ -450,9 +387,6 @@ class BLEService {
     }
   }
 
-  /**
-   * Read device information
-   */
   async readDeviceInfo() {
     const info = {};
 
@@ -479,12 +413,8 @@ class BLEService {
     return info;
   }
 
-  /**
-   * Generic write to characteristic
-   */
   async writeCharacteristic(serviceUUID, characteristicUUID, data) {
     if (!this.device) throw new Error('Device not connected');
-
     const base64Data = Buffer.from(data).toString('base64');
     await this.device.writeCharacteristicWithResponseForService(
       serviceUUID,
@@ -493,24 +423,16 @@ class BLEService {
     );
   }
 
-  /**
-   * Generic read from characteristic
-   */
   async readCharacteristic(serviceUUID, characteristicUUID) {
     if (!this.device) throw new Error('Device not connected');
-
     return await this.device.readCharacteristicForService(
       serviceUUID,
       characteristicUUID
     );
   }
 
-  /**
-   * Subscribe to characteristic notifications
-   */
   async subscribeToCharacteristic(serviceUUID, characteristicUUID, callback) {
     if (!this.device) throw new Error('Device not connected');
-
     this.device.monitorCharacteristicForService(
       serviceUUID,
       characteristicUUID,
@@ -518,23 +440,14 @@ class BLEService {
     );
   }
 
-  /**
-   * Add listener for BLE events
-   */
   addListener(callback) {
     this.listeners.push(callback);
   }
 
-  /**
-   * Remove listener
-   */
   removeListener(callback) {
     this.listeners = this.listeners.filter((cb) => cb !== callback);
   }
 
-  /**
-   * Notify all listeners of an event
-   */
   notifyListeners(event) {
     this.listeners.forEach((callback) => {
       try {
@@ -545,20 +458,13 @@ class BLEService {
     });
   }
 
-  /**
-   * Check if connected
-   */
   isConnected() {
     return this.connected && this.device !== null;
   }
 
-  /**
-   * Get connected device
-   */
   getDevice() {
     return this.device;
   }
 }
 
-// Export singleton instance
 export default new BLEService();
