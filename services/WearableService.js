@@ -17,8 +17,8 @@ const CURRENT_TIME_CHAR = '00002A2B-0000-1000-8000-00805F9B34FB';
 
 // Custom Praxiom Health Service
 const PRAXIOM_SERVICE = '00001900-78fc-48fe-8e23-433b3a1942d0';
-const BIO_AGE_CHAR = '00001900-78fc-48fe-8e23-433b3a1942d0';
-const HEALTH_REQUEST_CHAR = '00001900-78fc-48fe-8e23-433b3a1942d0';
+const BIO_AGE_CHAR = '00001901-78fc-48fe-8e23-433b3a1942d0';
+const HEALTH_REQUEST_CHAR = '00001902-78fc-48fe-8e23-433b3a1942d';
 
 export default class WearableService {
   constructor() {
