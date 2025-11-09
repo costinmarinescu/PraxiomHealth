@@ -13,7 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 // import * as FileSystem from 'expo-file-system';  // COMMENTED OUT
 // import * as Sharing from 'expo-sharing';         // COMMENTED OUT
-import BLEService from '../services/BLEService';
+import WearableService from '../services/WearableService';
 
 export default function SettingsScreen() {
   const [connectionStatus, setConnectionStatus] = useState('Loading...');
@@ -24,8 +24,8 @@ export default function SettingsScreen() {
 
   const updateConnectionStatus = async () => {
     try {
-      const isConnected = BLEService.isConnected();
-      const device = BLEService.getDevice();
+      const isConnected = WearableService.isConnected();
+      const device = WearableService.getDevice();
       const status = isConnected ? `Connected: ${device?.name || 'InfiniTime'}` : 'Not Connected';
       setConnectionStatus(status);
     } catch (error) {
