@@ -32,7 +32,8 @@
         "BLUETOOTH_CONNECT",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
-      ]
+      ],
+      "extraBufferSize": 2048
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -45,19 +46,14 @@
             "compileSdkVersion": 34,
             "targetSdkVersion": 34,
             "buildToolsVersion": "34.0.0",
-            "kotlinVersion": "1.8.22",
-            "minSdkVersion": 26
+            "kotlinVersion": "1.8.10",
+            "minSdkVersion": 24,
+            "enableProguardInReleaseBuilds": true,
+            "extraMavenRepos": [
+              "https://maven.google.com",
+              "https://repo.maven.apache.org/maven2"
+            ]
           }
-        }
-      ],
-      [
-        "react-native-ble-plx",
-        {
-          "isBackgroundEnabled": true,
-          "modes": [
-            "peripheral",
-            "central"
-          ]
         }
       ]
     ],
