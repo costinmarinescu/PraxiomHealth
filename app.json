@@ -42,11 +42,10 @@
         "expo-build-properties",
         {
           "android": {
-            "compileSdkVersion": 33,
-            "targetSdkVersion": 33,
-            "buildToolsVersion": "33.0.0",
-            "kotlinVersion": "1.8.10",
-            "minSdkVersion": 21
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "minSdkVersion": 21,
+            "kotlinVersion": "1.8.10"
           }
         }
       ]
