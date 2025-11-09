@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import PraxiomBackground from '../components/PraxiomBackground';
 import PraxiomAlgorithm from '../services/PraxiomAlgorithm';
 import StorageService from '../services/StorageService';
-import BLEService from '../services/BLEService';
+import WearableService from '../services/WearableService';
 
 const Tier1BiomarkerInputScreen = ({ navigation }) => {
   // Date selection
@@ -117,13 +117,9 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
       await StorageService.saveBiomarkerEntry(entry);
 
       // Send to watch if connected
-      if (BLEService.isConnected()) {
+      if (WearableService.isConnected()) {
         try {
-          await BLEService.sendHealthData(
-            results.bioAge,
-            results.oralScore,
-            results.systemicScore,
-            results.fitnessScore
+          await WearableService.sendBioAge(results.bioAge);
           );
           
           Alert.alert(
