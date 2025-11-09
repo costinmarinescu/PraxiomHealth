@@ -35,7 +35,7 @@ const INFINTIME_SERVICES = {
   NAVIGATION: '00010000-78fc-48fe-8e23-433b3a1942d0',
   MOTION: '00030000-78fc-48fe-8e23-433b3a1942d0',
   WEATHER: '00050000-78fc-48fe-8e23-433b3a1942d0',
-  // ✅ FIXED: Praxiom custom service UUID (matching firmware: 0x1900)
+  // âœ… FIXED: Praxiom custom service UUID (matching firmware: 0x1900)
   PRAXIOM: '00001900-78fc-48fe-8e23-433b3a1942d0',
 };
 
@@ -44,7 +44,7 @@ const INFINTIME_CHARACTERISTICS = {
   STEP_COUNT: '00030001-78fc-48fe-8e23-433b3a1942d0',
   MUSIC_EVENT: '00000001-78fc-48fe-8e23-433b3a1942d0',
   WEATHER_DATA: '00050001-78fc-48fe-8e23-433b3a1942d0',
-  // ✅ FIXED: Praxiom custom characteristic UUID (matching firmware: 0x1901)
+  // âœ… FIXED: Praxiom custom characteristic UUID (matching firmware: 0x1901)
   PRAXIOM_AGE: '00001901-78fc-48fe-8e23-433b3a1942d0',
 };
 
@@ -334,7 +334,7 @@ class BLEService {
 
   /**
    * Send Praxiom Age to watch
-   * ✅ FIXED: Now sends 4-byte uint32 (little-endian) to match firmware expectation
+   * âœ… FIXED: Now sends 4-byte uint32 (little-endian) to match firmware expectation
    */
   async sendPraxiomAge(age) {
     if (!this.device) {
@@ -342,11 +342,11 @@ class BLEService {
     }
 
     try {
-      console.log(`📤 Sending Praxiom Age: ${age}`);
-      console.log(`🔧 Service UUID: ${INFINTIME_SERVICES.PRAXIOM}`);
-      console.log(`🔧 Characteristic UUID: ${INFINTIME_CHARACTERISTICS.PRAXIOM_AGE}`);
+      console.log(`ðŸ“¤ Sending Praxiom Age: ${age}`);
+      console.log(`ðŸ”§ Service UUID: ${INFINTIME_SERVICES.PRAXIOM}`);
+      console.log(`ðŸ”§ Characteristic UUID: ${INFINTIME_CHARACTERISTICS.PRAXIOM_AGE}`);
 
-      // ✅ FIXED: Send age as uint32 (4 bytes, little-endian) to match firmware
+      // âœ… FIXED: Send age as uint32 (4 bytes, little-endian) to match firmware
       const ageData = new Uint32Array([Math.round(age)]);
       const buffer = new Uint8Array(ageData.buffer);
 
@@ -356,7 +356,7 @@ class BLEService {
         Array.from(buffer)
       );
 
-      console.log(`✅ Praxiom Age ${age} sent successfully to watch`);
+      console.log(`âœ… Praxiom Age ${age} sent successfully to watch`);
 
       try {
         await this.sendNotification(9, 'Praxiom Health', `Bio-Age updated: ${Math.round(age)} years`);
@@ -366,7 +366,7 @@ class BLEService {
 
       return true;
     } catch (error) {
-      console.error('❌ Failed to send Praxiom Age:', error);
+      console.error('âŒ Failed to send Praxiom Age:', error);
       throw error;
     }
   }
