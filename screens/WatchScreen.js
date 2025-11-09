@@ -1,512 +1,425 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
+  TouchableOpacity,
   Alert,
-  ActivityIndicator,
-  FlatList,
-  Switch
+  Switch,
+  Platform,
+  PermissionsAndroid,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BleManager } from 'react-native-ble-plx';
-import * as Device from 'expo-device';
-import { Platform, PermissionsAndroid } from 'react-native';
-import { AppContext } from '../AppContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Buffer } from 'buffer';
-
-// BLE Service and Characteristic UUIDs
-const PRAXIOM_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-const PRAXIOM_BIO_AGE_CHAR_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
-const PRAXIOM_NOTIFICATION_CHAR_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
-
-// Standard services
-const CURRENT_TIME_SERVICE = '00001805-0000-1000-8000-00805f9b34fb';
-const CURRENT_TIME_CHAR = '00002a2b-0000-1000-8000-00805f9b34fb';
-const BATTERY_SERVICE = '0000180f-0000-1000-8000-00805f9b34fb';
-const BATTERY_LEVEL_CHAR = '00002a19-0000-1000-8000-00805f9b34fb';
 
 export default function WatchScreen() {
-  const [manager] = useState(new BleManager());
-  const [devices, setDevices] = useState([]);
-  const [scanning, setScanning] = useState(false);
+  const [bleManager] = useState(new BleManager());
+  const [isScanning, setIsScanning] = useState(false);
   const [connectedDevice, setConnectedDevice] = useState(null);
-  const [batteryLevel, setBatteryLevel] = useState(null);
-  const [isPushing, setIsPushing] = useState(false);
+  const [discoveredDevices, setDiscoveredDevices] = useState([]);
   const [showAllDevices, setShowAllDevices] = useState(false);
-  const [watchConnected, setWatchConnected] = useState(false);
-  const { state } = useContext(AppContext);
+  const [bleEnabled, setBleEnabled] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('disconnected'); // 'disconnected', 'connecting', 'connected'
 
   useEffect(() => {
-    // Request permissions on mount
-    requestPermissions();
-
-    // Check for previously connected device
-    checkSavedDevice();
-
-    // Cleanup on unmount
-    return () => {
-      if (connectedDevice) {
-        connectedDevice.cancelConnection();
+    // Check if Bluetooth is enabled
+    const subscription = bleManager.onStateChange((state) => {
+      setBleEnabled(state === 'PoweredOn');
+      if (state !== 'PoweredOn' && connectedDevice) {
+        handleDisconnection();
       }
-      manager.destroy();
+    }, true);
+
+    // Load saved connection state
+    loadConnectionState();
+
+    // Monitor connection status
+    const connectionMonitor = setInterval(() => {
+      if (connectedDevice) {
+        checkConnectionHealth();
+      }
+    }, 5000);
+
+    return () => {
+      subscription.remove();
+      clearInterval(connectionMonitor);
+      if (connectedDevice) {
+        bleManager.cancelDeviceConnection(connectedDevice.id);
+      }
+      bleManager.destroy();
     };
   }, []);
 
-  const requestPermissions = async () => {
-    if (Platform.OS === 'android') {
-      if (Device.platformApiLevel >= 31) {
-        const bluetoothScanPermission = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-          {
-            title: "Bluetooth Scan Permission",
-            message: "This app needs Bluetooth scan permission to find your PineTime watch",
-            buttonPositive: "OK"
-          }
-        );
-        const bluetoothConnectPermission = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-          {
-            title: "Bluetooth Connect Permission",
-            message: "This app needs Bluetooth connect permission to connect to your PineTime watch",
-            buttonPositive: "OK"
-          }
-        );
-        const fineLocationPermission = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-          {
-            title: "Location Permission",
-            message: "This app needs location permission for Bluetooth",
-            buttonPositive: "OK"
-          }
-        );
+  useEffect(() => {
+    // Request Bluetooth permissions for Android 12+
+    if (Platform.OS === 'android' && Platform.Version >= 31) {
+      requestAndroidPermissions();
+    }
+  }, []);
+
+  const loadConnectionState = async () => {
+    try {
+      const savedDevice = await AsyncStorage.getItem('connectedDevice');
+      const status = await AsyncStorage.getItem('watchConnectionStatus');
+      
+      if (savedDevice && status === 'connected') {
+        const device = JSON.parse(savedDevice);
+        setConnectedDevice(device);
+        setConnectionStatus('connected');
+        console.log('Restored connection to:', device.name);
+      }
+    } catch (error) {
+      console.error('Error loading connection state:', error);
+    }
+  };
+
+  const saveConnectionState = async (device, status) => {
+    try {
+      if (device && status === 'connected') {
+        await AsyncStorage.setItem('connectedDevice', JSON.stringify(device));
+        await AsyncStorage.setItem('watchConnectionStatus', 'connected');
       } else {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-          {
-            title: "Location Permission",
-            message: "This app needs location permission for Bluetooth",
-            buttonPositive: "OK"
-          }
+        await AsyncStorage.removeItem('connectedDevice');
+        await AsyncStorage.setItem('watchConnectionStatus', 'disconnected');
+      }
+    } catch (error) {
+      console.error('Error saving connection state:', error);
+    }
+  };
+
+  const checkConnectionHealth = async () => {
+    if (!connectedDevice) return;
+
+    try {
+      const isConnected = await bleManager.isDeviceConnected(connectedDevice.id);
+      if (!isConnected) {
+        console.log('Device disconnected, updating state...');
+        handleDisconnection();
+      }
+    } catch (error) {
+      console.log('Connection check failed, device likely disconnected');
+      handleDisconnection();
+    }
+  };
+
+  const handleDisconnection = async () => {
+    setConnectedDevice(null);
+    setConnectionStatus('disconnected');
+    await saveConnectionState(null, 'disconnected');
+    
+    // Remove device from discovered devices to show it's available again
+    setDiscoveredDevices(prev => 
+      prev.map(device => ({
+        ...device,
+        isConnected: false
+      }))
+    );
+  };
+
+  const requestAndroidPermissions = async () => {
+    try {
+      const granted = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      ]);
+
+      if (
+        granted['android.permission.BLUETOOTH_SCAN'] === PermissionsAndroid.RESULTS.GRANTED &&
+        granted['android.permission.BLUETOOTH_CONNECT'] === PermissionsAndroid.RESULTS.GRANTED &&
+        granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
+      ) {
+        console.log('Bluetooth permissions granted');
+      } else {
+        Alert.alert(
+          'Permissions Required',
+          'Bluetooth permissions are required to scan for and connect to your PineTime watch.'
         );
       }
+    } catch (err) {
+      console.warn(err);
     }
   };
 
-  const checkSavedDevice = async () => {
-    try {
-      const savedDeviceId = await AsyncStorage.getItem('connectedWatchId');
-      if (savedDeviceId) {
-        // Try to reconnect to saved device
-        reconnectToDevice(savedDeviceId);
-      }
-    } catch (error) {
-      console.log('Error checking saved device:', error);
+  const startScanning = async () => {
+    if (!bleEnabled) {
+      Alert.alert('Bluetooth Disabled', 'Please enable Bluetooth to scan for devices.');
+      return;
     }
-  };
 
-  const reconnectToDevice = async (deviceId) => {
-    try {
-      const device = await manager.connectToDevice(deviceId);
-      await device.discoverAllServicesAndCharacteristics();
-      setConnectedDevice(device);
-      setWatchConnected(true);
-      
-      // Update global state
-      await AsyncStorage.setItem('watchConnected', 'true');
-      
-      // Monitor device connection
-      device.onDisconnected(() => {
-        setConnectedDevice(null);
-        setWatchConnected(false);
-        AsyncStorage.setItem('watchConnected', 'false');
-      });
-      
-      // Read battery level
-      readBatteryLevel(device);
-      
-      // Sync time
-      syncTime(device);
-      
-    } catch (error) {
-      console.log('Reconnection failed:', error);
-    }
-  };
+    setDiscoveredDevices([]);
+    setIsScanning(true);
 
-  const scanForDevices = () => {
-    setScanning(true);
-    setDevices([]);
-    const subscription = manager.startDeviceScan(null, null, (error, device) => {
+    // Stop any existing scan
+    bleManager.stopDeviceScan();
+
+    bleManager.startDeviceScan(null, null, (error, device) => {
       if (error) {
-        console.error(error);
-        setScanning(false);
+        console.error('Scan error:', error);
+        setIsScanning(false);
         return;
       }
 
-      if (device.name) {
-        // Filter for PineTime/InfiniTime devices or show all if debug mode
-        const isPineTime = device.name.toLowerCase().includes('infinitime') || 
-                          device.name.toLowerCase().includes('pinetime');
-        
+      if (device && device.name) {
+        const deviceName = device.name.toLowerCase();
+        const isPineTime =
+          deviceName.includes('pine') ||
+          deviceName.includes('infini') ||
+          deviceName.includes('sealed') ||
+          deviceName.includes('praxiom');
+
+        const isConnectedToThis = connectedDevice && connectedDevice.id === device.id;
+
         if (isPineTime || showAllDevices) {
-          setDevices(prevDevices => {
-            const existingDevice = prevDevices.find(d => d.id === device.id);
-            if (!existingDevice) {
-              return [...prevDevices, {
-                id: device.id,
-                name: device.name,
-                rssi: device.rssi,
-                isPineTime: isPineTime
-              }];
+          setDiscoveredDevices((prev) => {
+            // Avoid duplicates
+            const existingIndex = prev.findIndex(d => d.id === device.id);
+            
+            const deviceWithConnectionStatus = {
+              ...device,
+              isPineTime,
+              isConnected: isConnectedToThis
+            };
+
+            if (existingIndex !== -1) {
+              const updated = [...prev];
+              updated[existingIndex] = deviceWithConnectionStatus;
+              return updated;
             }
-            return prevDevices;
+            return [...prev, deviceWithConnectionStatus];
           });
         }
       }
     });
 
-    // Stop scanning after 10 seconds
+    // Stop scanning after 15 seconds
     setTimeout(() => {
-      subscription.remove();
-      setScanning(false);
-    }, 10000);
+      bleManager.stopDeviceScan();
+      setIsScanning(false);
+    }, 15000);
   };
 
   const connectToDevice = async (device) => {
-    try {
-      const deviceConnection = await manager.connectToDevice(device.id);
-      await deviceConnection.discoverAllServicesAndCharacteristics();
-      
-      setConnectedDevice(deviceConnection);
-      setWatchConnected(true);
-      
-      // Save device ID for reconnection
-      await AsyncStorage.setItem('connectedWatchId', device.id);
-      await AsyncStorage.setItem('watchConnected', 'true');
-      
-      // Monitor device disconnection
-      deviceConnection.onDisconnected(() => {
-        setConnectedDevice(null);
-        setWatchConnected(false);
-        setBatteryLevel(null);
-        AsyncStorage.setItem('watchConnected', 'false');
-        Alert.alert('Disconnected', 'Watch disconnected');
-      });
-
-      // Read battery level
-      await readBatteryLevel(deviceConnection);
-      
-      // Sync time
-      await syncTime(deviceConnection);
-      
-      Alert.alert('Connected', `Connected to ${device.name}`);
-    } catch (error) {
-      console.error('Connection error:', error);
-      Alert.alert('Connection Failed', 'Could not connect to device');
-    }
-  };
-
-  const readBatteryLevel = async (device) => {
-    try {
-      const battery = await device.readCharacteristicForService(
-        BATTERY_SERVICE,
-        BATTERY_LEVEL_CHAR
-      );
-      const level = Buffer.from(battery.value, 'base64')[0];
-      setBatteryLevel(level);
-    } catch (error) {
-      console.log('Could not read battery level:', error);
-    }
-  };
-
-  const syncTime = async (device) => {
-    try {
-      const now = new Date();
-      const timeData = Buffer.alloc(10);
-      
-      // Year (little-endian)
-      const year = now.getFullYear();
-      timeData.writeUInt16LE(year, 0);
-      
-      // Month (1-12)
-      timeData[2] = now.getMonth() + 1;
-      
-      // Day
-      timeData[3] = now.getDate();
-      
-      // Hour
-      timeData[4] = now.getHours();
-      
-      // Minute
-      timeData[5] = now.getMinutes();
-      
-      // Second
-      timeData[6] = now.getSeconds();
-      
-      // Day of week (1=Monday, 7=Sunday)
-      const dayOfWeek = now.getDay();
-      timeData[7] = dayOfWeek === 0 ? 7 : dayOfWeek;
-      
-      // Fractions256
-      timeData[8] = 0;
-      
-      // Adjust reason
-      timeData[9] = 1; // Manual update
-      
-      await device.writeCharacteristicWithResponseForService(
-        CURRENT_TIME_SERVICE,
-        CURRENT_TIME_CHAR,
-        timeData.toString('base64')
-      );
-      
-      console.log('Time synchronized');
-    } catch (error) {
-      console.log('Could not sync time:', error);
-    }
-  };
-
-  const pushBioAge = async () => {
-    if (!connectedDevice) {
-      Alert.alert('Not Connected', 'Please connect to a watch first');
+    if (connectedDevice && connectedDevice.id === device.id) {
+      Alert.alert('Already Connected', 'This device is already connected.');
       return;
     }
 
-    setIsPushing(true);
-    
     try {
-      // Calculate biological age from state
-      const bioAge = state.biologicalAge || 70.1; // Use calculated age or default
-      const chronoAge = state.chronologicalAge || 53;
-      const oralHealthScore = state.oralHealthScore || 50;
-      const systemicHealthScore = state.systemicHealthScore || 45;
+      setIsScanning(false);
+      bleManager.stopDeviceScan();
+      setConnectionStatus('connecting');
+
+      console.log('Attempting to connect to:', device.name);
       
-      // Create data packet for watch
-      // Format: [command, bioAge_int, bioAge_decimal, chronoAge, oralScore, systemicScore]
-      const dataPacket = Buffer.alloc(6);
-      dataPacket[0] = 0x01; // Command: Update Bio-Age
-      dataPacket[1] = Math.floor(bioAge); // Bio-Age integer part
-      dataPacket[2] = Math.round((bioAge % 1) * 100); // Bio-Age decimal part
-      dataPacket[3] = chronoAge;
-      dataPacket[4] = Math.round(oralHealthScore);
-      dataPacket[5] = Math.round(systemicHealthScore);
+      const connected = await bleManager.connectToDevice(device.id, {
+        timeout: 10000, // 10 second timeout
+      });
       
-      // Write to Praxiom Bio-Age characteristic
-      await connectedDevice.writeCharacteristicWithResponseForService(
-        PRAXIOM_SERVICE_UUID,
-        PRAXIOM_BIO_AGE_CHAR_UUID,
-        dataPacket.toString('base64')
+      await connected.discoverAllServicesAndCharacteristics();
+
+      setConnectedDevice(device);
+      setConnectionStatus('connected');
+      await saveConnectionState(device, 'connected');
+
+      // Update discovered devices to show connection status
+      setDiscoveredDevices(prev =>
+        prev.map(d => ({
+          ...d,
+          isConnected: d.id === device.id
+        }))
       );
-      
-      // Save sync status
-      await AsyncStorage.setItem('lastBioAgeSync', new Date().toISOString());
-      await AsyncStorage.setItem('syncedBioAge', bioAge.toString());
+
+      Alert.alert('Connected!', `Successfully connected to ${device.name}`);
+      console.log('Successfully connected to:', device.name);
+    } catch (error) {
+      console.error('Connection error:', error);
+      setConnectionStatus('disconnected');
       
       Alert.alert(
-        'Success', 
-        `Bio-Age (${bioAge.toFixed(1)} years) pushed to watch!\n\nOral Health: ${oralHealthScore}%\nSystemic Health: ${systemicHealthScore}%`
+        'Connection Failed',
+        `Could not connect to ${device.name}. Make sure the device is nearby and not connected to another app.\n\nTip: Try unpairing it from your phone's Bluetooth settings first.`
       );
+    }
+  };
+
+  const disconnectDevice = async () => {
+    if (!connectedDevice) {
+      Alert.alert('No Device Connected', 'There is no device to disconnect.');
+      return;
+    }
+
+    try {
+      console.log('Disconnecting from:', connectedDevice.name);
       
+      await bleManager.cancelDeviceConnection(connectedDevice.id);
+      
+      await handleDisconnection();
+      
+      Alert.alert('Disconnected', `Successfully disconnected from ${connectedDevice.name}`);
+      console.log('Successfully disconnected');
     } catch (error) {
-      console.error('Push error:', error);
+      console.error('Disconnect error:', error);
       
-      // Try fallback method using standard notification service
-      try {
-        await pushViaNotification();
-      } catch (fallbackError) {
-        Alert.alert('Push Failed', 'Could not send Bio-Age to watch. Make sure your watch has the Praxiom firmware installed.');
-      }
-    } finally {
-      setIsPushing(false);
+      // Force disconnect even if there was an error
+      await handleDisconnection();
+      
+      Alert.alert('Disconnected', 'Device has been disconnected.');
     }
   };
 
-  const pushViaNotification = async () => {
-    // Fallback: Send as notification if custom service not available
-    const ALERT_NOTIFICATION_SERVICE = '00001811-0000-1000-8000-00805f9b34fb';
-    const NEW_ALERT_CHAR = '00002a46-0000-1000-8000-00805f9b34fb';
-    
-    const bioAge = state.biologicalAge || 70.1;
-    const message = `Bio-Age: ${bioAge.toFixed(1)} years`;
-    
-    const notificationData = Buffer.concat([
-      Buffer.from([0x09, 0x01]), // Category: Instant Message, Count: 1
-      Buffer.from(message, 'utf8')
-    ]);
-    
-    await connectedDevice.writeCharacteristicWithoutResponseForService(
-      ALERT_NOTIFICATION_SERVICE,
-      NEW_ALERT_CHAR,
-      notificationData.toString('base64')
-    );
-  };
-
-  const disconnect = async () => {
-    if (connectedDevice) {
-      await connectedDevice.cancelConnection();
-      setConnectedDevice(null);
-      setWatchConnected(false);
-      setBatteryLevel(null);
-      await AsyncStorage.removeItem('connectedWatchId');
-      await AsyncStorage.setItem('watchConnected', 'false');
-      Alert.alert('Disconnected', 'Watch disconnected');
+  const getConnectionStatusText = () => {
+    switch (connectionStatus) {
+      case 'connecting':
+        return 'Connecting...';
+      case 'connected':
+        return 'Connected';
+      default:
+        return 'Not Connected';
     }
   };
 
-  const renderDevice = ({ item }) => (
-    <TouchableOpacity
-      style={[styles.deviceCard, item.isPineTime && styles.pineTimeDevice]}
-      onPress={() => connectToDevice(item)}
-    >
-      <View style={styles.deviceInfo}>
-        <Text style={styles.deviceName}>
-          {item.isPineTime && '⭐ '}{item.name}
-        </Text>
-        <Text style={styles.deviceId}>{item.id}</Text>
-        {item.rssi && (
-          <Text style={styles.deviceSignal}>Signal: {item.rssi} dBm</Text>
-        )}
-      </View>
-      <TouchableOpacity
-        style={styles.connectButton}
-        onPress={() => connectToDevice(item)}
-      >
-        <Text style={styles.connectButtonText}>Connect</Text>
-      </TouchableOpacity>
-    </TouchableOpacity>
-  );
+  const getConnectionIcon = () => {
+    switch (connectionStatus) {
+      case 'connecting':
+        return '🔄';
+      case 'connected':
+        return '✓';
+      default:
+        return '⚠';
+    }
+  };
 
   return (
     <LinearGradient
-      colors={['#FF6B00', '#FFB800', '#47C83E', '#0099DB']}
+      colors={['rgba(255, 140, 0, 0.15)', 'rgba(0, 207, 193, 0.15)']}
       style={styles.container}
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>PineTime Watch</Text>
-        <Text style={styles.subtitle}>Sync Your Bio-Age</Text>
+        <Text style={styles.header}>PRAXIOM{'\n'}HEALTH</Text>
 
-        {/* Connection Status */}
-        <View style={styles.statusCard}>
-          {connectedDevice ? (
-            <>
-              <Text style={styles.connectedIcon}>✓ Connected</Text>
-              <Text style={styles.deviceNameText}>{connectedDevice.name || 'InfiniTime'}</Text>
-              {batteryLevel !== null && (
-                <Text style={styles.batteryText}>Battery: {batteryLevel}%</Text>
-              )}
-            </>
-          ) : (
-            <>
-              <Text style={styles.disconnectedIcon}>○ Not Connected</Text>
-              <Text style={styles.instructionText}>
-                Scan for your PineTime watch below
-              </Text>
-            </>
+        {/* Watch Title */}
+        <View style={styles.titleContainer}>
+          <Text style={styles.title}>PineTime Watch</Text>
+          <Text style={styles.subtitle}>Sync Your Bio-Age</Text>
+        </View>
+
+        {/* Connection Status Card */}
+        <View style={[
+          styles.statusCard,
+          connectionStatus === 'connected' && styles.connectedCard,
+          connectionStatus === 'connecting' && styles.connectingCard
+        ]}>
+          <View style={styles.statusHeader}>
+            <Text style={styles.statusIcon}>{getConnectionIcon()}</Text>
+            <Text style={styles.statusTitle}>{getConnectionStatusText()}</Text>
+          </View>
+          {connectedDevice && (
+            <Text style={styles.deviceName}>{connectedDevice.name}</Text>
           )}
         </View>
 
-        {/* Push Bio-Age Button */}
-        {connectedDevice && (
+        {/* Connection Actions */}
+        {connectionStatus !== 'connected' ? (
           <TouchableOpacity
-            style={[styles.pushButton, isPushing && styles.pushingButton]}
-            onPress={pushBioAge}
-            disabled={isPushing}
+            style={[
+              styles.scanButton,
+              (isScanning || connectionStatus === 'connecting') && styles.scanButtonDisabled
+            ]}
+            onPress={startScanning}
+            disabled={isScanning || connectionStatus === 'connecting'}
           >
-            {isPushing ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <Text style={styles.pushButtonText}>Push Bio-Age to Watch</Text>
-            )}
+            <Text style={styles.scanButtonText}>
+              {isScanning ? 'Scanning...' : 
+               connectionStatus === 'connecting' ? 'Connecting...' : 
+               'Scan for Watch'}
+            </Text>
           </TouchableOpacity>
-        )}
-
-        {/* Disconnect Button */}
-        {connectedDevice && (
-          <TouchableOpacity
-            style={styles.disconnectButton}
-            onPress={disconnect}
-          >
+        ) : (
+          <TouchableOpacity style={styles.disconnectButton} onPress={disconnectDevice}>
             <Text style={styles.disconnectButtonText}>Disconnect</Text>
           </TouchableOpacity>
         )}
 
-        {/* Scan Controls */}
-        {!connectedDevice && (
+        {/* Show All Devices Toggle */}
+        <View style={styles.toggleContainer}>
+          <Text style={styles.toggleLabel}>Show All Devices (Debug)</Text>
+          <Switch
+            value={showAllDevices}
+            onValueChange={setShowAllDevices}
+            trackColor={{ false: '#D0D0D0', true: '#00CFC1' }}
+            thumbColor={showAllDevices ? '#fff' : '#f4f3f4'}
+          />
+        </View>
+
+        {/* Device List */}
+        {discoveredDevices.length > 0 && (
           <>
-            <TouchableOpacity
-              style={[styles.scanButton, scanning && styles.scanningButton]}
-              onPress={scanForDevices}
-              disabled={scanning}
-            >
-              {scanning ? (
-                <>
-                  <ActivityIndicator color="#FFF" />
-                  <Text style={styles.scanButtonText}>Scanning...</Text>
-                </>
-              ) : (
-                <Text style={styles.scanButtonText}>Scan for Devices</Text>
-              )}
-            </TouchableOpacity>
+            <Text style={styles.devicesFoundText}>
+              Found {discoveredDevices.length} device{discoveredDevices.length !== 1 ? 's' : ''}:
+            </Text>
+            <Text style={styles.pineTimeHint}>⭐ = Likely PineTime/InfiniTime</Text>
 
-            {/* Debug Mode Toggle */}
-            <View style={styles.debugToggle}>
-              <Text style={styles.debugText}>Show All Devices (Debug)</Text>
-              <Switch
-                value={showAllDevices}
-                onValueChange={setShowAllDevices}
-                trackColor={{ false: '#767577', true: '#0099DB' }}
-                thumbColor={showAllDevices ? '#47C83E' : '#f4f3f4'}
-              />
-            </View>
-
-            {/* Device List */}
-            {devices.length > 0 && (
-              <View style={styles.deviceListContainer}>
-                <Text style={styles.deviceListTitle}>
-                  Found {devices.length} device{devices.length > 1 ? 's' : ''}:
-                </Text>
-                {showAllDevices && (
-                  <Text style={styles.pineTimeHint}>
-                    ⭐ = Likely PineTime/InfiniTime
+            {discoveredDevices.map((device) => (
+              <View
+                key={device.id}
+                style={[
+                  styles.deviceCard,
+                  device.isPineTime && styles.pineTimeCard,
+                  device.isConnected && styles.connectedDeviceCard
+                ]}
+              >
+                <View style={styles.deviceInfo}>
+                  <Text style={styles.deviceNameText}>
+                    {device.name} {device.isPineTime && '⭐'}
+                    {device.isConnected && ' (Connected)'}
                   </Text>
+                  <Text style={styles.deviceMac}>{device.id}</Text>
+                  <Text style={styles.deviceSignal}>Signal: {device.rssi} dBm</Text>
+                </View>
+                {!device.isConnected && connectionStatus !== 'connecting' && (
+                  <TouchableOpacity
+                    style={styles.connectButton}
+                    onPress={() => connectToDevice(device)}
+                  >
+                    <Text style={styles.connectButtonText}>Connect</Text>
+                  </TouchableOpacity>
                 )}
-                <FlatList
-                  data={devices}
-                  renderItem={renderDevice}
-                  keyExtractor={(item) => item.id}
-                  style={styles.deviceList}
-                  scrollEnabled={false}
-                />
+                {device.isConnected && (
+                  <View style={styles.connectedIndicator}>
+                    <Text style={styles.connectedText}>✓</Text>
+                  </View>
+                )}
               </View>
-            )}
+            ))}
           </>
         )}
 
-        {/* Features Section */}
-        <View style={styles.featuresSection}>
-          <Text style={styles.featuresTitle}>Watch Features</Text>
-          <View style={styles.feature}>
-            <Text style={styles.featureIcon}>📊</Text>
-            <Text style={styles.featureText}>Real-time Bio-Age Display</Text>
+        {/* Troubleshooting Section */}
+        <View style={styles.troubleshootingCard}>
+          <View style={styles.troubleshootingHeader}>
+            <Text style={styles.lightbulbIcon}>💡</Text>
+            <Text style={styles.troubleshootingTitle}>Troubleshooting:</Text>
           </View>
-          <View style={styles.feature}>
-            <Text style={styles.featureIcon}>💓</Text>
-            <Text style={styles.featureText}>Heart Rate Monitoring</Text>
-          </View>
-          <View style={styles.feature}>
-            <Text style={styles.featureIcon}>👟</Text>
-            <Text style={styles.featureText}>Step Counter Integration</Text>
-          </View>
-          <View style={styles.feature}>
-            <Text style={styles.featureIcon}>🔔</Text>
-            <Text style={styles.featureText}>Health Alerts</Text>
-          </View>
-          <View style={styles.feature}>
-            <Text style={styles.featureIcon}>📱</Text>
-            <Text style={styles.featureText}>Two-way Sync</Text>
-          </View>
+          <Text style={styles.troubleshootingText}>• Make sure watch is ON and NEARBY</Text>
+          <Text style={styles.troubleshootingText}>
+            • Turn on "Show All Devices" to see everything
+          </Text>
+          <Text style={styles.troubleshootingText}>
+            • If you see your watch but can't connect, unpair it from your phone's Bluetooth settings first
+          </Text>
+          <Text style={styles.troubleshootingText}>
+            • Try turning Bluetooth off and on if having issues
+          </Text>
+        </View>
+
+        {/* Firmware Notice */}
+        <View style={styles.firmwareNotice}>
+          <Text style={styles.firmwareText}>
+            Your PineTime watch needs the Praxiom firmware installed to display Bio-Age.
+          </Text>
         </View>
       </ScrollView>
     </LinearGradient>
@@ -521,218 +434,238 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 100,
   },
+  header: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    color: '#333',
+    marginBottom: 30,
+    lineHeight: 22,
+  },
+  titleContainer: {
+    alignItems: 'center',
+    marginBottom: 25,
+  },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#2C3E50',
-    textAlign: 'center',
-    marginBottom: 10,
+    color: '#333',
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 18,
-    color: '#34495E',
-    textAlign: 'center',
-    marginBottom: 20,
+    color: '#999',
   },
   statusCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 15,
-    padding: 20,
+    backgroundColor: '#fff',
+    borderRadius: 30,
+    padding: 30,
     marginBottom: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  connectedCard: {
+    borderWidth: 2,
+    borderColor: '#4CAF50',
+  },
+  connectingCard: {
+    borderWidth: 2,
+    borderColor: '#FF8C00',
+  },
+  statusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  statusIcon: {
+    fontSize: 36,
+    marginRight: 15,
+  },
+  statusTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  deviceName: {
+    fontSize: 18,
+    color: '#666',
+    marginTop: 5,
+  },
+  scanButton: {
+    backgroundColor: '#00CFC1',
+    padding: 20,
+    borderRadius: 30,
+    alignItems: 'center',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  scanButtonDisabled: {
+    backgroundColor: '#B0B0B0',
+  },
+  scanButtonText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  disconnectButton: {
+    backgroundColor: '#FF5252',
+    padding: 20,
+    borderRadius: 30,
+    alignItems: 'center',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  disconnectButtonText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    padding: 18,
+    borderRadius: 20,
+    marginBottom: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  toggleLabel: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+  },
+  devicesFoundText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  pineTimeHint: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 15,
+    fontStyle: 'italic',
+  },
+  deviceCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 15,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 5,
+    elevation: 3,
   },
-  connectedIcon: {
-    fontSize: 24,
-    color: '#47C83E',
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  disconnectedIcon: {
-    fontSize: 24,
-    color: '#95A5A6',
-    marginBottom: 10,
-  },
-  deviceNameText: {
-    fontSize: 18,
-    color: '#2C3E50',
-    fontWeight: '600',
-    marginBottom: 5,
-  },
-  batteryText: {
-    fontSize: 16,
-    color: '#7F8C8D',
-    marginTop: 5,
-  },
-  instructionText: {
-    fontSize: 16,
-    color: '#7F8C8D',
-    textAlign: 'center',
-  },
-  pushButton: {
-    backgroundColor: '#47C83E',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  pushingButton: {
-    backgroundColor: '#95A5A6',
-  },
-  pushButtonText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  disconnectButton: {
-    backgroundColor: '#E74C3C',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  disconnectButtonText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  scanButton: {
-    backgroundColor: '#0099DB',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 20,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  scanningButton: {
-    backgroundColor: '#95A5A6',
-  },
-  scanButtonText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 10,
-  },
-  debugToggle: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  debugText: {
-    fontSize: 16,
-    color: '#2C3E50',
-  },
-  deviceListContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 15,
-    padding: 15,
-    marginBottom: 20,
-  },
-  deviceListTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2C3E50',
-    marginBottom: 10,
-  },
-  pineTimeHint: {
-    fontSize: 14,
-    color: '#7F8C8D',
-    marginBottom: 10,
-    fontStyle: 'italic',
-  },
-  deviceList: {
-    maxHeight: 300,
-  },
-  deviceCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  pineTimeDevice: {
-    borderColor: '#FFB800',
+  pineTimeCard: {
     borderWidth: 2,
+    borderColor: '#00CFC1',
+  },
+  connectedDeviceCard: {
+    borderWidth: 2,
+    borderColor: '#4CAF50',
+    backgroundColor: '#F8FFF8',
   },
   deviceInfo: {
     flex: 1,
   },
-  deviceName: {
+  deviceNameText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#2C3E50',
-    marginBottom: 5,
+    color: '#333',
+    marginBottom: 4,
   },
-  deviceId: {
-    fontSize: 12,
-    color: '#95A5A6',
-    marginBottom: 3,
+  deviceMac: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 4,
   },
   deviceSignal: {
-    fontSize: 14,
-    color: '#7F8C8D',
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
   },
   connectButton: {
-    backgroundColor: '#0099DB',
-    borderRadius: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    backgroundColor: '#00CFC1',
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 20,
   },
   connectButtonText: {
-    color: '#FFF',
+    color: '#fff',
+    fontSize: 16,
     fontWeight: 'bold',
   },
-  featuresSection: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 15,
-    padding: 20,
-    marginTop: 20,
+  connectedIndicator: {
+    backgroundColor: '#4CAF50',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  featuresTitle: {
+  connectedText: {
+    color: '#fff',
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#2C3E50',
-    marginBottom: 15,
   },
-  feature: {
+  troubleshootingCard: {
+    backgroundColor: '#FFF9E6',
+    borderRadius: 20,
+    padding: 20,
+    marginTop: 25,
+    marginBottom: 20,
+  },
+  troubleshootingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
   },
-  featureIcon: {
-    fontSize: 20,
+  lightbulbIcon: {
+    fontSize: 24,
     marginRight: 10,
   },
-  featureText: {
-    fontSize: 16,
-    color: '#34495E',
+  troubleshootingTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  troubleshootingText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  firmwareNotice: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+  },
+  firmwareText: {
+    fontSize: 14,
+    color: '#1976D2',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
