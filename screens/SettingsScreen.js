@@ -11,8 +11,8 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+// import * as FileSystem from 'expo-file-system';  // COMMENTED OUT
+// import * as Sharing from 'expo-sharing';         // COMMENTED OUT
 import BLEService from '../services/BLEService';
 
 export default function SettingsScreen() {
@@ -34,6 +34,10 @@ export default function SettingsScreen() {
   };
 
   const exportData = async () => {
+    // TEMPORARILY DISABLED - needs expo-file-system and expo-sharing packages
+    Alert.alert('Info', 'Export feature temporarily disabled. Will be re-enabled soon.');
+    
+    /* ORIGINAL CODE - COMMENTED OUT
     try {
       const savedData = await AsyncStorage.getItem('healthData');
       const data = savedData ? JSON.parse(savedData) : {};
@@ -55,6 +59,7 @@ export default function SettingsScreen() {
     } catch (error) {
       Alert.alert('Error', 'Failed to export data: ' + error.message);
     }
+    */
   };
 
   const importData = async () => {
