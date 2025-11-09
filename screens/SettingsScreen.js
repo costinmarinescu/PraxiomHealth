@@ -174,10 +174,7 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>📝 License</Text>
           <Text style={styles.licenseText}>
-            Praxiom Health is designed for Praxiom-enabled PineTime watches running InfiniTime firmware.{'
-
-'}
-            Built with care for your health journey.
+            {`Praxiom Health is designed for Praxiom-enabled PineTime watches running InfiniTime firmware. Built with care for your health journey.`}
           </Text>
         </View>
       </ScrollView>
