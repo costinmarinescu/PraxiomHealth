@@ -10,7 +10,6 @@ import SettingsScreen from './screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
 
-// Create a transparent theme to show the background image
 const MyTheme = {
   ...DefaultTheme,
   colors: {
@@ -31,7 +30,6 @@ export default function App() {
           screenOptions={({ route }) => ({
             tabBarIcon: ({ focused, color, size }) => {
               let iconName;
-              
               if (route.name === 'Dashboard') {
                 iconName = focused ? 'home' : 'home-outline';
               } else if (route.name === 'Watch') {
@@ -39,7 +37,6 @@ export default function App() {
               } else if (route.name === 'Settings') {
                 iconName = focused ? 'settings' : 'settings-outline';
               }
-              
               return <Ionicons name={iconName} size={size} color={color} />;
             },
             headerShown: false,
@@ -68,3 +65,4 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 });
+
