@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import WearableService from './services/WearableService';
 
 export const AppContext = createContext();
 
@@ -39,6 +40,47 @@ export const AppContextProvider = ({ children }) => {
   useEffect(() => {
     saveData();
   }, [state.biologicalAge, state.oralHealthScore, state.systemicHealthScore]);
+
+  // Subscribe to wearable data updates
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (WearableService.isConnected()) {
+        try {
+          // Get latest wearable data
+          const heartRate = await WearableService.getHeartRate();
+          const steps = await WearableService.getStepCount();
+          
+          // Update state with new data
+          updateState({
+            heartRate: heartRate || state.heartRate,
+            steps: steps || state.steps,
+            watchConnected: true,
+          });
+        } catch (error) {
+          console.error('Error fetching wearable data:', error);
+        }
+      }
+    }, 10000); // Poll every 10 seconds
+
+    // Also check connection status
+    const connectionInterval = setInterval(async () => {
+      try {
+        const watchStatus = await AsyncStorage.getItem('watchConnected');
+        const isConnected = watchStatus === 'true' && WearableService.isConnected();
+        
+        if (state.watchConnected !== isConnected) {
+          updateState({ watchConnected: isConnected });
+        }
+      } catch (error) {
+        console.error('Error checking watch connection:', error);
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(connectionInterval);
+    };
+  }, [state.heartRate, state.steps, state.watchConnected]);
 
   const loadSavedData = async () => {
     try {
@@ -114,6 +156,65 @@ export const AppContextProvider = ({ children }) => {
     updateState({ biologicalAge: bioAge });
     
     return bioAge;
+  };
+
+  const calculateWearableScore = () => {
+    let score = 50; // Default
+    let count = 0;
+
+    // HRV scoring (optimal ≥70 ms)
+    if (state.hrv !== null && state.hrv > 0) {
+      const hrv = parseFloat(state.hrv);
+      if (hrv >= 70) {
+        score += 100;
+      } else if (hrv >= 50) {
+        score += 75;
+      } else if (hrv >= 30) {
+        score += 50;
+      } else {
+        score += 25;
+      }
+      count++;
+    }
+
+    // Steps scoring (optimal ≥8000)
+    if (state.steps > 0) {
+      const steps = parseInt(state.steps);
+      if (steps >= 8000) {
+        score += 100;
+      } else if (steps >= 5000) {
+        score += 75;
+      } else if (steps >= 3000) {
+        score += 50;
+      } else {
+        score += 25;
+      }
+      count++;
+    }
+
+    // Heart rate scoring (optimal: 50-70 bpm at rest)
+    if (state.heartRate !== null && state.heartRate > 0) {
+      const hr = parseInt(state.heartRate);
+      if (hr >= 50 && hr <= 70) {
+        score += 100;
+      } else if (hr >= 45 && hr <= 75) {
+        score += 75;
+      } else if (hr >= 40 && hr <= 80) {
+        score += 50;
+      } else {
+        score += 25;
+      }
+      count++;
+    }
+
+    if (count > 0) {
+      score = (score - 50) / count;
+    } else {
+      score = 50; // Default if no data
+    }
+
+    updateState({ fitnessScore: Math.round(score) });
+    return Math.round(score);
   };
 
   const calculateScores = () => {
@@ -243,6 +344,9 @@ export const AppContextProvider = ({ children }) => {
       systemicScore = 45; // Default if no data
     }
     
+    // Calculate wearable score
+    calculateWearableScore();
+    
     // Calculate Vitality Index (average of both scores)
     const vitalityIndex = (oralScore + systemicScore) / 2;
     
@@ -263,6 +367,7 @@ export const AppContextProvider = ({ children }) => {
       updateState,
       calculateBiologicalAge,
       calculateScores,
+      calculateWearableScore,
       saveData,
       loadSavedData
     }}>
