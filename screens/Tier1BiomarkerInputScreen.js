@@ -117,11 +117,10 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
       await StorageService.saveBiomarkerEntry(entry);
 
       // Send to watch if connected
-      // NEW - CORRECT
       if (WearableService.isConnected()) {
-        await WearableService.sendBioAge({ praxiomAge: results.bioAge });
-      }
-  
+        try {
+          await WearableService.sendBioAge({ praxiomAge: results.bioAge });
+          
           Alert.alert(
             'Success!',
             `Bio-Age: ${results.bioAge} years\nData saved and synced to watch!`,
