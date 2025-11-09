@@ -238,16 +238,16 @@ export default function DashboardScreen() {
           text: 'Send',
           onPress: async () => {
             try {
-              console.log('📤 Dashboard: Attempting to send Bio-Age to watch...');
+              console.log('ðŸ“¤ Dashboard: Attempting to send Bio-Age to watch...');
               await BLEService.sendPraxiomAge(parseFloat(praxiomAge));
               await AsyncStorage.setItem('bioAgeForWatch', praxiomAge.toString());
-              console.log('✅ Dashboard: Bio-Age sent successfully!');
+              console.log('âœ… Dashboard: Bio-Age sent successfully!');
               Alert.alert(
                 'Success!',
                 `Bio-Age ${praxiomAge} years sent to watch successfully.\n\nCheck your watch - the age should update within 1-2 seconds!`
               );
             } catch (error) {
-              console.error('❌ Dashboard: Send error:', error);
+              console.error('âŒ Dashboard: Send error:', error);
               Alert.alert(
                 'Error',
                 `Failed to send Bio-Age: ${error.message}\n\nMake sure your watch is still connected.`
@@ -272,9 +272,9 @@ export default function DashboardScreen() {
   };
 
   const getScoreStatus = (score) => {
-    if (score >= 85) return '🟢';
-    if (score >= 75) return '🟡';
-    return '🔴';
+    if (score >= 85) return 'ðŸŸ¢';
+    if (score >= 75) return 'ðŸŸ¡';
+    return 'ðŸ”´';
   };
 
   return (
@@ -294,7 +294,7 @@ export default function DashboardScreen() {
         {/* Bio-Age Overview Card */}
         <TouchableOpacity style={styles.bioAgeCard} onPress={handlePushToWatch} activeOpacity={0.7}>
           <View style={styles.bioAgeHeader}>
-            <Text style={styles.bioAgeIcon}>🎯</Text>
+            <Text style={styles.bioAgeIcon}>ðŸŽ¯</Text>
             <Text style={styles.cardTitle}>Bio-Age Overview</Text>
           </View>
           
@@ -326,7 +326,7 @@ export default function DashboardScreen() {
 
         {/* Health Score Summary */}
         <View style={styles.summaryHeader}>
-          <Text style={styles.summaryIcon}>📊</Text>
+          <Text style={styles.summaryIcon}>ðŸ“Š</Text>
           <Text style={styles.sectionTitle}>Health Score Summary</Text>
         </View>
 
@@ -375,7 +375,7 @@ export default function DashboardScreen() {
                   <Text style={styles.wearableSubText}>{wearableData.heartRate} BPM</Text>
                   <Text style={styles.wearableSubText}>{wearableData.dailySteps} steps</Text>
                 </View>
-                <Text style={styles.statusIndicator}>📱</Text>
+                <Text style={styles.statusIndicator}>ðŸ“±</Text>
               </>
             ) : (
               <>
@@ -383,7 +383,7 @@ export default function DashboardScreen() {
                   --
                 </Text>
                 <Text style={styles.targetText}>No watch data</Text>
-                <Text style={styles.statusIndicator}>⌚</Text>
+                <Text style={styles.statusIndicator}>âŒš</Text>
               </>
             )}
           </View>
@@ -395,21 +395,21 @@ export default function DashboardScreen() {
             style={[styles.actionButton, styles.dnaButton]}
             onPress={() => setDnaModalVisible(true)}
           >
-            <Text style={styles.actionButtonText}>🧬 DNA Methylation Test</Text>
+            <Text style={styles.actionButtonText}>ðŸ§¬ DNA Methylation Test</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.actionButton, styles.biomarkerButton]}
             onPress={() => setBiomarkerModalVisible(true)}
           >
-            <Text style={styles.actionButtonText}>📊 Input Biomarkers</Text>
+            <Text style={styles.actionButtonText}>ðŸ“Š Input Biomarkers</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.actionButton, styles.dobButton]}
             onPress={() => setShowDatePicker(true)}
           >
-            <Text style={styles.actionButtonText}>📅 Set Date of Birth</Text>
+            <Text style={styles.actionButtonText}>ðŸ“… Set Date of Birth</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -605,7 +605,7 @@ export default function DashboardScreen() {
               onPress={() => setShowTier2(!showTier2)}
             >
               <Text style={styles.tier2ButtonText}>
-                {showTier2 ? '▼ Hide Tier 2 Biomarkers' : '▶ Show Tier 2 Biomarkers (Advanced)'}
+                {showTier2 ? 'â–¼ Hide Tier 2 Biomarkers' : 'â–¶ Show Tier 2 Biomarkers (Advanced)'}
               </Text>
             </TouchableOpacity>
 
@@ -626,11 +626,11 @@ export default function DashboardScreen() {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>TNF-α (pg/mL)</Text>
+                  <Text style={styles.inputLabel}>TNF-Î± (pg/mL)</Text>
                   <Text style={styles.inputHelper}>Optimal: &lt;10 pg/mL</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="Enter TNF-α level"
+                    placeholder="Enter TNF-Î± level"
                     keyboardType="decimal-pad"
                     value={tnfAlpha}
                     onChangeText={setTnfAlpha}
@@ -662,7 +662,7 @@ export default function DashboardScreen() {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>NAD+ (µM)</Text>
+                  <Text style={styles.inputLabel}>NAD+ (ÂµM)</Text>
                   <Text style={styles.inputHelper}>Age-adjusted optimal range</Text>
                   <TextInput
                     style={styles.input}
