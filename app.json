@@ -4,28 +4,38 @@
     "slug": "praxiom-health",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#FF6B00"
     },
-    "extra": {
-      "eas": {
-        "projectId": "0b25cc14-e855-4c8b-8272-95523bb9c592"
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.praxiom.health",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "This app needs Bluetooth to connect to your PineTime watch and sync your Bio-Age data.",
+        "NSBluetoothPeripheralUsageDescription": "This app needs Bluetooth to communicate with your PineTime watch."
       }
     },
     "android": {
-      "package": "com.praxiom.health",
       "adaptiveIcon": {
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FF6B00"
       },
+      "package": "com.praxiom.health",
       "permissions": [
         "BLUETOOTH",
         "BLUETOOTH_ADMIN",
-        "BLUETOOTH_CONNECT",
         "BLUETOOTH_SCAN",
-        "ACCESS_FINE_LOCATION"
+        "BLUETOOTH_CONNECT",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
       ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       [
@@ -35,7 +45,22 @@
             "kotlinVersion": "1.9.20"
           }
         }
+      ],
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": true,
+          "modes": [
+            "peripheral",
+            "central"
+          ]
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "0b25cc14-e855-4c8b-8272-95523bb9c592"
+      }
+    }
   }
 }
