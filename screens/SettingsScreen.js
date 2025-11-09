@@ -1,211 +1,330 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Switch,
   Alert,
   Share,
-  Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// import * as FileSystem from 'expo-file-system';  // COMMENTED OUT
-// import * as Sharing from 'expo-sharing';         // COMMENTED OUT
-import WearableService from '../services/WearableService';
+import { Ionicons } from '@expo/vector-icons';
+import BLEService from '../services/BLEService';
 
 export default function SettingsScreen() {
-  const [connectionStatus, setConnectionStatus] = useState('Loading...');
+  const [notifications, setNotifications] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
+  const [autoSync, setAutoSync] = useState(true);
+  const [deviceName, setDeviceName] = useState('Not Connected');
 
-  React.useEffect(() => {
-    updateConnectionStatus();
+  useEffect(() => {
+    loadSettings();
+    loadDeviceName();
   }, []);
 
-  const updateConnectionStatus = async () => {
+  const loadSettings = async () => {
     try {
-      const isConnected = WearableService.isConnected();
-      const device = WearableService.getDevice();
-      const status = isConnected ? `Connected: ${device?.name || 'InfiniTime'}` : 'Not Connected';
-      setConnectionStatus(status);
+      const notif = await AsyncStorage.getItem('notifications');
+      const dark = await AsyncStorage.getItem('darkMode');
+      const sync = await AsyncStorage.getItem('autoSync');
+      
+      if (notif !== null) setNotifications(JSON.parse(notif));
+      if (dark !== null) setDarkMode(JSON.parse(dark));
+      if (sync !== null) setAutoSync(JSON.parse(sync));
     } catch (error) {
-      setConnectionStatus('Error checking status');
+      console.error('Error loading settings:', error);
     }
   };
 
-  const exportData = async () => {
-    // TEMPORARILY DISABLED - needs expo-file-system and expo-sharing packages
-    Alert.alert('Info', 'Export feature temporarily disabled. Will be re-enabled soon.');
-    
-    /* ORIGINAL CODE - COMMENTED OUT
-    try {
-      const savedData = await AsyncStorage.getItem('healthData');
-      const data = savedData ? JSON.parse(savedData) : {};
-      const jsonString = JSON.stringify(data, null, 2);
+  const loadDeviceName = async () => {
+    const name = await AsyncStorage.getItem('lastDeviceName');
+    if (name) setDeviceName(name);
+  };
 
-      if (Platform.OS === 'web') {
-        const blob = new Blob([jsonString], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `praxiom-health-${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
-      } else {
-        const filePath = `${FileSystem.documentDirectory}praxiom-health-export.json`;
-        await FileSystem.writeAsStringAsync(filePath, jsonString);
-        await Sharing.shareAsync(filePath);
+  const saveSetting = async (key, value) => {
+    try {
+      await AsyncStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving setting:', error);
+    }
+  };
+
+  const handleExportData = async () => {
+    try {
+      const data = await AsyncStorage.getItem('healthData');
+      if (!data) {
+        Alert.alert('No Data', 'No health data to export');
+        return;
       }
-      Alert.alert('Success', 'Health data exported successfully!');
+
+      const result = await Share.share({
+        message: `Praxiom Health Data:\n\n${data}`,
+        title: 'Health Data Export',
+      });
+
+      if (result.action === Share.sharedAction) {
+        Alert.alert('Success', 'Data exported successfully');
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to export data: ' + error.message);
+      Alert.alert('Error', 'Failed to export data');
     }
-    */
   };
 
-  const importData = async () => {
-    Alert.alert('Import Data', 'This feature requires file picker. Please use manual backup restoration through file management.');
-  };
-
-  const clearAllData = () => {
-    Alert.alert('Clear All Data', 'Are you sure? This cannot be undone!', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear All',
-        onPress: async () => {
-          try {
-            await AsyncStorage.removeItem('healthData');
-            await AsyncStorage.removeItem('watchConnected');
-            await AsyncStorage.removeItem('lastDeviceId');
-            Alert.alert('Success', 'All data cleared!');
-          } catch (error) {
-            Alert.alert('Error', 'Failed to clear data');
-          }
+  const handleClearData = () => {
+    Alert.alert(
+      'Clear All Data',
+      'Are you sure you want to clear all health data? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AsyncStorage.removeItem('healthData');
+              await AsyncStorage.removeItem('biomarkers');
+              Alert.alert('Success', 'All data cleared');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to clear data');
+            }
+          },
         },
-        style: 'destructive',
-      },
-    ]);
+      ]
+    );
   };
 
-  const shareDebugInfo = async () => {
-    try {
-      const debugInfo = {
-        app: 'Praxiom Health',
-        version: '1.0.0',
-        platform: Platform.OS,
-        bleStatus: connectionStatus,
-        timestamp: new Date().toISOString(),
-      };
-      const message = JSON.stringify(debugInfo, null, 2);
-      await Share.share({ message });
-    } catch (error) {
-      Alert.alert('Error', 'Failed to share debug info');
-    }
-  };
+  const SettingItem = ({ icon, title, subtitle, value, onValueChange, type = 'switch' }) => (
+    <View style={styles.settingItem}>
+      <View style={styles.settingLeft}>
+        <Ionicons name={icon} size={24} color="#00CFC1" style={styles.settingIcon} />
+        <View>
+          <Text style={styles.settingTitle}>{title}</Text>
+          {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
+        </View>
+      </View>
+      {type === 'switch' && (
+        <Switch
+          value={value}
+          onValueChange={onValueChange}
+          trackColor={{ false: '#767577', true: '#00CFC1' }}
+          thumbColor={value ? '#ffffff' : '#f4f3f4'}
+        />
+      )}
+      {type === 'button' && (
+        <Ionicons name="chevron-forward" size={24} color="#999" />
+      )}
+    </View>
+  );
 
   return (
-    <LinearGradient colors={['#FF8C00', '#00CFC1']} style={styles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.title}>⚙️ Settings</Text>
+    <ScrollView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={styles.headerSubtitle}>Praxiom Health</Text>
+      </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Connection Status</Text>
-          <View style={styles.statusBox}>
-            <Text style={styles.statusText}>{connectionStatus}</Text>
-            <TouchableOpacity
-              style={styles.refreshButton}
-              onPress={updateConnectionStatus}
-            >
-              <Text style={styles.refreshText}>Refresh</Text>
-            </TouchableOpacity>
+      {/* Device Info */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Connected Device</Text>
+        <View style={styles.deviceCard}>
+          <Ionicons name="watch" size={32} color="#00CFC1" />
+          <View style={styles.deviceInfo}>
+            <Text style={styles.deviceName}>{deviceName}</Text>
+            <Text style={styles.deviceStatus}>
+              {BLEService.isConnected() ? 'Connected' : 'Disconnected'}
+            </Text>
           </View>
         </View>
+      </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>💾 Data Management</Text>
+      {/* App Settings */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>App Settings</Text>
+        <SettingItem
+          icon="notifications"
+          title="Notifications"
+          subtitle="Get notified about health updates"
+          value={notifications}
+          onValueChange={(val) => {
+            setNotifications(val);
+            saveSetting('notifications', val);
+          }}
+        />
+        <SettingItem
+          icon="moon"
+          title="Dark Mode"
+          subtitle="Switch to dark theme"
+          value={darkMode}
+          onValueChange={(val) => {
+            setDarkMode(val);
+            saveSetting('darkMode', val);
+          }}
+        />
+        <SettingItem
+          icon="sync"
+          title="Auto Sync"
+          subtitle="Automatically sync with watch"
+          value={autoSync}
+          onValueChange={(val) => {
+            setAutoSync(val);
+            saveSetting('autoSync', val);
+          }}
+        />
+      </View>
 
-          <TouchableOpacity
-            style={[styles.button, styles.buttonPrimary]}
-            onPress={exportData}
-          >
-            <Text style={styles.buttonText}>📤 Export Health Data</Text>
-          </TouchableOpacity>
+      {/* Data Management */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Data Management</Text>
+        <TouchableOpacity style={styles.button} onPress={handleExportData}>
+          <Ionicons name="download" size={24} color="#00CFC1" />
+          <Text style={styles.buttonText}>Export Health Data</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={handleClearData}>
+          <Ionicons name="trash" size={24} color="#ff4444" />
+          <Text style={[styles.buttonText, { color: '#ff4444' }]}>Clear All Data</Text>
+        </TouchableOpacity>
+      </View>
 
-          <TouchableOpacity
-            style={[styles.button, styles.buttonSecondary]}
-            onPress={importData}
-          >
-            <Text style={styles.buttonText}>📥 Import Backup</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, styles.buttonWarning]}
-            onPress={clearAllData}
-          >
-            <Text style={styles.buttonText}>🗑️ Clear All Data</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>ℹ️ About</Text>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>App Name:</Text>
-            <Text style={styles.infoValue}>Praxiom Health</Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Version:</Text>
-            <Text style={styles.infoValue}>1.0.0</Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Platform:</Text>
-            <Text style={styles.infoValue}>{Platform.OS}</Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Last Updated:</Text>
-            <Text style={styles.infoValue}>Nov 9, 2025</Text>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.button, styles.buttonDebug]}
-            onPress={shareDebugInfo}
-          >
-            <Text style={styles.buttonText}>🐛 Share Debug Info</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>📝 License</Text>
-          <Text style={styles.licenseText}>
-            {`Praxiom Health is designed for Praxiom-enabled PineTime watches running InfiniTime firmware. Built with care for your health journey.`}
+      {/* About */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>About</Text>
+        <View style={styles.aboutCard}>
+          <Text style={styles.appName}>Praxiom Health</Text>
+          <Text style={styles.version}>Version 1.0.0</Text>
+          <Text style={styles.description}>
+            Track your biological age and health metrics with your PineTime smartwatch.
           </Text>
         </View>
-      </ScrollView>
-    </LinearGradient>
+      </View>
+
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>© 2025 Praxiom Health</Text>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollView: { flex: 1 },
-  contentContainer: { padding: 20, paddingBottom: 50 },
-  title: { fontSize: 32, fontWeight: 'bold', color: '#fff', marginBottom: 30, textAlign: 'center', textShadowColor: 'rgba(0, 0, 0, 0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 },
-  card: { backgroundColor: '#fff', borderRadius: 20, padding: 20, marginBottom: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 5 },
-  cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 15 },
-  statusBox: { backgroundColor: '#f5f5f5', borderRadius: 15, padding: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  statusText: { fontSize: 14, color: '#333', fontWeight: '600', flex: 1 },
-  refreshButton: { backgroundColor: '#00CFC1', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 10 },
-  refreshText: { color: '#fff', fontWeight: '600', fontSize: 12 },
-  button: { paddingVertical: 14, paddingHorizontal: 20, borderRadius: 15, alignItems: 'center', marginBottom: 12 },
-  buttonPrimary: { backgroundColor: '#00CFC1' },
-  buttonSecondary: { backgroundColor: '#9B59B6' },
-  buttonWarning: { backgroundColor: '#FF6B6B' },
-  buttonDebug: { backgroundColor: '#FF8C00', marginTop: 10 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' },
-  infoLabel: { fontSize: 14, color: '#666', fontWeight: '600' },
-  infoValue: { fontSize: 14, color: '#333', fontWeight: '500' },
-  licenseText: { fontSize: 13, color: '#666', lineHeight: 20, textAlign: 'center' },
+  container: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  header: {
+    padding: 20,
+    paddingTop: 60,
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  headerSubtitle: {
+    fontSize: 16,
+    color: '#00CFC1',
+    marginTop: 5,
+  },
+  section: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 10,
+  },
+  deviceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 15,
+    borderRadius: 10,
+  },
+  deviceInfo: {
+    marginLeft: 15,
+  },
+  deviceName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  deviceStatus: {
+    fontSize: 14,
+    color: '#00CFC1',
+    marginTop: 2,
+  },
+  settingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  settingLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  settingIcon: {
+    marginRight: 15,
+  },
+  settingTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  settingSubtitle: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
+  },
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  buttonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#00CFC1',
+    marginLeft: 15,
+  },
+  aboutCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  appName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  version: {
+    fontSize: 14,
+    color: '#00CFC1',
+    marginTop: 5,
+  },
+  description: {
+    fontSize: 14,
+    color: '#ccc',
+    textAlign: 'center',
+    marginTop: 10,
+    lineHeight: 20,
+  },
+  footer: {
+    alignItems: 'center',
+    paddingVertical: 30,
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#666',
+  },
 });
