@@ -6,8 +6,7 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web",
-    "eas-build-pre-install": "npx expo install expo-file-system expo-sharing"
+    "web": "expo start --web"
   },
   "dependencies": {
     "expo": "~51.0.28",
