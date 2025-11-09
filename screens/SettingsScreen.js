@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import BLEService from '../services/BLEService';
 
 export default function SettingsScreen() {
   const [notifications, setNotifications] = useState(true);
@@ -132,9 +131,7 @@ export default function SettingsScreen() {
           <Ionicons name="watch" size={32} color="#00CFC1" />
           <View style={styles.deviceInfo}>
             <Text style={styles.deviceName}>{deviceName}</Text>
-            <Text style={styles.deviceStatus}>
-              {BLEService.isConnected() ? 'Connected' : 'Disconnected'}
-            </Text>
+            <Text style={styles.deviceStatus}>Disconnected</Text>
           </View>
         </View>
       </View>
