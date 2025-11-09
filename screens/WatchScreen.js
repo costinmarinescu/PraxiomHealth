@@ -284,11 +284,11 @@ export default function WatchScreen() {
   const getConnectionIcon = () => {
     switch (connectionStatus) {
       case 'connecting':
-        return '🔄';
+        return 'ðŸ”„';
       case 'connected':
-        return '✓';
+        return 'âœ“';
       default:
-        return '⚠';
+        return 'âš ';
     }
   };
 
@@ -360,7 +360,7 @@ export default function WatchScreen() {
             <Text style={styles.devicesFoundText}>
               Found {discoveredDevices.length} device{discoveredDevices.length !== 1 ? 's' : ''}:
             </Text>
-            <Text style={styles.pineTimeHint}>⭐ = Likely PineTime/InfiniTime</Text>
+            <Text style={styles.pineTimeHint}>â­ = Likely PineTime/InfiniTime</Text>
 
             {discoveredDevices.map((device) => (
               <View
@@ -373,7 +373,7 @@ export default function WatchScreen() {
               >
                 <View style={styles.deviceInfo}>
                   <Text style={styles.deviceNameText}>
-                    {device.name} {device.isPineTime && '⭐'}
+                    {device.name} {device.isPineTime && 'â­'}
                     {device.isConnected && ' (Connected)'}
                   </Text>
                   <Text style={styles.deviceMac}>{device.id}</Text>
@@ -389,7 +389,7 @@ export default function WatchScreen() {
                 )}
                 {device.isConnected && (
                   <View style={styles.connectedIndicator}>
-                    <Text style={styles.connectedText}>✓</Text>
+                    <Text style={styles.connectedText}>âœ“</Text>
                   </View>
                 )}
               </View>
@@ -400,18 +400,18 @@ export default function WatchScreen() {
         {/* Troubleshooting Section */}
         <View style={styles.troubleshootingCard}>
           <View style={styles.troubleshootingHeader}>
-            <Text style={styles.lightbulbIcon}>💡</Text>
+            <Text style={styles.lightbulbIcon}>ðŸ’¡</Text>
             <Text style={styles.troubleshootingTitle}>Troubleshooting:</Text>
           </View>
-          <Text style={styles.troubleshootingText}>• Make sure watch is ON and NEARBY</Text>
+          <Text style={styles.troubleshootingText}>â€¢ Make sure watch is ON and NEARBY</Text>
           <Text style={styles.troubleshootingText}>
-            • Turn on "Show All Devices" to see everything
+            â€¢ Turn on "Show All Devices" to see everything
           </Text>
           <Text style={styles.troubleshootingText}>
-            • If you see your watch but can't connect, unpair it from your phone's Bluetooth settings first
+            â€¢ If you see your watch but can't connect, unpair it from your phone's Bluetooth settings first
           </Text>
           <Text style={styles.troubleshootingText}>
-            • Try turning Bluetooth off and on if having issues
+            â€¢ Try turning Bluetooth off and on if having issues
           </Text>
         </View>
 
