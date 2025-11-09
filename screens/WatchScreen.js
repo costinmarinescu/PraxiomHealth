@@ -7,418 +7,244 @@ import {
   TouchableOpacity,
   Alert,
   Switch,
-  Platform,
-  PermissionsAndroid,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BleManager } from 'react-native-ble-plx';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import BLEService from '../services/BLEService';
 
 export default function WatchScreen() {
-  const [bleManager] = useState(new BleManager());
   const [isScanning, setIsScanning] = useState(false);
   const [connectedDevice, setConnectedDevice] = useState(null);
   const [discoveredDevices, setDiscoveredDevices] = useState([]);
   const [showAllDevices, setShowAllDevices] = useState(false);
-  const [bleEnabled, setBleEnabled] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState('disconnected'); // 'disconnected', 'connecting', 'connected'
+  const [connectionStatus, setConnectionStatus] = useState('disconnected');
 
+  // Listen for connection events from BLEService
   useEffect(() => {
-    // Check if Bluetooth is enabled
-    const subscription = bleManager.onStateChange((state) => {
-      setBleEnabled(state === 'PoweredOn');
-      if (state !== 'PoweredOn' && connectedDevice) {
-        handleDisconnection();
+    const onBleEvent = (event) => {
+      console.log('WatchScreen received BLE event:', event);
+      if (event.type === 'connected') {
+        setConnectedDevice(event.device);
+        setConnectionStatus('connected');
+        updateDiscoveredDevices(event.device, true);
+      } else if (event.type === 'disconnected') {
+        setConnectedDevice(null);
+        setConnectionStatus('disconnected');
+        updateDiscoveredDevices(null, false);
       }
-    }, true);
+    };
 
-    // Load saved connection state
-    loadConnectionState();
+    BLEService.addListener(onBleEvent);
 
-    // Monitor connection status
-    const connectionMonitor = setInterval(() => {
-      if (connectedDevice) {
-        checkConnectionHealth();
+    // Set initial state from the service
+    if (BLEService.isConnected()) {
+      const device = BLEService.getDevice();
+      setConnectedDevice(device);
+      setConnectionStatus('connected');
+      if (device) {
+        setDiscoveredDevices([{ ...device, isConnected: true }]);
       }
-    }, 5000);
+    }
 
     return () => {
-      subscription.remove();
-      clearInterval(connectionMonitor);
-      if (connectedDevice) {
-        bleManager.cancelDeviceConnection(connectedDevice.id);
-      }
-      bleManager.destroy();
+      BLEService.removeListener(onBleEvent);
     };
   }, []);
 
-  useEffect(() => {
-    // Request Bluetooth permissions for Android 12+
-    if (Platform.OS === 'android' && Platform.Version >= 31) {
-      requestAndroidPermissions();
-    }
-  }, []);
-
-  const loadConnectionState = async () => {
-    try {
-      const savedDevice = await AsyncStorage.getItem('connectedDevice');
-      const status = await AsyncStorage.getItem('watchConnectionStatus');
-      
-      if (savedDevice && status === 'connected') {
-        const device = JSON.parse(savedDevice);
-        setConnectedDevice(device);
-        setConnectionStatus('connected');
-        console.log('Restored connection to:', device.name);
-      }
-    } catch (error) {
-      console.error('Error loading connection state:', error);
-    }
-  };
-
-  const saveConnectionState = async (device, status) => {
-    try {
-      if (device && status === 'connected') {
-        await AsyncStorage.setItem('connectedDevice', JSON.stringify(device));
-        await AsyncStorage.setItem('watchConnectionStatus', 'connected');
-      } else {
-        await AsyncStorage.removeItem('connectedDevice');
-        await AsyncStorage.setItem('watchConnectionStatus', 'disconnected');
-      }
-    } catch (error) {
-      console.error('Error saving connection state:', error);
-    }
-  };
-
-  const checkConnectionHealth = async () => {
-    if (!connectedDevice) return;
-
-    try {
-      const isConnected = await bleManager.isDeviceConnected(connectedDevice.id);
-      if (!isConnected) {
-        console.log('Device disconnected, updating state...');
-        handleDisconnection();
-      }
-    } catch (error) {
-      console.log('Connection check failed, device likely disconnected');
-      handleDisconnection();
-    }
-  };
-
-  const handleDisconnection = async () => {
-    setConnectedDevice(null);
-    setConnectionStatus('disconnected');
-    await saveConnectionState(null, 'disconnected');
-    
-    // Remove device from discovered devices to show it's available again
-    setDiscoveredDevices(prev => 
-      prev.map(device => ({
-        ...device,
-        isConnected: false
-      }))
-    );
-  };
-
-  const requestAndroidPermissions = async () => {
-    try {
-      const granted = await PermissionsAndroid.requestMultiple([
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-      ]);
-
-      if (
-        granted['android.permission.BLUETOOTH_SCAN'] === PermissionsAndroid.RESULTS.GRANTED &&
-        granted['android.permission.BLUETOOTH_CONNECT'] === PermissionsAndroid.RESULTS.GRANTED &&
-        granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
-      ) {
-        console.log('Bluetooth permissions granted');
-      } else {
-        Alert.alert(
-          'Permissions Required',
-          'Bluetooth permissions are required to scan for and connect to your PineTime watch.'
-        );
-      }
-    } catch (err) {
-      console.warn(err);
+  const updateDiscoveredDevices = (connected, isConnected) => {
+    if (connected && isConnected) {
+      setDiscoveredDevices(prev => {
+        const exists = prev.find(dev => dev.id === connected.id);
+        if (exists) {
+          return prev.map(dev => ({
+            ...dev,
+            isConnected: dev.id === connected.id,
+          }));
+        } else {
+          return [...prev, { ...connected, isConnected: true }];
+        }
+      });
+    } else {
+      setDiscoveredDevices(prev =>
+        prev.map(dev => ({
+          ...dev,
+          isConnected: false,
+        }))
+      );
     }
   };
 
   const startScanning = async () => {
-    if (!bleEnabled) {
-      Alert.alert('Bluetooth Disabled', 'Please enable Bluetooth to scan for devices.');
-      return;
-    }
-
-    setDiscoveredDevices([]);
+    if (isScanning) return;
     setIsScanning(true);
-
-    // Stop any existing scan
-    bleManager.stopDeviceScan();
-
-    bleManager.startDeviceScan(null, null, (error, device) => {
-      if (error) {
-        console.error('Scan error:', error);
-        setIsScanning(false);
-        return;
-      }
-
-      if (device && device.name) {
-        const deviceName = device.name.toLowerCase();
-        const isPineTime =
-          deviceName.includes('pine') ||
-          deviceName.includes('infini') ||
-          deviceName.includes('sealed') ||
-          deviceName.includes('praxiom');
-
-        const isConnectedToThis = connectedDevice && connectedDevice.id === device.id;
-
-        if (isPineTime || showAllDevices) {
-          setDiscoveredDevices((prev) => {
-            // Avoid duplicates
-            const existingIndex = prev.findIndex(d => d.id === device.id);
-            
-            const deviceWithConnectionStatus = {
-              ...device,
-              isPineTime,
-              isConnected: isConnectedToThis
-            };
-
-            if (existingIndex !== -1) {
-              const updated = [...prev];
-              updated[existingIndex] = deviceWithConnectionStatus;
-              return updated;
-            }
-            return [...prev, deviceWithConnectionStatus];
-          });
-        }
-      }
-    });
-
-    // Stop scanning after 15 seconds
-    setTimeout(() => {
-      bleManager.stopDeviceScan();
-      setIsScanning(false);
-    }, 15000);
-  };
-
-  const connectToDevice = async (device) => {
-    if (connectedDevice && connectedDevice.id === device.id) {
-      Alert.alert('Already Connected', 'This device is already connected.');
-      return;
-    }
-
+    setDiscoveredDevices([]);
     try {
-      setIsScanning(false);
-      bleManager.stopDeviceScan();
-      setConnectionStatus('connecting');
-
-      console.log('Attempting to connect to:', device.name);
-      
-      const connected = await bleManager.connectToDevice(device.id, {
-        timeout: 10000, // 10 second timeout
+      await BLEService.scanForDevices((device) => {
+        setDiscoveredDevices((prev) => {
+          if (!prev.find((d) => d.id === device.id)) {
+            return [...prev, { ...device, isConnected: false }];
+          }
+          return prev;
+        });
       });
-      
-      await connected.discoverAllServicesAndCharacteristics();
-
-      setConnectedDevice(device);
-      setConnectionStatus('connected');
-      await saveConnectionState(device, 'connected');
-
-      // Update discovered devices to show connection status
-      setDiscoveredDevices(prev =>
-        prev.map(d => ({
-          ...d,
-          isConnected: d.id === device.id
-        }))
-      );
-
-      Alert.alert('Connected!', `Successfully connected to ${device.name}`);
-      console.log('Successfully connected to:', device.name);
     } catch (error) {
-      console.error('Connection error:', error);
-      setConnectionStatus('disconnected');
-      
-      Alert.alert(
-        'Connection Failed',
-        `Could not connect to ${device.name}. Make sure the device is nearby and not connected to another app.\n\nTip: Try unpairing it from your phone's Bluetooth settings first.`
-      );
+      Alert.alert('Scan Error', error.message);
+    } finally {
+      setIsScanning(false);
     }
   };
 
-  const disconnectDevice = async () => {
-    if (!connectedDevice) {
-      Alert.alert('No Device Connected', 'There is no device to disconnect.');
-      return;
-    }
-
+  const handleConnect = async (device) => {
+    if (connectionStatus === 'connecting') return;
+    setConnectionStatus('connecting');
     try {
-      console.log('Disconnecting from:', connectedDevice.name);
-      
-      await bleManager.cancelDeviceConnection(connectedDevice.id);
-      
-      await handleDisconnection();
-      
-      Alert.alert('Disconnected', `Successfully disconnected from ${connectedDevice.name}`);
-      console.log('Successfully disconnected');
+      await BLEService.connectToDevice(device);
+      // The listener will handle the UI update
     } catch (error) {
-      console.error('Disconnect error:', error);
-      
-      // Force disconnect even if there was an error
-      await handleDisconnection();
-      
-      Alert.alert('Disconnected', 'Device has been disconnected.');
+      Alert.alert('Connection Failed', error.message);
+      setConnectionStatus('disconnected');
     }
   };
 
-  const getConnectionStatusText = () => {
-    switch (connectionStatus) {
-      case 'connecting':
-        return 'Connecting...';
-      case 'connected':
-        return 'Connected';
-      default:
-        return 'Not Connected';
+  const handleDisconnect = async () => {
+    try {
+      await BLEService.disconnect();
+      // The listener will handle the UI update
+    } catch (error) {
+      Alert.alert('Disconnection Failed', error.message);
     }
   };
 
-  const getConnectionIcon = () => {
-    switch (connectionStatus) {
-      case 'connecting':
-        return 'ðŸ”„';
-      case 'connected':
-        return 'âœ“';
-      default:
-        return 'âš ';
-    }
+  const renderDeviceCard = (item) => {
+    const deviceName = item.name?.toLowerCase() || '';
+    const isPineTime =
+      deviceName.includes('pine') ||
+      deviceName.includes('infini') ||
+      deviceName.includes('sealed') ||
+      deviceName.includes('praxiom');
+
+    return (
+      <View
+        key={item.id}
+        style={[
+          styles.deviceCard,
+          isPineTime && styles.pineTimeCard,
+          item.isConnected && styles.connectedDeviceCard,
+        ]}
+      >
+        <View style={styles.deviceInfo}>
+          <Text style={styles.deviceNameText}>{item.name || 'Unknown Device'}</Text>
+          <Text style={styles.deviceMac}>{item.id}</Text>
+          {item.rssi && <Text style={styles.deviceSignal}>Signal: {item.rssi} dBm</Text>}
+        </View>
+        {item.isConnected ? (
+          <View style={styles.connectedIndicator}>
+            <Text style={styles.connectedText}>✓</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.connectButton}
+            onPress={() => handleConnect(item)}
+            disabled={connectionStatus === 'connecting'}
+          >
+            <Text style={styles.connectButtonText}>
+              {connectionStatus === 'connecting' ? 'Connecting...' : 'Connect'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
   };
 
   return (
-    <LinearGradient
-      colors={['rgba(255, 140, 0, 0.15)', 'rgba(0, 207, 193, 0.15)']}
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.header}>PRAXIOM{'\n'}HEALTH</Text>
+    <LinearGradient colors={['#FF8C00', '#00CFC1']} style={styles.container}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
+        <Text style={styles.title}>PineTime Watch</Text>
+        <Text style={styles.subtitle}>Sync Your Bio-Age</Text>
 
-        {/* Watch Title */}
-        <View style={styles.titleContainer}>
-          <Text style={styles.title}>PineTime Watch</Text>
-          <Text style={styles.subtitle}>Sync Your Bio-Age</Text>
-        </View>
-
-        {/* Connection Status Card */}
-        <View style={[
-          styles.statusCard,
-          connectionStatus === 'connected' && styles.connectedCard,
-          connectionStatus === 'connecting' && styles.connectingCard
-        ]}>
+        <View
+          style={[
+            styles.statusCard,
+            connectionStatus === 'connected' && styles.connectedCard,
+            connectionStatus === 'connecting' && styles.connectingCard,
+          ]}
+        >
           <View style={styles.statusHeader}>
-            <Text style={styles.statusIcon}>{getConnectionIcon()}</Text>
-            <Text style={styles.statusTitle}>{getConnectionStatusText()}</Text>
+            <Text style={styles.statusIcon}>
+              {connectionStatus === 'connected' ? '✓' : connectionStatus === 'connecting' ? '⟳' : '○'}
+            </Text>
+            <Text style={styles.statusTitle}>
+              {connectionStatus === 'connected'
+                ? 'Connected'
+                : connectionStatus === 'connecting'
+                ? 'Connecting'
+                : 'Not Connected'}
+            </Text>
           </View>
           {connectedDevice && (
-            <Text style={styles.deviceName}>{connectedDevice.name}</Text>
+            <Text style={styles.deviceName}>{connectedDevice.name || 'InfiniTime'}</Text>
           )}
         </View>
 
-        {/* Connection Actions */}
-        {connectionStatus !== 'connected' ? (
+        {!connectedDevice ? (
           <TouchableOpacity
-            style={[
-              styles.scanButton,
-              (isScanning || connectionStatus === 'connecting') && styles.scanButtonDisabled
-            ]}
+            style={[styles.scanButton, isScanning && styles.scanButtonDisabled]}
             onPress={startScanning}
-            disabled={isScanning || connectionStatus === 'connecting'}
+            disabled={isScanning}
           >
             <Text style={styles.scanButtonText}>
-              {isScanning ? 'Scanning...' : 
-               connectionStatus === 'connecting' ? 'Connecting...' : 
-               'Scan for Watch'}
+              {isScanning ? 'Scanning...' : 'Scan for Devices'}
             </Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.disconnectButton} onPress={disconnectDevice}>
+          <TouchableOpacity style={styles.disconnectButton} onPress={handleDisconnect}>
             <Text style={styles.disconnectButtonText}>Disconnect</Text>
           </TouchableOpacity>
         )}
 
-        {/* Show All Devices Toggle */}
         <View style={styles.toggleContainer}>
           <Text style={styles.toggleLabel}>Show All Devices (Debug)</Text>
           <Switch
             value={showAllDevices}
             onValueChange={setShowAllDevices}
-            trackColor={{ false: '#D0D0D0', true: '#00CFC1' }}
+            trackColor={{ false: '#B0B0B0', true: '#00CFC1' }}
             thumbColor={showAllDevices ? '#fff' : '#f4f3f4'}
           />
         </View>
 
-        {/* Device List */}
         {discoveredDevices.length > 0 && (
           <>
-            <Text style={styles.devicesFoundText}>
-              Found {discoveredDevices.length} device{discoveredDevices.length !== 1 ? 's' : ''}:
+            <Text style={styles.devicesFoundText}>Found {discoveredDevices.length} device(s)</Text>
+            <Text style={styles.pineTimeHint}>
+              {showAllDevices
+                ? 'Showing all Bluetooth devices'
+                : 'PineTime devices appear with a colored border'}
             </Text>
-            <Text style={styles.pineTimeHint}>â­ = Likely PineTime/InfiniTime</Text>
-
-            {discoveredDevices.map((device) => (
-              <View
-                key={device.id}
-                style={[
-                  styles.deviceCard,
-                  device.isPineTime && styles.pineTimeCard,
-                  device.isConnected && styles.connectedDeviceCard
-                ]}
-              >
-                <View style={styles.deviceInfo}>
-                  <Text style={styles.deviceNameText}>
-                    {device.name} {device.isPineTime && 'â­'}
-                    {device.isConnected && ' (Connected)'}
-                  </Text>
-                  <Text style={styles.deviceMac}>{device.id}</Text>
-                  <Text style={styles.deviceSignal}>Signal: {device.rssi} dBm</Text>
-                </View>
-                {!device.isConnected && connectionStatus !== 'connecting' && (
-                  <TouchableOpacity
-                    style={styles.connectButton}
-                    onPress={() => connectToDevice(device)}
-                  >
-                    <Text style={styles.connectButtonText}>Connect</Text>
-                  </TouchableOpacity>
-                )}
-                {device.isConnected && (
-                  <View style={styles.connectedIndicator}>
-                    <Text style={styles.connectedText}>âœ“</Text>
-                  </View>
-                )}
-              </View>
-            ))}
+            {discoveredDevices.map((item) => renderDeviceCard(item))}
           </>
         )}
 
-        {/* Troubleshooting Section */}
         <View style={styles.troubleshootingCard}>
           <View style={styles.troubleshootingHeader}>
-            <Text style={styles.lightbulbIcon}>ðŸ’¡</Text>
-            <Text style={styles.troubleshootingTitle}>Troubleshooting:</Text>
+            <Text style={styles.lightbulbIcon}>💡</Text>
+            <Text style={styles.troubleshootingTitle}>Troubleshooting Tips</Text>
           </View>
-          <Text style={styles.troubleshootingText}>â€¢ Make sure watch is ON and NEARBY</Text>
           <Text style={styles.troubleshootingText}>
-            â€¢ Turn on "Show All Devices" to see everything
+            • Make sure your watch is charged and turned on
           </Text>
           <Text style={styles.troubleshootingText}>
-            â€¢ If you see your watch but can't connect, unpair it from your phone's Bluetooth settings first
+            • Keep your watch close to your phone during pairing
           </Text>
           <Text style={styles.troubleshootingText}>
-            â€¢ Try turning Bluetooth off and on if having issues
+            • If connection fails, restart your watch and try again
+          </Text>
+          <Text style={styles.troubleshootingText}>
+            • Enable "Show All Devices" to see all Bluetooth devices nearby
           </Text>
         </View>
 
-        {/* Firmware Notice */}
         <View style={styles.firmwareNotice}>
           <Text style={styles.firmwareText}>
-            Your PineTime watch needs the Praxiom firmware installed to display Bio-Age.
+            This app is designed for PineTime watches running InfiniTime firmware with Praxiom customizations
           </Text>
         </View>
       </ScrollView>
@@ -430,31 +256,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollContent: {
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
     padding: 20,
-    paddingBottom: 100,
-  },
-  header: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#333',
-    marginBottom: 30,
-    lineHeight: 22,
-  },
-  titleContainer: {
-    alignItems: 'center',
-    marginBottom: 25,
+    paddingTop: 50,
   },
   title: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 5,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   subtitle: {
     fontSize: 18,
-    color: '#999',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 30,
+    opacity: 0.9,
   },
   statusCard: {
     backgroundColor: '#fff',
