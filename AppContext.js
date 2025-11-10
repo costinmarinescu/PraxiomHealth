@@ -150,34 +150,35 @@ export const AppContextProvider = ({ children }) => {
       }
       systemicScore = Math.max(0, Math.min(100, systemicScore));
 
-      // Calculate Vitality Index
+      // Calculate Fitness Score from steps
       const fitnessFromSteps = Math.min(100, (state.steps / 10000) * 100);
       const heartHealthScore = state.hrv ? Math.min(100, state.hrv) : 50;
       const vitalityIndex = (fitnessFromSteps + heartHealthScore) / 2;
 
-      // Calculate Biological Age using Praxiom Algorithm
-      const biologicalAge = PraxiomAlgorithm.calculateBiologicalAge({
-        chronologicalAge: state.chronologicalAge,
-        oralHealthScore,
-        systemicHealthScore,
-        fitnessScore: fitnessFromSteps,
-        hsCRP: state.hsCRP,
-        omega3Index: state.omega3Index,
-        hba1c: state.hba1c,
-      });
+      // ✅ CORRECTED: Use actual PraxiomAlgorithm.calculateBioAge() API
+      // Expects 4 separate parameters, not an object!
+      const result = PraxiomAlgorithm.calculateBioAge(
+        state.chronologicalAge,
+        oralScore,
+        systemicScore,
+        fitnessFromSteps
+      );
+
+      const biologicalAge = result.bioAge; // Extract bioAge from result object
 
       console.log('📈 Calculated scores:', {
         oralScore,
         systemicScore,
         vitalityIndex,
         biologicalAge,
+        fullResult: result,
       });
 
       updateState({
         oralHealthScore: Math.round(oralScore),
         systemicHealthScore: Math.round(systemicScore),
         vitalityIndex: Math.round(vitalityIndex * 10) / 10,
-        biologicalAge: Math.round(biologicalAge * 10) / 10,
+        biologicalAge: biologicalAge,
         fitnessScore: Math.round(fitnessFromSteps),
         lastSync: new Date().toISOString(),
       });
