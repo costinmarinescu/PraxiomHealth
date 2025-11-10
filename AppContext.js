@@ -44,7 +44,7 @@ export const AppContextProvider = ({ children }) => {
 
     // Listen for data updates from watch
     const unsubscribeData = WearableService.onDataUpdate((data) => {
-      console.log('📊 Received wearable data:', data);
+      console.log('📊 Received wearable data update:', data);
 
       setState((prevState) => ({
         ...prevState,
@@ -52,11 +52,16 @@ export const AppContextProvider = ({ children }) => {
         steps: data.steps !== undefined ? data.steps : prevState.steps,
         hrv: data.hrv !== undefined ? data.hrv : prevState.hrv,
       }));
+
+      // Log what was actually updated
+      if (data.heartRate !== undefined) console.log('✅ Heart rate updated:', data.heartRate);
+      if (data.steps !== undefined) console.log('✅ Steps updated:', data.steps);
+      if (data.hrv !== undefined) console.log('✅ HRV updated:', data.hrv);
     });
 
     // Listen for connection status changes
     const unsubscribeConnection = WearableService.onConnectionChange((isConnected) => {
-      console.log('🔗 Watch connection status:', isConnected);
+      console.log('🔗 Watch connection status changed:', isConnected);
 
       setState((prevState) => ({
         ...prevState,
@@ -66,6 +71,7 @@ export const AppContextProvider = ({ children }) => {
 
     // Cleanup on unmount
     return () => {
+      console.log('🧹 Cleaning up WearableService listeners');
       unsubscribeData();
       unsubscribeConnection();
     };
@@ -85,10 +91,10 @@ export const AppContextProvider = ({ children }) => {
           ...prevState,
           ...parsedData,
         }));
-        console.log('✅ Loaded saved data');
+        console.log('✅ Loaded saved data from storage');
       }
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('❌ Error loading data:', error);
     }
   };
 
@@ -109,7 +115,7 @@ export const AppContextProvider = ({ children }) => {
       };
       await AsyncStorage.setItem('praxiomHealthData', JSON.stringify(dataToSave));
     } catch (error) {
-      console.error('Error saving data:', error);
+      console.error('❌ Error saving data:', error);
     }
   };
 
@@ -122,6 +128,8 @@ export const AppContextProvider = ({ children }) => {
 
   const calculateScores = () => {
     try {
+      console.log('🧮 Starting score calculation...');
+
       // Calculate Oral Health Score
       let oralScore = 75;
       if (state.salivaryPH !== null) {
@@ -155,8 +163,7 @@ export const AppContextProvider = ({ children }) => {
       const heartHealthScore = state.hrv ? Math.min(100, state.hrv) : 50;
       const vitalityIndex = (fitnessFromSteps + heartHealthScore) / 2;
 
-      // ✅ CORRECTED: Use actual PraxiomAlgorithm.calculateBioAge() API
-      // Expects 4 separate parameters, not an object!
+      // ✅ Use actual PraxiomAlgorithm.calculateBioAge() API
       const result = PraxiomAlgorithm.calculateBioAge(
         state.chronologicalAge,
         oralScore,
@@ -164,14 +171,14 @@ export const AppContextProvider = ({ children }) => {
         fitnessFromSteps
       );
 
-      const biologicalAge = result.bioAge; // Extract bioAge from result object
+      const biologicalAge = result.bioAge;
 
-      console.log('📈 Calculated scores:', {
-        oralScore,
-        systemicScore,
-        vitalityIndex,
-        biologicalAge,
-        fullResult: result,
+      console.log('📊 Calculation complete:', {
+        oralScore: Math.round(oralScore),
+        systemicScore: Math.round(systemicScore),
+        fitnessScore: Math.round(fitnessFromSteps),
+        vitalityIndex: Math.round(vitalityIndex * 10) / 10,
+        biologicalAge: biologicalAge,
       });
 
       updateState({
@@ -183,14 +190,16 @@ export const AppContextProvider = ({ children }) => {
         lastSync: new Date().toISOString(),
       });
 
-      // 🔥 SEND BIO-AGE TO WATCH!
+      // 🔥 AUTO-SEND BIO-AGE TO WATCH IF CONNECTED
       if (state.watchConnected) {
+        console.log('📤 Watch is connected, attempting to send bio-age...');
         WearableService.sendBiologicalAge(biologicalAge)
           .then(() => {
-            console.log('✅ Bio-age synced to watch!');
+            console.log('✅ Bio-age successfully sent to watch:', biologicalAge);
           })
           .catch((error) => {
-            console.error('❌ Failed to sync bio-age:', error.message);
+            console.error('❌ Failed to send bio-age to watch:', error.message);
+            // Don't throw - just log the error
           });
       } else {
         console.log('⚠️ Watch not connected, bio-age not sent');
@@ -198,7 +207,7 @@ export const AppContextProvider = ({ children }) => {
 
       return biologicalAge;
     } catch (error) {
-      console.error('Error calculating scores:', error);
+      console.error('❌ Error calculating scores:', error);
       return state.biologicalAge;
     }
   };
