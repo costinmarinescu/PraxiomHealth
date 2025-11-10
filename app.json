@@ -15,8 +15,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.praxiom.health",
       "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "This app needs Bluetooth to connect to your PineTime watch and sync your Bio-Age data.",
-        "NSBluetoothPeripheralUsageDescription": "This app needs Bluetooth to communicate with your PineTime watch."
+        "NSBluetoothAlwaysUsageDescription": "Connect to Praxiom watch",
+        "NSBluetoothPeripheralUsageDescription": "Communicate with Praxiom watch"
       }
     },
     "android": {
@@ -44,8 +44,7 @@
           "android": {
             "compileSdkVersion": 34,
             "targetSdkVersion": 34,
-            "minSdkVersion": 21,
-            "kotlinVersion": "1.8.10"
+            "minSdkVersion": 21
           }
         }
       ]
