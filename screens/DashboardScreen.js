@@ -1,46 +1,16 @@
 import React, { useContext, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { AppContext } from '../AppContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function DashboardScreen({ navigation }) {
   const { state, updateState, calculateScores } = useContext(AppContext);
-  const [showWatchAlert, setShowWatchAlert] = React.useState(false);
-  
-  useEffect(() => {
-    // Check watch connection status on mount and focus
-    checkWatchConnection();
-    
-    // Set up interval to check connection status
-    const interval = setInterval(checkWatchConnection, 5000); // Check every 5 seconds
-    
-    return () => clearInterval(interval);
-  }, []);
-  
-  const checkWatchConnection = async () => {
-    try {
-      const watchStatus = await AsyncStorage.getItem('watchConnected');
-      updateState({ watchConnected: watchStatus === 'true' });
-    } catch (error) {
-      console.error('Error checking watch connection:', error);
-    }
-  };
-  
-  const handleWatchButtonPress = () => {
-    if (!state.watchConnected) {
-      setShowWatchAlert(true);
-    } else {
-      navigation.navigate('Watch');
-    }
-  };
-  
+
   const getScoreColor = (score) => {
     if (score >= 85) return '#47C83E';
     if (score >= 75) return '#FFB800';
     return '#E74C3C';
   };
-  
+
   const getDeviationColor = (deviation) => {
     if (Math.abs(deviation) <= 5) return '#47C83E';
     if (Math.abs(deviation) <= 10) return '#FFB800';
@@ -48,173 +18,139 @@ export default function DashboardScreen({ navigation }) {
   };
 
   return (
-    <LinearGradient
-      colors={['#FF6B00', '#FFB800', '#47C83E', '#0099DB']}
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Bio-Age Overview Card */}
-        <View style={styles.bioAgeCard}>
-          <View style={styles.bioAgeHeader}>
-            <Text style={styles.targetIcon}>🎯</Text>
-            <Text style={styles.bioAgeTitle}>Bio-Age Overview</Text>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+      {/* Bio-Age Overview Card */}
+      <View style={styles.bioAgeCard}>
+        <View style={styles.bioAgeHeader}>
+          <Text style={styles.targetIcon}>🎯</Text>
+          <Text style={styles.bioAgeTitle}>Bio-Age Overview</Text>
+        </View>
+
+        <View style={styles.ageContainer}>
+          <View style={styles.ageBox}>
+            <Text style={styles.ageLabel}>Chronological Age</Text>
+            <Text style={styles.ageValue}>{state.chronologicalAge}</Text>
+            <Text style={styles.ageUnit}>years</Text>
           </View>
           
-          <View style={styles.ageContainer}>
-            <View style={styles.ageBox}>
-              <Text style={styles.ageLabel}>Chronological Age</Text>
-              <Text style={styles.ageValue}>{state.chronologicalAge}</Text>
-              <Text style={styles.ageUnit}>years</Text>
-            </View>
-            
-            <View style={styles.ageBox}>
-              <Text style={styles.ageLabel}>Praxiom Age</Text>
-              <Text style={[styles.ageValue, styles.bioAge]}>
-                {state.biologicalAge.toFixed(1)}
-              </Text>
-              <Text style={styles.ageUnit}>years</Text>
-            </View>
-          </View>
-          
-          <View style={styles.deviationContainer}>
-            <Text style={styles.deviationLabel}>Bio-Age Deviation:</Text>
-            <Text style={[
-              styles.deviationValue,
-              { color: getDeviationColor(state.biologicalAge - state.chronologicalAge) }
-            ]}>
-              {state.biologicalAge > state.chronologicalAge ? '+' : ''}
-              {(state.biologicalAge - state.chronologicalAge).toFixed(1)} years
+          <View style={styles.ageBox}>
+            <Text style={styles.ageLabel}>Praxiom Age</Text>
+            <Text style={[styles.ageValue, styles.bioAge]}>
+              {state.biologicalAge.toFixed(1)}
             </Text>
+            <Text style={styles.ageUnit}>years</Text>
           </View>
         </View>
 
-        {/* Watch Connection Button */}
-        <TouchableOpacity
-          style={[
-            styles.watchButton,
-            state.watchConnected ? styles.watchConnected : styles.watchDisconnected
-          ]}
-          onPress={handleWatchButtonPress}
+        <View style={styles.deviationContainer}>
+          <Text style={styles.deviationLabel}>Bio-Age Deviation:</Text>
+          <Text 
+            style={[
+              styles.deviationValue, 
+              { color: getDeviationColor(state.biologicalAge - state.chronologicalAge) }
+            ]}
+          >
+            {state.biologicalAge > state.chronologicalAge ? '+' : ''}
+            {(state.biologicalAge - state.chronologicalAge).toFixed(1)} years
+          </Text>
+        </View>
+      </View>
+
+      {/* Watch Connection Button */}
+      <TouchableOpacity 
+        style={[
+          styles.watchButton, 
+          state.watchConnected ? styles.watchConnected : styles.watchDisconnected
+        ]}
+        onPress={() => navigation.navigate('Watch')}
+      >
+        <Text style={styles.watchButtonIcon}>{state.watchConnected ? '⌚✓' : '⌚'}</Text>
+        <Text style={styles.watchButtonText}>
+          {state.watchConnected ? 'Watch Connected' : 'Connect Watch'}
+        </Text>
+        {state.watchConnected && state.lastSync && (
+          <Text style={styles.syncText}>
+            Last sync: {new Date(state.lastSync).toLocaleTimeString()}
+          </Text>
+        )}
+      </TouchableOpacity>
+
+      {/* Health Score Cards */}
+      <View style={styles.scoreCardsContainer}>
+        {/* Oral Health Card */}
+        <View style={styles.scoreCard}>
+          <Text style={styles.scoreTitle}>Oral Health</Text>
+          <Text style={[styles.scoreValue, { color: getScoreColor(state.oralHealthScore) }]}>
+            {state.oralHealthScore}%
+          </Text>
+          <Text style={styles.scoreTarget}>Target: &gt;85%</Text>
+          <View style={[styles.scoreIndicator, { backgroundColor: getScoreColor(state.oralHealthScore) }]} />
+        </View>
+
+        {/* Systemic Health Card */}
+        <View style={styles.scoreCard}>
+          <Text style={styles.scoreTitle}>Systemic Health</Text>
+          <Text style={[styles.scoreValue, { color: getScoreColor(state.systemicHealthScore) }]}>
+            {state.systemicHealthScore}%
+          </Text>
+          <Text style={styles.scoreTarget}>Target: &gt;85%</Text>
+          <View style={[styles.scoreIndicator, { backgroundColor: getScoreColor(state.systemicHealthScore) }]} />
+        </View>
+      </View>
+
+      {/* Additional Score Cards */}
+      <View style={styles.scoreCardsContainer}>
+        {/* Fitness Score Card */}
+        <View style={styles.scoreCard}>
+          <Text style={styles.scoreTitle}>Fitness Score</Text>
+          <Text style={[styles.scoreValue, { color: getScoreColor(state.fitnessScore) }]}>
+            {state.fitnessScore}%
+          </Text>
+          <Text style={styles.scoreTarget}>Target: &gt;85%</Text>
+          <View style={[styles.scoreIndicator, { backgroundColor: getScoreColor(state.fitnessScore) }]} />
+        </View>
+
+        {/* Wearable Data Card */}
+        <View style={styles.scoreCard}>
+          <Text style={styles.scoreTitle}>Wearable Data</Text>
+          <View style={styles.wearableData}>
+            <Text style={styles.wearableItem}>❤️ {state.heartRate || '--'} bpm</Text>
+            <Text style={styles.wearableItem}>👟 {state.steps || 0}</Text>
+            <Text style={styles.wearableItem}>📊 HRV: {state.hrv || '--'}</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Quick Actions - FIXED NAVIGATION */}
+      <View style={styles.quickActions}>
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('BiomarkerInput')}
         >
-          <Text style={styles.watchButtonIcon}>
-            {state.watchConnected ? '⌚✓' : '⌚'}
-          </Text>
-          <Text style={styles.watchButtonText}>
-            {state.watchConnected ? 'Watch Connected' : 'Connect Watch'}
-          </Text>
-          {state.watchConnected && state.lastSync && (
-            <Text style={styles.syncText}>
-              Last sync: {new Date(state.lastSync).toLocaleTimeString()}
-            </Text>
-          )}
+          <Text style={styles.actionButtonText}>📝 Enter Biomarkers</Text>
         </TouchableOpacity>
 
-        {/* Health Score Cards */}
-        <View style={styles.scoreCardsContainer}>
-          {/* Oral Health Card */}
-          <TouchableOpacity style={styles.scoreCard}>
-            <Text style={styles.scoreTitle}>Oral Health</Text>
-            <Text style={[styles.scoreValue, { color: getScoreColor(state.oralHealthScore) }]}>
-              {state.oralHealthScore}%
-            </Text>
-            <Text style={styles.scoreTarget}>Target: >85%</Text>
-            <View style={[styles.scoreIndicator, { backgroundColor: getScoreColor(state.oralHealthScore) }]} />
-          </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => {
+            calculateScores();
+            updateState({ lastSync: new Date().toISOString() });
+          }}
+        >
+          <Text style={styles.actionButtonText}>🔄 Recalculate Age</Text>
+        </TouchableOpacity>
+      </View>
 
-          {/* Systemic Health Card */}
-          <TouchableOpacity style={styles.scoreCard}>
-            <Text style={styles.scoreTitle}>Systemic Health</Text>
-            <Text style={[styles.scoreValue, { color: getScoreColor(state.systemicHealthScore) }]}>
-              {state.systemicHealthScore}%
-            </Text>
-            <Text style={styles.scoreTarget}>Target: >85%</Text>
-            <View style={[styles.scoreIndicator, { backgroundColor: getScoreColor(state.systemicHealthScore) }]} />
-          </TouchableOpacity>
+      {/* Tier Upgrade Alert */}
+      {(state.oralHealthScore < 75 || state.systemicHealthScore < 75) && (
+        <View style={styles.alertCard}>
+          <Text style={styles.alertTitle}>⚠️ Tier Upgrade Recommended</Text>
+          <Text style={styles.alertText}>
+            Your health scores indicate you may benefit from Tier 2 assessment for more personalized insights.
+          </Text>
         </View>
-
-        {/* Additional Score Cards */}
-        <View style={styles.scoreCardsContainer}>
-          {/* Fitness Score Card */}
-          <TouchableOpacity style={styles.scoreCard}>
-            <Text style={styles.scoreTitle}>Fitness Score</Text>
-            <Text style={[styles.scoreValue, { color: getScoreColor(state.fitnessScore) }]}>
-              {state.fitnessScore}%
-            </Text>
-            <Text style={styles.scoreTarget}>Target: >85%</Text>
-            <View style={[styles.scoreIndicator, { backgroundColor: getScoreColor(state.fitnessScore) }]} />
-          </TouchableOpacity>
-
-          {/* Wearable Data Card */}
-          <TouchableOpacity style={styles.scoreCard}>
-            <Text style={styles.scoreTitle}>Wearable Data</Text>
-            <View style={styles.wearableData}>
-              <Text style={styles.wearableItem}>❤️ {state.heartRate || '--'} bpm</Text>
-              <Text style={styles.wearableItem}>👟 {state.steps || 0}</Text>
-              <Text style={styles.wearableItem}>📊 HRV: {state.hrv || '--'}</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('Settings')}
-          >
-            <Text style={styles.actionButtonText}>📝 Enter Biomarkers</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={calculateScores}
-          >
-            <Text style={styles.actionButtonText}>🔄 Recalculate Age</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Tier Upgrade Alert */}
-        {(state.oralHealthScore < 75 || state.systemicHealthScore < 75) && (
-          <View style={styles.alertCard}>
-            <Text style={styles.alertTitle}>⚠️ Tier Upgrade Recommended</Text>
-            <Text style={styles.alertText}>
-              Your health scores indicate you may benefit from Tier 2 assessment for more personalized insights.
-            </Text>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Watch Alert Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={showWatchAlert}
-        onRequestClose={() => setShowWatchAlert(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Watch Not Connected</Text>
-            <Text style={styles.modalText}>
-              Please go to the Watch tab and connect to your PineTime watch first.
-            </Text>
-            <TouchableOpacity
-              style={styles.modalButton}
-              onPress={() => {
-                setShowWatchAlert(false);
-                navigation.navigate('Watch');
-              }}
-            >
-              <Text style={styles.modalButtonText}>Go to Watch Tab</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modalButton, styles.modalCancelButton]}
-              onPress={() => setShowWatchAlert(false)}
-            >
-              <Text style={styles.modalCancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    </LinearGradient>
+      )}
+    </ScrollView>
   );
 }
 
@@ -413,51 +349,5 @@ const styles = StyleSheet.create({
   alertText: {
     fontSize: 14,
     color: '#856404',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#FFF',
-    borderRadius: 15,
-    padding: 20,
-    width: '80%',
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#2C3E50',
-    marginBottom: 10,
-  },
-  modalText: {
-    fontSize: 16,
-    color: '#7F8C8D',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  modalButton: {
-    backgroundColor: '#0099DB',
-    borderRadius: 10,
-    padding: 15,
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  modalButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  modalCancelButton: {
-    backgroundColor: '#E0E0E0',
-  },
-  modalCancelButtonText: {
-    color: '#7F8C8D',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
 });
