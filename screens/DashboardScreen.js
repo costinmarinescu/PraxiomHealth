@@ -1,11 +1,12 @@
-import React, { useContext, useEffect } from 'react';
+import React, { useContext } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppContext } from '../AppContext';
 import WearableService from '../services/WearableService';
+import PraxiomBackground from '../components/PraxiomBackground';
 
 export default function DashboardScreen({ navigation }) {
-  const { state, updateState, calculateScores } = useContext(AppContext);
+  const { state, calculateScores } = useContext(AppContext);
 
   const getScoreColor = (score) => {
     if (score >= 85) return '#47C83E';
@@ -19,13 +20,10 @@ export default function DashboardScreen({ navigation }) {
     return '#E74C3C';
   };
 
-  // 🔄 Handle recalculate age with watch sync
   const handleRecalculateAge = async () => {
     console.log('🔄 Recalculating biological age...');
-    
     const newAge = calculateScores();
-    
-    // 🔥 AUTO-SEND TO WATCH if connected
+
     if (state.watchConnected) {
       try {
         console.log('📤 Sending bio-age to watch:', newAge);
@@ -40,131 +38,141 @@ export default function DashboardScreen({ navigation }) {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Praxiom Health</Text>
-        <Text style={styles.headerSubtitle}>Bio-Age Overview</Text>
-      </View>
+    <View style={styles.container}>
+      <PraxiomBackground />
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Praxiom Health</Text>
+          <Text style={styles.headerSubtitle}>Bio-Age Overview</Text>
+        </View>
 
-      {/* Bio-Age Card */}
-      <View style={styles.bioAgeCard}>
-        <View style={styles.cardHeader}>
-          <Ionicons name="target" size={28} color="#00CFC1" />
+        {/* Bio-Age Card */}
+        <View style={styles.bioAgeCard}>
           <Text style={styles.cardTitle}>Bio-Age Overview</Text>
-        </View>
 
-        <View style={styles.ageGrid}>
-          {/* Chronological Age */}
-          <View style={styles.ageItem}>
-            <Text style={styles.ageLabel}>Chronological Age</Text>
-            <Text style={styles.ageValue}>{state.chronologicalAge}</Text>
-            <Text style={styles.ageUnit}>years</Text>
+          {/* Age Grid */}
+          <View style={styles.ageGrid}>
+            <View style={styles.ageItem}>
+              <Text style={styles.ageLabel}>Chronological Age</Text>
+              <Text style={styles.ageValue}>{state.chronologicalAge}</Text>
+              <Text style={styles.ageUnit}>years</Text>
+            </View>
+
+            <View style={styles.ageItem}>
+              <Text style={styles.ageLabel}>Praxiom Age</Text>
+              <Text style={[styles.ageValue, { color: '#E74C3C' }]}>
+                {state.biologicalAge.toFixed(1)}
+              </Text>
+              <Text style={styles.ageUnit}>years</Text>
+            </View>
           </View>
 
-          {/* Praxiom Age */}
-          <View style={styles.ageItem}>
-            <Text style={styles.ageLabel}>Praxiom Age</Text>
-            <Text style={[styles.ageValue, { color: getScoreColor(state.biologicalAge) }]}>
-              {state.biologicalAge.toFixed(1)}
+          {/* Deviation */}
+          <View style={styles.deviationSection}>
+            <Text style={styles.deviationLabel}>Bio-Age Deviation:</Text>
+            <Text
+              style={[
+                styles.deviationValue,
+                { color: getDeviationColor(state.biologicalAge - state.chronologicalAge) },
+              ]}>
+              {state.biologicalAge > state.chronologicalAge ? '+' : ''}
+              {(state.biologicalAge - state.chronologicalAge).toFixed(1)} years
             </Text>
-            <Text style={styles.ageUnit}>years</Text>
           </View>
         </View>
 
-        {/* Bio-Age Deviation */}
-        <View style={styles.deviationSection}>
-          <Text style={styles.deviationLabel}>Bio-Age Deviation:</Text>
-          <Text
-            style={[
-              styles.deviationValue,
-              {
-                color: getDeviationColor(state.biologicalAge - state.chronologicalAge),
-              },
-            ]}
-          >
-            {state.biologicalAge > state.chronologicalAge ? '+' : ''}
-            {(state.biologicalAge - state.chronologicalAge).toFixed(1)} years
-          </Text>
-        </View>
-      </View>
-
-      {/* Watch Connection Button */}
-      <TouchableOpacity
-        style={[
-          styles.watchButton,
-          {
-            backgroundColor: state.watchConnected ? '#47C83E' : '#95A5A6',
-          },
-        ]}
-        onPress={() => navigation.navigate('Watch')}
-      >
-        <Ionicons name="watch" size={24} color="#fff" />
-        <View style={styles.watchButtonText}>
-          <Text style={styles.watchButtonTitle}>
-            {state.watchConnected ? '✓ Connected to Watch' : 'Connect Watch'}
-          </Text>
-          {state.watchConnected && (
-            <Text style={styles.watchButtonSubtitle}>Tap to manage connection</Text>
-          )}
-        </View>
-      </TouchableOpacity>
-
-      {/* Recalculate Button */}
-      <TouchableOpacity style={styles.recalculateButton} onPress={handleRecalculateAge}>
-        <Ionicons name="refresh" size={20} color="#fff" />
-        <Text style={styles.recalculateText}>🔄 Recalculate Age</Text>
-      </TouchableOpacity>
-
-      {/* Health Scores Grid */}
-      <View style={styles.scoresGrid}>
-        {/* Oral Health */}
-        <View style={styles.scoreCard}>
-          <View style={styles.scoreHeader}>
-            <Ionicons name="medical" size={24} color="#FF6B6B" />
-            <Text style={styles.scoreTitle}>Oral Health</Text>
+        {/* Watch Connection Button */}
+        <TouchableOpacity
+          style={[
+            styles.watchButton,
+            { backgroundColor: state.watchConnected ? '#47C83E' : '#999' },
+          ]}
+          onPress={() => navigation.navigate('Watch')}>
+          <Ionicons name="watch" size={24} color="#fff" />
+          <View style={styles.watchButtonText}>
+            <Text style={styles.watchButtonTitle}>
+              {state.watchConnected ? '✓ Connected to Watch' : 'Connect Watch'}
+            </Text>
+            {state.watchConnected && (
+              <Text style={styles.watchButtonSubtitle}>Tap to manage connection</Text>
+            )}
           </View>
-          <Text style={[styles.scoreValue, { color: getScoreColor(state.oralHealthScore) }]}>
-            {state.oralHealthScore}%
-          </Text>
-          <Text style={styles.scoreTarget}>Target: >85%</Text>
-          <View style={[styles.scoreBar, { backgroundColor: getScoreColor(state.oralHealthScore) }]} />
-        </View>
+          <Ionicons name="chevron-forward" size={20} color="#fff" />
+        </TouchableOpacity>
 
-        {/* Systemic Health */}
-        <View style={styles.scoreCard}>
-          <View style={styles.scoreHeader}>
-            <Ionicons name="heart" size={24} color="#FF6B6B" />
-            <Text style={styles.scoreTitle}>Systemic Health</Text>
-          </View>
-          <Text style={[styles.scoreValue, { color: getScoreColor(state.systemicHealthScore) }]}>
-            {state.systemicHealthScore}%
-          </Text>
-          <Text style={styles.scoreTarget}>Target: >85%</Text>
-          <View style={[styles.scoreBar, { backgroundColor: getScoreColor(state.systemicHealthScore) }]} />
-        </View>
+        {/* Recalculate Button */}
+        <TouchableOpacity style={styles.recalculateButton} onPress={handleRecalculateAge}>
+          <Ionicons name="sync" size={20} color="#fff" />
+          <Text style={styles.recalculateText}>🔄 Recalculate Age</Text>
+        </TouchableOpacity>
 
-        {/* Fitness Score */}
-        <View style={styles.scoreCard}>
-          <View style={styles.scoreHeader}>
-            <Ionicons name="fitness" size={24} color="#FFB800" />
-            <Text style={styles.scoreTitle}>Fitness Score</Text>
+        {/* Health Scores Grid (2x2) */}
+        <View style={styles.scoresGrid}>
+          {/* Oral Health */}
+          <View style={styles.scoreCard}>
+            <View style={styles.scoreHeader}>
+              <Ionicons name="leaf" size={18} color="#E74C3C" />
+              <Text style={styles.scoreTitle}>Oral Health</Text>
+            </View>
+            <Text style={[styles.scoreValue, { color: getScoreColor(state.oralHealthScore) }]}>
+              {state.oralHealthScore}%
+            </Text>
+            <Text style={styles.scoreTarget}>Target: >85%</Text>
+            <View
+              style={[
+                styles.scoreBar,
+                { backgroundColor: getScoreColor(state.oralHealthScore), width: `${state.oralHealthScore}%` },
+              ]}
+            />
           </View>
-          <Text style={[styles.scoreValue, { color: getScoreColor(state.fitnessScore) }]}>
-            {state.fitnessScore}%
-          </Text>
-          <Text style={styles.scoreTarget}>Target: >85%</Text>
-          <View style={[styles.scoreBar, { backgroundColor: getScoreColor(state.fitnessScore) }]} />
-        </View>
 
-        {/* Wearable Data */}
-        <View style={styles.scoreCard}>
-          <View style={styles.scoreHeader}>
-            <Ionicons name="watch" size={24} color="#00CFC1" />
-            <Text style={styles.scoreTitle}>Wearable Data</Text>
+          {/* Systemic Health */}
+          <View style={styles.scoreCard}>
+            <View style={styles.scoreHeader}>
+              <Ionicons name="heart" size={18} color="#E74C3C" />
+              <Text style={styles.scoreTitle}>Systemic Health</Text>
+            </View>
+            <Text style={[styles.scoreValue, { color: getScoreColor(state.systemicHealthScore) }]}>
+              {state.systemicHealthScore}%
+            </Text>
+            <Text style={styles.scoreTarget}>Target: >85%</Text>
+            <View
+              style={[
+                styles.scoreBar,
+                {
+                  backgroundColor: getScoreColor(state.systemicHealthScore),
+                  width: `${state.systemicHealthScore}%`,
+                },
+              ]}
+            />
           </View>
-          {state.watchConnected ? (
-            <>
+
+          {/* Fitness Score */}
+          <View style={styles.scoreCard}>
+            <View style={styles.scoreHeader}>
+              <Ionicons name="fitness" size={18} color="#FFB800" />
+              <Text style={styles.scoreTitle}>Fitness Score</Text>
+            </View>
+            <Text style={[styles.scoreValue, { color: getScoreColor(state.fitnessScore) }]}>
+              {state.fitnessScore}%
+            </Text>
+            <Text style={styles.scoreTarget}>Target: >85%</Text>
+            <View
+              style={[
+                styles.scoreBar,
+                { backgroundColor: getScoreColor(state.fitnessScore), width: `${state.fitnessScore}%` },
+              ]}
+            />
+          </View>
+
+          {/* Wearable Data */}
+          <View style={styles.scoreCard}>
+            <View style={styles.scoreHeader}>
+              <Ionicons name="watch" size={18} color="#00CFC1" />
+              <Text style={styles.scoreTitle}>Wearable Data</Text>
+            </View>
+            {state.watchConnected ? (
               <View style={styles.wearableData}>
                 <View style={styles.dataItem}>
                   <Text style={styles.dataLabel}>❤️ HR</Text>
@@ -179,80 +187,94 @@ export default function DashboardScreen({ navigation }) {
                   <Text style={styles.dataValue}>{state.hrv ? state.hrv : '--'}</Text>
                 </View>
               </View>
-            </>
-          ) : (
-            <Text style={styles.noDataText}>Connect watch to see data</Text>
-          )}
+            ) : (
+              <Text style={styles.noDataText}>Connect watch to see data</Text>
+            )}
+          </View>
         </View>
-      </View>
 
-      {/* Navigation Buttons */}
-      <View style={styles.navigationGrid}>
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => navigation.navigate('BiomarkerInput')}
-        >
-          <Ionicons name="document-text" size={24} color="#00CFC1" />
-          <Text style={styles.navButtonText}>📝 Enter Biomarkers</Text>
-        </TouchableOpacity>
+        {/* Navigation Buttons Grid (2x2) */}
+        <View style={styles.navigationGrid}>
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => navigation.navigate('BiomarkerInput')}>
+            <Ionicons name="document-text" size={28} color="#00CFC1" />
+            <Text style={styles.navButtonText}>📝 Enter Biomarkers</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => navigation.navigate('Report')}
-        >
-          <Ionicons name="bar-chart" size={24} color="#00CFC1" />
-          <Text style={styles.navButtonText}>📊 View Report</Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => navigation.navigate('Report')}>
+            <Ionicons name="stats-chart" size={28} color="#00CFC1" />
+            <Text style={styles.navButtonText}>📊 View Report</Text>
+          </TouchableOpacity>
 
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Last synced: {state.lastSync ? new Date(state.lastSync).toLocaleString() : 'Never'}</Text>
-      </View>
-    </ScrollView>
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => navigation.navigate('DNATest')}>
+            <Ionicons name="git-branch" size={28} color="#00CFC1" />
+            <Text style={styles.navButtonText}>🧬 DNA Test</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => navigation.navigate('HistoricalData')}>
+            <Ionicons name="trending-up" size={28} color="#00CFC1" />
+            <Text style={styles.navButtonText}>📈 History</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>
+            Last synced: {state.lastSync ? new Date(state.lastSync).toLocaleString() : 'Never'}
+          </Text>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 50,
     paddingBottom: 10,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   headerSubtitle: {
-    fontSize: 14,
-    color: '#00CFC1',
+    fontSize: 16,
+    color: '#FFFFFF',
     marginTop: 4,
+    opacity: 0.9,
   },
   bioAgeCard: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     marginHorizontal: 20,
     marginVertical: 15,
     borderRadius: 15,
     padding: 20,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.15,
     shadowRadius: 10,
-    elevation: 5,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
+    elevation: 8,
   },
   cardTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#1a1a1a',
-    marginLeft: 10,
+    marginBottom: 20,
+    textAlign: 'center',
   },
   ageGrid: {
     flexDirection: 'row',
@@ -265,15 +287,16 @@ const styles = StyleSheet.create({
   ageLabel: {
     fontSize: 12,
     color: '#999',
-    marginBottom: 5,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   ageValue: {
-    fontSize: 36,
+    fontSize: 40,
     fontWeight: 'bold',
     color: '#1a1a1a',
   },
   ageUnit: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#999',
     marginTop: 4,
   },
@@ -288,17 +311,21 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   deviationValue: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     marginTop: 5,
   },
   watchButton: {
     marginHorizontal: 20,
     marginVertical: 10,
-    padding: 15,
+    padding: 18,
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
   },
   watchButtonText: {
     marginLeft: 12,
@@ -311,18 +338,22 @@ const styles = StyleSheet.create({
   },
   watchButtonSubtitle: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.9)',
     marginTop: 2,
   },
   recalculateButton: {
     marginHorizontal: 20,
     marginVertical: 10,
     backgroundColor: '#00CFC1',
-    padding: 15,
+    padding: 16,
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
   },
   recalculateText: {
     fontSize: 16,
@@ -331,18 +362,22 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   scoresGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     marginHorizontal: 20,
     marginVertical: 15,
+    justifyContent: 'space-between',
   },
   scoreCard: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 12,
     padding: 15,
     marginBottom: 12,
+    width: '48%',
     shadowColor: '#000',
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 4,
   },
   scoreHeader: {
     flexDirection: 'row',
@@ -350,79 +385,83 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   scoreTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#1a1a1a',
-    marginLeft: 8,
+    marginLeft: 6,
   },
   scoreValue: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     marginVertical: 8,
   },
   scoreTarget: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#999',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   scoreBar: {
-    height: 6,
+    height: 5,
     borderRadius: 3,
-    opacity: 0.5,
+    opacity: 0.6,
   },
   wearableData: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginVertical: 10,
+    marginTop: 8,
   },
   dataItem: {
-    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 4,
   },
   dataLabel: {
     fontSize: 12,
-    color: '#999',
-    marginBottom: 4,
+    color: '#666',
   },
   dataValue: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: 'bold',
     color: '#00CFC1',
   },
   noDataText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#999',
     textAlign: 'center',
     marginVertical: 10,
   },
   navigationGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     marginHorizontal: 20,
     marginVertical: 15,
-    gap: 12,
+    justifyContent: 'space-between',
   },
   navButton: {
-    flex: 1,
-    backgroundColor: '#fff',
+    width: '48%',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 12,
-    padding: 15,
+    padding: 18,
     alignItems: 'center',
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 4,
   },
   navButtonText: {
     fontSize: 13,
     fontWeight: '600',
     color: '#00CFC1',
     marginTop: 8,
+    textAlign: 'center',
   },
   footer: {
     alignItems: 'center',
     paddingVertical: 20,
+    paddingBottom: 30,
   },
   footerText: {
     fontSize: 12,
-    color: '#999',
+    color: '#FFFFFF',
+    opacity: 0.8,
   },
 });
