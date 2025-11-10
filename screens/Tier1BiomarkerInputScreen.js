@@ -11,7 +11,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import PraxiomBackground from '../components/PraxiomBackground';
 import PraxiomAlgorithm from '../services/PraxiomAlgorithm';
-import WearableService from '../services/WearableService';
 
 const Tier1BiomarkerInputScreen = ({ navigation }) => {
   // Patient Information
@@ -40,15 +39,21 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
       return;
     }
 
-    // Calculate using Praxiom Algorithm
-    const bioAge = PraxiomAlgorithm.calculateBiologicalAge({
-      chronologicalAge: ageNum,
-      oralHealthScore: calculateOralScore(parseFloat(salivaryPH), parseFloat(activeMMP8), parseFloat(salivaryFlowRate)),
-      systemicHealthScore: calculateSystemicScore(parseFloat(hsCRP), parseFloat(omega3Index), parseFloat(hba1c)),
-      hsCRP: parseFloat(hsCRP),
-      omega3Index: parseFloat(omega3Index),
-      hba1c: parseFloat(hba1c),
-    });
+    // Calculate scores
+    const oralScore = calculateOralScore(parseFloat(salivaryPH), parseFloat(activeMMP8), parseFloat(salivaryFlowRate));
+    const systemicScore = calculateSystemicScore(parseFloat(hsCRP), parseFloat(omega3Index), parseFloat(hba1c));
+    const fitnessScore = 50; // Default for manual entry
+
+    // ✅ CORRECTED: Use actual PraxiomAlgorithm.calculateBioAge() API
+    // Expects 4 separate parameters, not an object!
+    const result = PraxiomAlgorithm.calculateBioAge(
+      ageNum,
+      oralScore,
+      systemicScore,
+      fitnessScore
+    );
+
+    const bioAge = result.bioAge; // Extract bioAge from result object
 
     Alert.alert('Success', `Calculated Biological Age: ${bioAge.toFixed(1)} years`);
 
