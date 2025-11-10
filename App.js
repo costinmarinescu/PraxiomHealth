@@ -51,7 +51,7 @@ export default function App() {
   return (
     <AppContextProvider>
       <ImageBackground
-        source={require('./assets/gradient-background.png')}
+        source={require('./assets/praxiom_background.png')}
         style={styles.backgroundImage}
         resizeMode="cover">
         <NavigationContainer theme={MyTheme}>
