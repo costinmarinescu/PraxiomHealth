@@ -7,20 +7,13 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
-  Platform,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import PraxiomBackground from '../components/PraxiomBackground';
 import PraxiomAlgorithm from '../services/PraxiomAlgorithm';
-import StorageService from '../services/StorageService';
 import WearableService from '../services/WearableService';
 
 const Tier1BiomarkerInputScreen = ({ navigation }) => {
-  // Date selection
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
-
   // Patient Information
   const [age, setAge] = useState('');
 
@@ -32,335 +25,193 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
   // Systemic Health Biomarkers
   const [hsCRP, setHsCRP] = useState('');
   const [omega3Index, setOmega3Index] = useState('');
-  const [hbA1c, setHbA1c] = useState('');
-  const [gdf15, setGDF15] = useState('');
-  const [vitaminD, setVitaminD] = useState('');
+  const [hba1c, setHba1c] = useState('');
 
-  // Wearable Data
-  const [heartRate, setHeartRate] = useState('');
-  const [steps, setSteps] = useState('');
-  const [spO2, setSpO2] = useState('');
-
-  const [loading, setLoading] = useState(false);
-
-  const onDateChange = (event, date) => {
-    setShowDatePicker(Platform.OS === 'ios');
-    if (date) {
-      setSelectedDate(date);
+  const handleSubmit = () => {
+    // Validate inputs
+    if (!age || !salivaryPH || !activeMMP8 || !salivaryFlowRate || !hsCRP || !omega3Index || !hba1c) {
+      Alert.alert('Missing Data', 'Please fill in all fields');
+      return;
     }
+
+    const ageNum = parseFloat(age);
+    if (ageNum <= 0 || ageNum > 150) {
+      Alert.alert('Invalid Age', 'Please enter a valid age');
+      return;
+    }
+
+    // Calculate using Praxiom Algorithm
+    const bioAge = PraxiomAlgorithm.calculateBiologicalAge({
+      chronologicalAge: ageNum,
+      oralHealthScore: calculateOralScore(parseFloat(salivaryPH), parseFloat(activeMMP8), parseFloat(salivaryFlowRate)),
+      systemicHealthScore: calculateSystemicScore(parseFloat(hsCRP), parseFloat(omega3Index), parseFloat(hba1c)),
+      hsCRP: parseFloat(hsCRP),
+      omega3Index: parseFloat(omega3Index),
+      hba1c: parseFloat(hba1c),
+    });
+
+    Alert.alert('Success', `Calculated Biological Age: ${bioAge.toFixed(1)} years`);
+
+    // Reset form
+    resetForm();
+    navigation.goBack();
   };
 
-  const validateInputs = () => {
-    if (!age || parseFloat(age) < 18 || parseFloat(age) > 120) {
-      Alert.alert('Invalid Input', 'Please enter a valid age (18-120)');
-      return false;
-    }
-
-    const requiredFields = [
-      { value: salivaryPH, name: 'Salivary pH' },
-      { value: activeMMP8, name: 'Active MMP-8' },
-      { value: salivaryFlowRate, name: 'Salivary Flow Rate' },
-      { value: hsCRP, name: 'hs-CRP' },
-      { value: omega3Index, name: 'Omega-3 Index' },
-      { value: hbA1c, name: 'HbA1c' },
-      { value: gdf15, name: 'GDF-15' },
-      { value: vitaminD, name: 'Vitamin D' },
-      { value: heartRate, name: 'Heart Rate' },
-      { value: steps, name: 'Daily Steps' },
-      { value: spO2, name: 'Oxygen Saturation' },
-    ];
-
-    for (const field of requiredFields) {
-      if (!field.value || field.value.trim() === '') {
-        Alert.alert('Missing Data', `Please enter ${field.name}`);
-        return false;
-      }
-    }
-
-    return true;
+  const calculateOralScore = (ph, mmp8, flowRate) => {
+    let score = 75;
+    const phDiff = Math.abs(ph - 6.8);
+    score -= phDiff * 5;
+    score -= Math.min(40, mmp8 * 0.5);
+    if (flowRate > 1.5) score += 10;
+    return Math.max(0, Math.min(100, score));
   };
 
-  const handleCalculate = async () => {
-    if (!validateInputs()) return;
+  const calculateSystemicScore = (hsCRP, omega3, hba1c) => {
+    let score = 75;
+    score -= Math.min(30, hsCRP * 10);
+    if (omega3 >= 8) score += 15;
+    const hba1cDiff = Math.abs(hba1c - 5.2);
+    score -= hba1cDiff * 5;
+    return Math.max(0, Math.min(100, score));
+  };
 
-    setLoading(true);
-
-    try {
-      // Prepare biomarker data
-      const biomarkerData = {
-        age: parseFloat(age),
-        salivaryPH: parseFloat(salivaryPH),
-        activeMMP8: parseFloat(activeMMP8),
-        salivaryFlowRate: parseFloat(salivaryFlowRate),
-        hsCRP: parseFloat(hsCRP),
-        omega3Index: parseFloat(omega3Index),
-        hbA1c: parseFloat(hbA1c),
-        gdf15: parseFloat(gdf15),
-        vitaminD: parseFloat(vitaminD),
-        heartRate: parseFloat(heartRate),
-        steps: parseInt(steps),
-        spO2: parseFloat(spO2),
-      };
-
-      // Calculate Bio-Age using Praxiom Algorithm
-      const results = PraxiomAlgorithm.calculateFromBiomarkers(biomarkerData);
-
-      // Prepare entry for storage
-      const entry = {
-        ...biomarkerData,
-        ...results,
-        timestamp: selectedDate.toISOString(),
-        tier: 1,
-      };
-
-      // Save to storage
-      await StorageService.saveBiomarkerEntry(entry);
-
-      // Send to watch if connected
-      if (WearableService.isConnected()) {
-        try {
-          await WearableService.sendBioAge({ praxiomAge: results.bioAge });
-          
-          Alert.alert(
-            'Success!',
-            `Bio-Age: ${results.bioAge} years\nData saved and synced to watch!`,
-            [{ text: 'OK', onPress: () => navigation.goBack() }]
-          );
-        } catch (bleError) {
-          console.error('BLE sync error:', bleError);
-          Alert.alert(
-            'Partial Success',
-            `Bio-Age: ${results.bioAge} years\nData saved but watch sync failed.`,
-            [{ text: 'OK', onPress: () => navigation.goBack() }]
-          );
-        }
-      } else {
-        Alert.alert(
-          'Success!',
-          `Bio-Age: ${results.bioAge} years\nData saved successfully!`,
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
-        );
-      }
-    } catch (error) {
-      console.error('Calculation error:', error);
-      Alert.alert('Error', 'Failed to calculate Bio-Age. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+  const resetForm = () => {
+    setAge('');
+    setSalivaryPH('');
+    setActiveMMP8('');
+    setSalivaryFlowRate('');
+    setHsCRP('');
+    setOmega3Index('');
+    setHba1c('');
   };
 
   return (
-    <PraxiomBackground>
-      <ScrollView style={styles.container}>
-        {/* Date Selection */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Assessment Date</Text>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={20} color="#00d4ff" />
-            <Text style={styles.dateText}>
-              {selectedDate.toLocaleDateString()}
-            </Text>
-          </TouchableOpacity>
-          {showDatePicker && (
-            <DateTimePicker
-              value={selectedDate}
-              mode="date"
-              display="default"
-              onChange={onDateChange}
-              maximumDate={new Date()}
-            />
-          )}
-        </View>
+    <View style={styles.container}>
+      <PraxiomBackground />
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <Text style={styles.title}>Tier 1 Biomarkers</Text>
+        <Text style={styles.subtitle}>Essential Health Measurements</Text>
 
         {/* Patient Information */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Patient Information</Text>
+          <Text style={styles.sectionTitle}>👤 Patient Information</Text>
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Age (years)</Text>
+            <Text style={styles.label}>Chronological Age (years)</Text>
+            <Text style={styles.hint}>Your actual age</Text>
             <TextInput
               style={styles.input}
+              placeholder="53"
+              placeholderTextColor="rgba(255, 255, 255, 0.5)"
+              keyboardType="decimal-pad"
               value={age}
               onChangeText={setAge}
-              keyboardType="numeric"
-              placeholder="e.g., 45"
-              placeholderTextColor="#666"
             />
           </View>
         </View>
 
-        {/* Oral Health Biomarkers */}
+        {/* Oral Health */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Oral Health Biomarkers</Text>
-          
+          <Text style={styles.sectionTitle}>🦷 Oral Health</Text>
+
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Salivary pH (Optimal: 6.5-7.2)</Text>
+            <Text style={styles.hint}>Neutral pH indicates better oral health</Text>
             <TextInput
               style={styles.input}
+              placeholder="6.8"
+              placeholderTextColor="rgba(255, 255, 255, 0.5)"
+              keyboardType="decimal-pad"
               value={salivaryPH}
               onChangeText={setSalivaryPH}
-              keyboardType="decimal-pad"
-              placeholder="e.g., 7.0"
-              placeholderTextColor="#666"
             />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Active MMP-8 (ng/mL) (Optimal: &lt;60)</Text>
+            <Text style={styles.label}>MMP-8 ng/mL (Optimal: &lt;60)</Text>
+            <Text style={styles.hint}>Matrix Metalloproteinase-8 indicator</Text>
             <TextInput
               style={styles.input}
+              placeholder="50"
+              placeholderTextColor="rgba(255, 255, 255, 0.5)"
+              keyboardType="decimal-pad"
               value={activeMMP8}
               onChangeText={setActiveMMP8}
-              keyboardType="numeric"
-              placeholder="e.g., 45"
-              placeholderTextColor="#666"
             />
-            <Text style={styles.hint}>Weight: 2.5x - CVD correlation</Text>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Salivary Flow Rate (mL/min) (Optimal: &gt;1.5)</Text>
+            <Text style={styles.label}>Flow Rate mL/min (Optimal: &gt;1.5)</Text>
+            <Text style={styles.hint}>Salivary flow rate measurement</Text>
             <TextInput
               style={styles.input}
+              placeholder="1.8"
+              placeholderTextColor="rgba(255, 255, 255, 0.5)"
+              keyboardType="decimal-pad"
               value={salivaryFlowRate}
               onChangeText={setSalivaryFlowRate}
-              keyboardType="decimal-pad"
-              placeholder="e.g., 1.8"
-              placeholderTextColor="#666"
             />
           </View>
         </View>
 
-        {/* Systemic Health Biomarkers */}
+        {/* Systemic Health */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Systemic Health Biomarkers</Text>
-          
+          <Text style={styles.sectionTitle}>❤️ Systemic Health</Text>
+
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>hs-CRP (mg/L) (Optimal: &lt;1.0)</Text>
+            <Text style={styles.label}>hs-CRP mg/L (Optimal: &lt;1.0)</Text>
+            <Text style={styles.hint}>High-sensitivity C-Reactive Protein</Text>
             <TextInput
               style={styles.input}
+              placeholder="0.8"
+              placeholderTextColor="rgba(255, 255, 255, 0.5)"
+              keyboardType="decimal-pad"
               value={hsCRP}
               onChangeText={setHsCRP}
-              keyboardType="decimal-pad"
-              placeholder="e.g., 0.8"
-              placeholderTextColor="#666"
             />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Omega-3 Index (%) (Optimal: &gt;8)</Text>
+            <Text style={styles.label}>Omega-3 Index % (Optimal: &gt;8.0)</Text>
+            <Text style={styles.hint}>Omega-3 Fatty Acid content percentage</Text>
             <TextInput
               style={styles.input}
+              placeholder="8.5"
+              placeholderTextColor="rgba(255, 255, 255, 0.5)"
+              keyboardType="decimal-pad"
               value={omega3Index}
               onChangeText={setOmega3Index}
-              keyboardType="decimal-pad"
-              placeholder="e.g., 8.5"
-              placeholderTextColor="#666"
             />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>HbA1c (%) (Optimal: &lt;5.7)</Text>
+            <Text style={styles.label}>HbA1c % (Optimal: &lt;5.7)</Text>
+            <Text style={styles.hint}>Glycated hemoglobin blood glucose</Text>
             <TextInput
               style={styles.input}
-              value={hbA1c}
-              onChangeText={setHbA1c}
+              placeholder="5.2"
+              placeholderTextColor="rgba(255, 255, 255, 0.5)"
               keyboardType="decimal-pad"
-              placeholder="e.g., 5.4"
-              placeholderTextColor="#666"
-            />
-            <Text style={styles.hint}>Weight: 1.5x - ADA validated</Text>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>GDF-15 (pg/mL) (Optimal: &lt;1200)</Text>
-            <TextInput
-              style={styles.input}
-              value={gdf15}
-              onChangeText={setGDF15}
-              keyboardType="numeric"
-              placeholder="e.g., 1000"
-              placeholderTextColor="#666"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Vitamin D 25-OH (ng/mL) (Optimal: &gt;30)</Text>
-            <TextInput
-              style={styles.input}
-              value={vitaminD}
-              onChangeText={setVitaminD}
-              keyboardType="decimal-pad"
-              placeholder="e.g., 35"
-              placeholderTextColor="#666"
+              value={hba1c}
+              onChangeText={setHba1c}
             />
           </View>
         </View>
 
-        {/* Wearable Data */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Wearable Data (PineTime)</Text>
-          
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Heart Rate (bpm)</Text>
-            <TextInput
-              style={styles.input}
-              value={heartRate}
-              onChangeText={setHeartRate}
-              keyboardType="numeric"
-              placeholder="e.g., 65"
-              placeholderTextColor="#666"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Daily Steps</Text>
-            <TextInput
-              style={styles.input}
-              value={steps}
-              onChangeText={setSteps}
-              keyboardType="numeric"
-              placeholder="e.g., 10000"
-              placeholderTextColor="#666"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Oxygen Saturation (%)</Text>
-            <TextInput
-              style={styles.input}
-              value={spO2}
-              onChangeText={setSpO2}
-              keyboardType="numeric"
-              placeholder="e.g., 98"
-              placeholderTextColor="#666"
-            />
-          </View>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.button, styles.primaryButton]}
-            onPress={handleCalculate}
-            disabled={loading}
-          >
-            <Text style={styles.buttonText}>
-              {loading ? 'Calculating...' : 'Calculate Praxiom Bio-Age'}
-            </Text>
+        {/* Buttons */}
+        <View style={styles.buttonGroup}>
+          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+            <Ionicons name="checkmark-circle" size={20} color="#fff" />
+            <Text style={styles.submitButtonText}>Calculate Bio-Age</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton]}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.secondaryButtonText}>Cancel</Text>
+          <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
         </View>
+
+        <View style={styles.spacer} />
       </ScrollView>
-    </PraxiomBackground>
+    </View>
   );
 };
 
@@ -368,80 +219,96 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  section: {
+  content: {
+    flex: 1,
     padding: 20,
-    paddingTop: 10,
+    paddingTop: 40,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    marginBottom: 24,
+    opacity: 0.9,
+  },
+  section: {
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#00d4ff',
-    marginBottom: 15,
-  },
-  dateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1e1e2e',
-    padding: 15,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#00d4ff',
-  },
-  dateText: {
-    fontSize: 16,
-    color: '#ffffff',
-    marginLeft: 10,
+    color: '#FFFFFF',
+    marginBottom: 16,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   label: {
     fontSize: 14,
-    color: '#ffffff',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#1e1e2e',
-    color: '#ffffff',
-    padding: 15,
-    borderRadius: 12,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#2a2a3e',
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 4,
   },
   hint: {
     fontSize: 12,
-    color: '#8e8e93',
-    marginTop: 4,
+    color: '#E0E0E0',
+    marginBottom: 8,
     fontStyle: 'italic',
   },
-  actions: {
-    padding: 20,
-    paddingBottom: 40,
+  input: {
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#FFFFFF',
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  button: {
-    padding: 18,
-    borderRadius: 12,
+  buttonGroup: {
+    marginTop: 24,
+    gap: 12,
+  },
+  submitButton: {
+    backgroundColor: '#00CFC1',
+    paddingVertical: 14,
+    borderRadius: 10,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'center',
+    gap: 8,
   },
-  primaryButton: {
-    backgroundColor: '#4ade80',
-  },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: '#8e8e93',
-  },
-  buttonText: {
+  submitButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#000000',
+    color: '#FFFFFF',
   },
-  secondaryButtonText: {
+  cancelButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  cancelButtonText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#8e8e93',
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  spacer: {
+    height: 20,
   },
 });
 
