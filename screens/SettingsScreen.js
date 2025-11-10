@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Switch,
   Alert,
   Share,
 } from 'react-native';
@@ -112,7 +113,7 @@ export default function SettingsScreen({ navigation }) {
         <Text style={styles.headerSubtitle}>Praxiom Health</Text>
       </View>
 
-      {/* Device Info - NOW USING AppContext */}
+      {/* Device Info */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Connected Device</Text>
         <TouchableOpacity 
@@ -135,7 +136,7 @@ export default function SettingsScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* App Settings - DARK MODE REMOVED */}
+      {/* App Settings */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>App Settings</Text>
         
