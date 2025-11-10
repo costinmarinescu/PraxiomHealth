@@ -409,7 +409,7 @@ class WearableService {
     return Math.round(hrvScore);
   }
 
-  // ✅ NEW METHOD: Send Biological Age to Watch
+  // ✅ FIXED: Send Biological Age as UINT32 (not float)
   async sendBiologicalAge(biologicalAge) {
     if (!this.connectedDevice) {
       throw new Error('No device connected');
@@ -422,18 +422,21 @@ class WearableService {
         throw new Error('Invalid biological age value');
       }
       
-      // Send as 4-byte float (matching watch firmware expectation)
+      // ✅ CRITICAL FIX: Watch firmware expects uint32_t, NOT float!
+      // Round to nearest integer and send as 4-byte little-endian uint32
+      const ageAsInteger = Math.round(bioAge);
+      
       const buffer = new ArrayBuffer(4);
       const view = new DataView(buffer);
-      view.setFloat32(0, bioAge, true); // little-endian
+      view.setUint32(0, ageAsInteger, true); // little-endian uint32
       
       // Convert to base64
       const bytes = new Uint8Array(buffer);
       const base64Data = base64.encode(String.fromCharCode(...bytes));
       
-      console.log('📤 Sending Biological Age to watch:', bioAge);
-      console.log('🔧 Using service UUID:', PRAXIOM_SERVICE);
-      console.log('🔧 Using characteristic UUID:', BIO_AGE_CHAR);
+      console.log('📤 Sending Biological Age to watch:', ageAsInteger, '(rounded from', bioAge, ')');
+      console.log('🔧 Data format: uint32_t (4 bytes, little-endian)');
+      console.log('🔧 Raw bytes:', Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' '));
       
       await this.connectedDevice.writeCharacteristicWithResponseForService(
         PRAXIOM_SERVICE,
