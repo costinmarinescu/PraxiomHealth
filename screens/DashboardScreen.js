@@ -164,14 +164,16 @@ export default function DashboardScreen({ navigation }) {
             style={styles.actionButton}
             onPress={() => navigation.navigate('BiomarkerInput')}
           >
-            <Text style={styles.actionButtonText}>{"📝 Enter\nBiomarkers"}</Text>
+            <Text style={styles.actionButtonText}>📝 Enter</Text>
+            <Text style={styles.actionButtonText}>Biomarkers</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.actionButton}
             onPress={handleRecalculateAge}
           >
-            <Text style={styles.actionButtonText}>{"🔄 Recalculate\nAge"}</Text>
+            <Text style={styles.actionButtonText}>🔄 Recalculate</Text>
+            <Text style={styles.actionButtonText}>Age</Text>
           </TouchableOpacity>
         </View>
 

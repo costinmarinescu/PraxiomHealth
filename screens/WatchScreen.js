@@ -211,7 +211,7 @@ export default function WatchScreen() {
 
       Alert.alert(
         '✅ Connected!',
-        `Successfully connected to ${device.name}.\n\nYour watch will now sync heart rate, steps, and other health data.\n\nYour Bio-Age (${state.biologicalAge.toFixed(1)} years) is calculated and displayed in the app.`
+        `Successfully connected to ${device.name}.\n\nYour watch will now sync heart rate, steps, and other health data.`
       );
     } catch (error) {
       console.error('Connection error:', error);
@@ -224,10 +224,7 @@ export default function WatchScreen() {
   };
 
   const disconnectDevice = async () => {
-    if (!connectedDevice) {
-      Alert.alert('No Device Connected', 'There is no device to disconnect.');
-      return;
-    }
+    if (!connectedDevice) return;
 
     try {
       await bleManager.cancelDeviceConnection(connectedDevice.id);
@@ -239,26 +236,11 @@ export default function WatchScreen() {
     }
   };
 
-  const getConnectionStatusText = () => {
-    switch (connectionStatus) {
-      case 'connecting': return 'Connecting...';
-      case 'connected': return 'Connected';
-      default: return 'Not Connected';
-    }
-  };
-
-  const getConnectionIcon = () => {
-    switch (connectionStatus) {
-      case 'connecting': return '🔄';
-      case 'connected': return '✓';
-      default: return '⚠';
-    }
-  };
-
   return (
     <LinearGradient colors={['#FF6B00', '#FFB800']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.header}>{"PRAXIOM\nHEALTH"}</Text>
+        <Text style={styles.header}>PRAXIOM</Text>
+        <Text style={styles.header}>HEALTH</Text>
 
         <View style={styles.titleContainer}>
           <Text style={styles.title}>PineTime Watch</Text>
@@ -271,8 +253,12 @@ export default function WatchScreen() {
           connectionStatus === 'connecting' && styles.connectingCard
         ]}>
           <View style={styles.statusHeader}>
-            <Text style={styles.statusIcon}>{getConnectionIcon()}</Text>
-            <Text style={styles.statusTitle}>{getConnectionStatusText()}</Text>
+            <Text style={styles.statusIcon}>
+              {connectionStatus === 'connecting' ? '🔄' : connectionStatus === 'connected' ? '✓' : '⚠'}
+            </Text>
+            <Text style={styles.statusTitle}>
+              {connectionStatus === 'connecting' ? 'Connecting...' : connectionStatus === 'connected' ? 'Connected' : 'Not Connected'}
+            </Text>
           </View>
           {connectedDevice && (
             <>
@@ -295,9 +281,7 @@ export default function WatchScreen() {
             disabled={isScanning || connectionStatus === 'connecting'}
           >
             <Text style={styles.scanButtonText}>
-              {isScanning ? 'Scanning...' :
-                connectionStatus === 'connecting' ? 'Connecting...' :
-                  'Scan for Watch'}
+              {isScanning ? 'Scanning...' : connectionStatus === 'connecting' ? 'Connecting...' : 'Scan for Watch'}
             </Text>
           </TouchableOpacity>
         ) : (
@@ -362,18 +346,16 @@ export default function WatchScreen() {
 
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>💡 Watch Features:</Text>
-          <Text style={styles.infoText}>✓ Syncs heart rate, steps, HRV to app</Text>
+          <Text style={styles.infoText}>✓ Syncs heart rate, steps, HRV</Text>
           <Text style={styles.infoText}>✓ Real-time health monitoring</Text>
-          <Text style={styles.infoText}>✓ Bio-Age calculated and displayed in app</Text>
-          <Text style={styles.infoText}>✓ Works with standard InfiniTime firmware</Text>
+          <Text style={styles.infoText}>✓ Bio-Age calculated in app</Text>
         </View>
 
         <View style={styles.troubleshootingCard}>
           <Text style={styles.troubleshootingTitle}>💡 Troubleshooting:</Text>
           <Text style={styles.troubleshootingText}>• Make sure watch is ON and NEARBY</Text>
           <Text style={styles.troubleshootingText}>• Turn on "Show All Devices" to see everything</Text>
-          <Text style={styles.troubleshootingText}>• Unpair from phone's Bluetooth settings if connection fails</Text>
-          <Text style={styles.troubleshootingText}>• Try turning Bluetooth off and on if having issues</Text>
+          <Text style={styles.troubleshootingText}>• Unpair from Bluetooth settings if connection fails</Text>
         </View>
       </ScrollView>
     </LinearGradient>
@@ -383,8 +365,8 @@ export default function WatchScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { padding: 20, paddingBottom: 100 },
-  header: { fontSize: 16, fontWeight: 'bold', textAlign: 'center', color: '#333', marginBottom: 30, lineHeight: 22 },
-  titleContainer: { alignItems: 'center', marginBottom: 25 },
+  header: { fontSize: 16, fontWeight: 'bold', textAlign: 'center', color: '#333', lineHeight: 22 },
+  titleContainer: { alignItems: 'center', marginBottom: 25, marginTop: 10 },
   title: { fontSize: 32, fontWeight: 'bold', color: '#333', marginBottom: 8 },
   subtitle: { fontSize: 18, color: '#666' },
   statusCard: {

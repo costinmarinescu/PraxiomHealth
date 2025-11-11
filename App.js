@@ -31,21 +31,16 @@ const MyTheme = {
 
 function DashboardStack() {
   return (
-    <Stack.Navigator 
-      screenOptions={{ 
-        headerShown: false,
-        animation: 'slide_from_right',
-      }}
-    >
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="DashboardHome" component={DashboardScreen} />
-      <Stack.Screen name="BiomarkerInput" component={BiomarkerInputScreen} options={{ title: 'Enter Biomarkers' }} />
-      <Stack.Screen name="Tier1BiomarkerInput" component={Tier1BiomarkerInputScreen} options={{ title: 'Tier 1 Biomarkers' }} />
-      <Stack.Screen name="Tier2BiomarkerInput" component={Tier2BiomarkerInputScreen} options={{ title: 'Tier 2 Biomarkers' }} />
-      <Stack.Screen name="Report" component={ReportScreen} options={{ title: 'Health Report' }} />
-      <Stack.Screen name="DNATest" component={DNATestScreen} options={{ title: 'DNA Test Results' }} />
-      <Stack.Screen name="HistoricalData" component={HistoricalDataScreen} options={{ title: 'Historical Data' }} />
-      <Stack.Screen name="BiomarkerHistory" component={BiomarkerHistoryScreen} options={{ title: 'Biomarker History' }} />
-      <Stack.Screen name="Comparison" component={ComparisonScreen} options={{ title: 'Compare Data' }} />
+      <Stack.Screen name="BiomarkerInput" component={BiomarkerInputScreen} />
+      <Stack.Screen name="Tier1BiomarkerInput" component={Tier1BiomarkerInputScreen} />
+      <Stack.Screen name="Tier2BiomarkerInput" component={Tier2BiomarkerInputScreen} />
+      <Stack.Screen name="Report" component={ReportScreen} />
+      <Stack.Screen name="DNATest" component={DNATestScreen} />
+      <Stack.Screen name="HistoricalData" component={HistoricalDataScreen} />
+      <Stack.Screen name="BiomarkerHistory" component={BiomarkerHistoryScreen} />
+      <Stack.Screen name="Comparison" component={ComparisonScreen} />
     </Stack.Navigator>
   );
 }
@@ -57,7 +52,7 @@ export default function App() {
         source={require('./assets/praxiom_background.png')}
         style={styles.backgroundImage}
         resizeMode="cover"
-        onError={(error) => console.log('Background image not found, using fallback color')}
+        onError={() => console.log('Background image not found')}
       >
         <NavigationContainer theme={MyTheme}>
           <Tab.Navigator
@@ -83,9 +78,9 @@ export default function App() {
               },
             })}
           >
-            <Tab.Screen name="Dashboard" component={DashboardStack} options={{ title: 'Dashboard' }} />
-            <Tab.Screen name="Watch" component={WatchScreen} options={{ title: 'Watch' }} />
-            <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+            <Tab.Screen name="Dashboard" component={DashboardStack} />
+            <Tab.Screen name="Watch" component={WatchScreen} />
+            <Tab.Screen name="Settings" component={SettingsScreen} />
           </Tab.Navigator>
         </NavigationContainer>
       </ImageBackground>
