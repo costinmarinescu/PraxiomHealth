@@ -9,7 +9,6 @@ const CircularProgress = ({ score, label, size = 120 }) => {
   const circumference = 2 * Math.PI * radius;
   const progress = (score / 100) * circumference;
 
-  // Color based on score
   const getColor = (score) => {
     if (score >= 80) return ['#00d4ff', '#0ea5e9'];
     if (score >= 65) return ['#4ade80', '#22c55e'];
@@ -22,12 +21,8 @@ const CircularProgress = ({ score, label, size = 120 }) => {
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
-      <LinearGradient
-        colors={['#1e1e2e', '#2a2a3e']}
-        style={styles.card}
-      >
+      <LinearGradient colors={['#1e1e2e', '#2a2a3e']} style={styles.card}>
         <Svg width={size} height={size} style={styles.svg}>
-          {/* Background circle */}
           <Circle
             cx={size / 2}
             cy={size / 2}
@@ -36,8 +31,6 @@ const CircularProgress = ({ score, label, size = 120 }) => {
             strokeWidth={strokeWidth}
             fill="transparent"
           />
-          
-          {/* Progress circle */}
           <Circle
             cx={size / 2}
             cy={size / 2}
@@ -52,7 +45,6 @@ const CircularProgress = ({ score, label, size = 120 }) => {
             origin={`${size / 2}, ${size / 2}`}
           />
         </Svg>
-
         <View style={styles.content}>
           <Text style={styles.score}>{score}</Text>
           <Text style={styles.label}>{label}</Text>
@@ -63,10 +55,7 @@ const CircularProgress = ({ score, label, size = 120 }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  container: { alignItems: 'center', justifyContent: 'center' },
   card: {
     width: '100%',
     height: '100%',
@@ -79,23 +68,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  svg: {
-    position: 'absolute',
-  },
-  content: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  score: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  label: {
-    fontSize: 12,
-    color: '#8e8e93',
-    marginTop: 4,
-  },
+  svg: { position: 'absolute' },
+  content: { alignItems: 'center', justifyContent: 'center' },
+  score: { fontSize: 32, fontWeight: 'bold', color: '#ffffff' },
+  label: { fontSize: 12, color: '#8e8e93', marginTop: 4 },
 });
 
 export default CircularProgress;
