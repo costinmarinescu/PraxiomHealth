@@ -15,7 +15,6 @@ export const AppContextProvider = ({ children }) => {
     fitnessScore: 65,
     watchConnected: false,
     lastSync: null,
-
     // Tier 1 Biomarkers
     salivaryPH: null,
     mmp8: null,
@@ -25,7 +24,6 @@ export const AppContextProvider = ({ children }) => {
     hba1c: null,
     gdf15: null,
     vitaminD: null,
-
     // Wearable Data
     heartRate: null,
     steps: 0,
@@ -45,7 +43,6 @@ export const AppContextProvider = ({ children }) => {
     // Listen for data updates from watch
     const unsubscribeData = WearableService.onDataUpdate((data) => {
       console.log('📊 Received wearable data update:', data);
-
       setState((prevState) => ({
         ...prevState,
         heartRate: data.heartRate !== undefined ? data.heartRate : prevState.heartRate,
@@ -62,7 +59,6 @@ export const AppContextProvider = ({ children }) => {
     // Listen for connection status changes
     const unsubscribeConnection = WearableService.onConnectionChange((isConnected) => {
       console.log('🔗 Watch connection status changed:', isConnected);
-
       setState((prevState) => ({
         ...prevState,
         watchConnected: isConnected,
@@ -170,7 +166,6 @@ export const AppContextProvider = ({ children }) => {
         systemicScore,
         fitnessFromSteps
       );
-
       const biologicalAge = result.bioAge;
 
       console.log('📊 Calculation complete:', {

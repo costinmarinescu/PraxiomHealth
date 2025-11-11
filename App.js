@@ -1,5 +1,5 @@
 import React from 'react';
-import { ImageBackground, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -26,7 +26,7 @@ const MyTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    background: 'transparent',
+    background: '#1a1a2e',
   },
 };
 
@@ -50,10 +50,7 @@ function DashboardStack() {
 export default function App() {
   return (
     <AppContextProvider>
-      <ImageBackground
-        source={require('./assets/praxiom_background.png')}
-        style={styles.backgroundImage}
-        resizeMode="cover">
+      <View style={styles.container}>
         <NavigationContainer theme={MyTheme}>
           <Tab.Navigator
             screenOptions={({ route }) => ({
@@ -72,7 +69,7 @@ export default function App() {
               tabBarActiveTintColor: '#00CFC1',
               tabBarInactiveTintColor: 'white',
               tabBarStyle: {
-                backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                backgroundColor: 'rgba(0, 0, 0, 0.9)',
                 borderTopWidth: 0,
                 elevation: 0,
                 paddingBottom: 8,
@@ -89,15 +86,14 @@ export default function App() {
             <Tab.Screen name="Settings" component={SettingsScreen} />
           </Tab.Navigator>
         </NavigationContainer>
-      </ImageBackground>
+      </View>
     </AppContextProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  backgroundImage: {
+  container: {
     flex: 1,
-    width: '100%',
-    height: '100%',
+    backgroundColor: '#1a1a2e',
   },
 });
