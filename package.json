@@ -9,7 +9,6 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "react": "18.2.0",
     "expo": "~50.0.0",
     "react-native": "0.73.6",
     "expo-modules-core": "~1.11.0",

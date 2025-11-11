@@ -1,4 +1,4 @@
-import React, { useContext, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,26 +11,35 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { AppContext } from '../AppContext';
 
-export default function SettingsScreen({ navigation }) {
-  const { state } = useContext(AppContext);
-  const [notifications, setNotifications] = React.useState(true);
-  const [autoSync, setAutoSync] = React.useState(true);
+export default function SettingsScreen() {
+  const [notifications, setNotifications] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
+  const [autoSync, setAutoSync] = useState(true);
+  const [deviceName, setDeviceName] = useState('Not Connected');
 
   useEffect(() => {
     loadSettings();
+    loadDeviceName();
   }, []);
 
   const loadSettings = async () => {
     try {
       const notif = await AsyncStorage.getItem('notifications');
+      const dark = await AsyncStorage.getItem('darkMode');
       const sync = await AsyncStorage.getItem('autoSync');
+      
       if (notif !== null) setNotifications(JSON.parse(notif));
+      if (dark !== null) setDarkMode(JSON.parse(dark));
       if (sync !== null) setAutoSync(JSON.parse(sync));
     } catch (error) {
       console.error('Error loading settings:', error);
     }
+  };
+
+  const loadDeviceName = async () => {
+    const name = await AsyncStorage.getItem('lastDeviceName');
+    if (name) setDeviceName(name);
   };
 
   const saveSetting = async (key, value) => {
@@ -43,15 +52,17 @@ export default function SettingsScreen({ navigation }) {
 
   const handleExportData = async () => {
     try {
-      const data = await AsyncStorage.getItem('praxiomHealthData');
+      const data = await AsyncStorage.getItem('healthData');
       if (!data) {
         Alert.alert('No Data', 'No health data to export');
         return;
       }
+
       const result = await Share.share({
         message: `Praxiom Health Data:\n\n${data}`,
         title: 'Health Data Export',
       });
+
       if (result.action === Share.sharedAction) {
         Alert.alert('Success', 'Data exported successfully');
       }
@@ -71,7 +82,7 @@ export default function SettingsScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await AsyncStorage.removeItem('praxiomHealthData');
+              await AsyncStorage.removeItem('healthData');
               await AsyncStorage.removeItem('biomarkers');
               Alert.alert('Success', 'All data cleared');
             } catch (error) {
@@ -97,11 +108,11 @@ export default function SettingsScreen({ navigation }) {
           value={value}
           onValueChange={onValueChange}
           trackColor={{ false: '#767577', true: '#00CFC1' }}
-          thumbColor={value ? '#fff' : '#f4f3f4'}
+          thumbColor={value ? '#ffffff' : '#f4f3f4'}
         />
       )}
       {type === 'button' && (
-        <Ionicons name="chevron-forward" size={24} color="#00CFC1" />
+        <Ionicons name="chevron-forward" size={24} color="#999" />
       )}
     </View>
   );
@@ -116,30 +127,18 @@ export default function SettingsScreen({ navigation }) {
       {/* Device Info */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Connected Device</Text>
-        <TouchableOpacity 
-          style={styles.deviceCard}
-          onPress={() => navigation.navigate('Watch')}
-        >
-          <Ionicons 
-            name={state.watchConnected ? "watch" : "watch-outline"} 
-            size={40} 
-            color={state.watchConnected ? "#00CFC1" : "#95A5A6"} 
-          />
+        <View style={styles.deviceCard}>
+          <Ionicons name="watch" size={32} color="#00CFC1" />
           <View style={styles.deviceInfo}>
-            <Text style={styles.deviceName}>
-              {state.watchConnected ? 'InfiniTime' : 'Not Connected'}
-            </Text>
-            <Text style={[styles.deviceStatus, { color: state.watchConnected ? '#00CFC1' : '#E74C3C' }]}>
-              {state.watchConnected ? 'Connected' : 'Disconnected'}
-            </Text>
+            <Text style={styles.deviceName}>{deviceName}</Text>
+            <Text style={styles.deviceStatus}>Disconnected</Text>
           </View>
-        </TouchableOpacity>
+        </View>
       </View>
 
       {/* App Settings */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>App Settings</Text>
-        
         <SettingItem
           icon="notifications"
           title="Notifications"
@@ -150,7 +149,16 @@ export default function SettingsScreen({ navigation }) {
             saveSetting('notifications', val);
           }}
         />
-        
+        <SettingItem
+          icon="moon"
+          title="Dark Mode"
+          subtitle="Switch to dark theme"
+          value={darkMode}
+          onValueChange={(val) => {
+            setDarkMode(val);
+            saveSetting('darkMode', val);
+          }}
+        />
         <SettingItem
           icon="sync"
           title="Auto Sync"
@@ -171,8 +179,8 @@ export default function SettingsScreen({ navigation }) {
           <Text style={styles.buttonText}>Export Health Data</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={handleClearData}>
-          <Ionicons name="trash" size={24} color="#E74C3C" />
-          <Text style={[styles.buttonText, { color: '#E74C3C' }]}>Clear All Data</Text>
+          <Ionicons name="trash" size={24} color="#ff4444" />
+          <Text style={[styles.buttonText, { color: '#ff4444' }]}>Clear All Data</Text>
         </TouchableOpacity>
       </View>
 
@@ -241,6 +249,7 @@ const styles = StyleSheet.create({
   },
   deviceStatus: {
     fontSize: 14,
+    color: '#00CFC1',
     marginTop: 2,
   },
   settingItem: {
