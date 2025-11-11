@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { AppContext } from '../AppContext';
 import WearableService from '../services/WearableService';
-import PraxiomBackground from '../components/PraxiomBackground';
 
 export default function DashboardScreen({ navigation }) {
   const { state, calculateScores } = useContext(AppContext);
@@ -39,8 +38,7 @@ export default function DashboardScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <PraxiomBackground />
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView>
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Praxiom Health</Text>
@@ -61,7 +59,7 @@ export default function DashboardScreen({ navigation }) {
 
             <View style={styles.ageItem}>
               <Text style={styles.ageLabel}>Praxiom Age</Text>
-              <Text style={[styles.ageValue, { color: '#E74C3C' }]}>
+              <Text style={[styles.ageValue, { color: getDeviationColor(state.biologicalAge - state.chronologicalAge) }]}>
                 {state.biologicalAge.toFixed(1)}
               </Text>
               <Text style={styles.ageUnit}>years</Text>
@@ -71,11 +69,7 @@ export default function DashboardScreen({ navigation }) {
           {/* Deviation */}
           <View style={styles.deviationSection}>
             <Text style={styles.deviationLabel}>Bio-Age Deviation:</Text>
-            <Text
-              style={[
-                styles.deviationValue,
-                { color: getDeviationColor(state.biologicalAge - state.chronologicalAge) },
-              ]}>
+            <Text style={[styles.deviationValue, { color: getDeviationColor(state.biologicalAge - state.chronologicalAge) }]}>
               {state.biologicalAge > state.chronologicalAge ? '+' : ''}
               {(state.biologicalAge - state.chronologicalAge).toFixed(1)} years
             </Text>
@@ -83,13 +77,10 @@ export default function DashboardScreen({ navigation }) {
         </View>
 
         {/* Watch Connection Button */}
-        <TouchableOpacity
-          style={[
-            styles.watchButton,
-            { backgroundColor: state.watchConnected ? '#47C83E' : '#999' },
-          ]}
+        <TouchableOpacity 
+          style={[styles.watchButton, { backgroundColor: state.watchConnected ? '#47C83E' : '#666' }]}
           onPress={() => navigation.navigate('Watch')}>
-          <Ionicons name="watch" size={24} color="#fff" />
+          <Ionicons name={state.watchConnected ? 'checkmark-circle' : 'watch-outline'} size={24} color="#fff" />
           <View style={styles.watchButtonText}>
             <Text style={styles.watchButtonTitle}>
               {state.watchConnected ? '✓ Connected to Watch' : 'Connect Watch'}
@@ -98,12 +89,10 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.watchButtonSubtitle}>Tap to manage connection</Text>
             )}
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#fff" />
         </TouchableOpacity>
 
         {/* Recalculate Button */}
         <TouchableOpacity style={styles.recalculateButton} onPress={handleRecalculateAge}>
-          <Ionicons name="sync" size={20} color="#fff" />
           <Text style={styles.recalculateText}>🔄 Recalculate Age</Text>
         </TouchableOpacity>
 
@@ -112,64 +101,46 @@ export default function DashboardScreen({ navigation }) {
           {/* Oral Health */}
           <View style={styles.scoreCard}>
             <View style={styles.scoreHeader}>
-              <Ionicons name="leaf" size={18} color="#E74C3C" />
+              <Ionicons name="water" size={20} color={getScoreColor(state.oralHealthScore)} />
               <Text style={styles.scoreTitle}>Oral Health</Text>
             </View>
             <Text style={[styles.scoreValue, { color: getScoreColor(state.oralHealthScore) }]}>
               {state.oralHealthScore}%
             </Text>
             <Text style={styles.scoreTarget}>Target: >85%</Text>
-            <View
-              style={[
-                styles.scoreBar,
-                { backgroundColor: getScoreColor(state.oralHealthScore), width: `${state.oralHealthScore}%` },
-              ]}
-            />
+            <View style={[styles.scoreBar, { backgroundColor: getScoreColor(state.oralHealthScore), width: `${state.oralHealthScore}%` }]} />
           </View>
 
           {/* Systemic Health */}
           <View style={styles.scoreCard}>
             <View style={styles.scoreHeader}>
-              <Ionicons name="heart" size={18} color="#E74C3C" />
+              <Ionicons name="fitness" size={20} color={getScoreColor(state.systemicHealthScore)} />
               <Text style={styles.scoreTitle}>Systemic Health</Text>
             </View>
             <Text style={[styles.scoreValue, { color: getScoreColor(state.systemicHealthScore) }]}>
               {state.systemicHealthScore}%
             </Text>
             <Text style={styles.scoreTarget}>Target: >85%</Text>
-            <View
-              style={[
-                styles.scoreBar,
-                {
-                  backgroundColor: getScoreColor(state.systemicHealthScore),
-                  width: `${state.systemicHealthScore}%`,
-                },
-              ]}
-            />
+            <View style={[styles.scoreBar, { backgroundColor: getScoreColor(state.systemicHealthScore), width: `${state.systemicHealthScore}%` }]} />
           </View>
 
           {/* Fitness Score */}
           <View style={styles.scoreCard}>
             <View style={styles.scoreHeader}>
-              <Ionicons name="fitness" size={18} color="#FFB800" />
+              <Ionicons name="walk" size={20} color={getScoreColor(state.fitnessScore)} />
               <Text style={styles.scoreTitle}>Fitness Score</Text>
             </View>
             <Text style={[styles.scoreValue, { color: getScoreColor(state.fitnessScore) }]}>
               {state.fitnessScore}%
             </Text>
             <Text style={styles.scoreTarget}>Target: >85%</Text>
-            <View
-              style={[
-                styles.scoreBar,
-                { backgroundColor: getScoreColor(state.fitnessScore), width: `${state.fitnessScore}%` },
-              ]}
-            />
+            <View style={[styles.scoreBar, { backgroundColor: getScoreColor(state.fitnessScore), width: `${state.fitnessScore}%` }]} />
           </View>
 
           {/* Wearable Data */}
           <View style={styles.scoreCard}>
             <View style={styles.scoreHeader}>
-              <Ionicons name="watch" size={18} color="#00CFC1" />
+              <Ionicons name="watch" size={20} color="#00CFC1" />
               <Text style={styles.scoreTitle}>Wearable Data</Text>
             </View>
             {state.watchConnected ? (
@@ -195,31 +166,23 @@ export default function DashboardScreen({ navigation }) {
 
         {/* Navigation Buttons Grid (2x2) */}
         <View style={styles.navigationGrid}>
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => navigation.navigate('BiomarkerInput')}>
-            <Ionicons name="document-text" size={28} color="#00CFC1" />
+          <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('BiomarkerInput')}>
+            <Ionicons name="create-outline" size={32} color="#00CFC1" />
             <Text style={styles.navButtonText}>📝 Enter Biomarkers</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => navigation.navigate('Report')}>
-            <Ionicons name="stats-chart" size={28} color="#00CFC1" />
+          <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Report')}>
+            <Ionicons name="stats-chart" size={32} color="#00CFC1" />
             <Text style={styles.navButtonText}>📊 View Report</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => navigation.navigate('DNATest')}>
-            <Ionicons name="git-branch" size={28} color="#00CFC1" />
+          <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('DNATest')}>
+            <Ionicons name="gitlab" size={32} color="#00CFC1" />
             <Text style={styles.navButtonText}>🧬 DNA Test</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => navigation.navigate('HistoricalData')}>
-            <Ionicons name="trending-up" size={28} color="#00CFC1" />
+          <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('HistoricalData')}>
+            <Ionicons name="trending-up" size={32} color="#00CFC1" />
             <Text style={styles.navButtonText}>📈 History</Text>
           </TouchableOpacity>
         </View>
@@ -238,6 +201,7 @@ export default function DashboardScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#1a1a2e',
   },
   header: {
     paddingHorizontal: 20,
@@ -254,7 +218,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: '#00CFC1',
     marginTop: 4,
     opacity: 0.9,
   },
