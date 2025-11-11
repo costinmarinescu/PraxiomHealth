@@ -41,46 +41,47 @@ export const AppContextProvider = ({ children }) => {
     saveData();
   }, [state.biologicalAge, state.oralHealthScore, state.systemicHealthScore]);
 
-  // Subscribe to wearable data updates
+  // ✅ FIXED: Subscribe to wearable data updates ONLY when connected
   useEffect(() => {
-    const interval = setInterval(async () => {
-      if (WearableService.isConnected()) {
-        try {
-          // Get latest wearable data
-          const heartRate = await WearableService.getHeartRate();
-          const steps = await WearableService.getStepCount();
-          
-          // Update state with new data
-          updateState({
-            heartRate: heartRate || state.heartRate,
-            steps: steps || state.steps,
-            watchConnected: true,
-          });
-        } catch (error) {
-          console.error('Error fetching wearable data:', error);
-        }
-      }
-    }, 10000); // Poll every 10 seconds
+    // Don't start polling if not connected
+    if (!state.watchConnected) return;
 
-    // Also check connection status
-    const connectionInterval = setInterval(async () => {
+    const interval = setInterval(async () => {
       try {
-        const watchStatus = await AsyncStorage.getItem('watchConnected');
-        const isConnected = watchStatus === 'true' && WearableService.isConnected();
-        
-        if (state.watchConnected !== isConnected) {
-          updateState({ watchConnected: isConnected });
+        // ✅ FIXED: Check if WearableService exists and is connected
+        const isConnected = await WearableService.isConnected();
+        if (isConnected) {
+          // Get latest wearable data with error handling
+          try {
+            const heartRate = await WearableService.getHeartRate();
+            const steps = await WearableService.getStepCount();
+            
+            // Update state with new data (only if values exist)
+            if (heartRate || steps) {
+              updateState({
+                heartRate: heartRate || state.heartRate,
+                steps: steps || state.steps,
+                watchConnected: true,
+              });
+            }
+          } catch (dataError) {
+            console.error('Error fetching wearable data:', dataError);
+            // Don't disconnect on data fetch error
+          }
+        } else {
+          // Device disconnected
+          updateState({ watchConnected: false });
         }
       } catch (error) {
-        console.error('Error checking watch connection:', error);
+        console.error('Error in wearable polling:', error);
+        updateState({ watchConnected: false });
       }
-    }, 5000); // Check every 5 seconds
+    }, 15000); // Poll every 15 seconds (less aggressive)
 
     return () => {
       clearInterval(interval);
-      clearInterval(connectionInterval);
     };
-  }, [state.heartRate, state.steps, state.watchConnected]);
+  }, [state.watchConnected]); // ✅ FIXED: Only recreate when connection status changes
 
   const loadSavedData = async () => {
     try {
