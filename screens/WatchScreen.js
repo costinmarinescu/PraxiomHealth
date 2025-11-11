@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
   View,
   Text,
@@ -13,21 +13,31 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { BleManager } from 'react-native-ble-plx';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppContext } from '../AppContext';
+
+// ✅ BLE Service UUIDs for PineTime/InfiniTime
+const HEART_RATE_SERVICE = '0000180D-0000-1000-8000-00805F9B34FB';
+const HEART_RATE_MEASUREMENT = '00002A37-0000-1000-8000-00805F9B34FB';
+
+// ✅ Praxiom Custom Service for Bio-Age
+const PRAXIOM_SERVICE = '00001900-78fc-48fe-8e23-433b3a1942d0';
+const BIO_AGE_CHAR = '00001901-78fc-48fe-8e23-433b3a1942d0';
 
 export default function WatchScreen() {
+  const { state } = useContext(AppContext);
   const [bleManager] = useState(new BleManager());
   const [isScanning, setIsScanning] = useState(false);
   const [connectedDevice, setConnectedDevice] = useState(null);
   const [discoveredDevices, setDiscoveredDevices] = useState([]);
   const [showAllDevices, setShowAllDevices] = useState(false);
   const [bleEnabled, setBleEnabled] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState('disconnected'); // 'disconnected', 'connecting', 'connected'
+  const [connectionStatus, setConnectionStatus] = useState('disconnected');
 
   useEffect(() => {
     // Check if Bluetooth is enabled
-    const subscription = bleManager.onStateChange((state) => {
-      setBleEnabled(state === 'PoweredOn');
-      if (state !== 'PoweredOn' && connectedDevice) {
+    const subscription = bleManager.onStateChange((bleState) => {
+      setBleEnabled(bleState === 'PoweredOn');
+      if (bleState !== 'PoweredOn' && connectedDevice) {
         handleDisconnection();
       }
     }, true);
@@ -59,47 +69,49 @@ export default function WatchScreen() {
     }
   }, []);
 
+  // ✅ FIX 1: Use consistent AsyncStorage key 'watchConnected'
   const loadConnectionState = async () => {
     try {
       const savedDevice = await AsyncStorage.getItem('connectedDevice');
-      const status = await AsyncStorage.getItem('watchConnectionStatus');
-      
-      if (savedDevice && status === 'connected') {
+      const status = await AsyncStorage.getItem('watchConnected'); // ✅ UNIFIED KEY
+      if (savedDevice && status === 'true') {
         const device = JSON.parse(savedDevice);
         setConnectedDevice(device);
         setConnectionStatus('connected');
-        console.log('Restored connection to:', device.name);
+        console.log('✅ Restored connection to:', device.name);
       }
     } catch (error) {
-      console.error('Error loading connection state:', error);
+      console.error('❌ Error loading connection state:', error);
     }
   };
 
-  const saveConnectionState = async (device, status) => {
+  // ✅ FIX 1: Use consistent AsyncStorage key 'watchConnected'
+  const saveConnectionState = async (device, isConnected) => {
     try {
-      if (device && status === 'connected') {
+      if (device && isConnected) {
         await AsyncStorage.setItem('connectedDevice', JSON.stringify(device));
-        await AsyncStorage.setItem('watchConnectionStatus', 'connected');
+        await AsyncStorage.setItem('watchConnected', 'true'); // ✅ UNIFIED KEY
+        console.log('✅ Saved connection state: true');
       } else {
         await AsyncStorage.removeItem('connectedDevice');
-        await AsyncStorage.setItem('watchConnectionStatus', 'disconnected');
+        await AsyncStorage.setItem('watchConnected', 'false'); // ✅ UNIFIED KEY
+        console.log('✅ Saved connection state: false');
       }
     } catch (error) {
-      console.error('Error saving connection state:', error);
+      console.error('❌ Error saving connection state:', error);
     }
   };
 
   const checkConnectionHealth = async () => {
     if (!connectedDevice) return;
-
     try {
       const isConnected = await bleManager.isDeviceConnected(connectedDevice.id);
       if (!isConnected) {
-        console.log('Device disconnected, updating state...');
+        console.log('❌ Device disconnected, updating state...');
         handleDisconnection();
       }
     } catch (error) {
-      console.log('Connection check failed, device likely disconnected');
+      console.log('❌ Connection check failed, device likely disconnected');
       handleDisconnection();
     }
   };
@@ -107,10 +119,8 @@ export default function WatchScreen() {
   const handleDisconnection = async () => {
     setConnectedDevice(null);
     setConnectionStatus('disconnected');
-    await saveConnectionState(null, 'disconnected');
-    
-    // Remove device from discovered devices to show it's available again
-    setDiscoveredDevices(prev => 
+    await saveConnectionState(null, false);
+    setDiscoveredDevices(prev =>
       prev.map(device => ({
         ...device,
         isConnected: false
@@ -125,13 +135,12 @@ export default function WatchScreen() {
         PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
       ]);
-
       if (
         granted['android.permission.BLUETOOTH_SCAN'] === PermissionsAndroid.RESULTS.GRANTED &&
         granted['android.permission.BLUETOOTH_CONNECT'] === PermissionsAndroid.RESULTS.GRANTED &&
         granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
       ) {
-        console.log('Bluetooth permissions granted');
+        console.log('✅ Bluetooth permissions granted');
       } else {
         Alert.alert(
           'Permissions Required',
@@ -151,8 +160,6 @@ export default function WatchScreen() {
 
     setDiscoveredDevices([]);
     setIsScanning(true);
-
-    // Stop any existing scan
     bleManager.stopDeviceScan();
 
     bleManager.startDeviceScan(null, null, (error, device) => {
@@ -174,9 +181,7 @@ export default function WatchScreen() {
 
         if (isPineTime || showAllDevices) {
           setDiscoveredDevices((prev) => {
-            // Avoid duplicates
             const existingIndex = prev.findIndex(d => d.id === device.id);
-            
             const deviceWithConnectionStatus = {
               ...device,
               isPineTime,
@@ -194,11 +199,44 @@ export default function WatchScreen() {
       }
     });
 
-    // Stop scanning after 15 seconds
     setTimeout(() => {
       bleManager.stopDeviceScan();
       setIsScanning(false);
     }, 15000);
+  };
+
+  // ✅ FIX 2: Send Bio-Age to watch after connection
+  const sendBioAgeToWatch = async (device) => {
+    try {
+      console.log('📤 Attempting to send Bio-Age to watch...');
+
+      // Convert biological age to bytes (as float)
+      const bioAge = state.biologicalAge;
+      const buffer = new ArrayBuffer(4);
+      const view = new DataView(buffer);
+      view.setFloat32(0, bioAge, true); // little-endian
+
+      // Convert to base64 for BLE transmission
+      const bytes = new Uint8Array(buffer);
+      const base64Value = btoa(String.fromCharCode(...bytes));
+
+      await device.writeCharacteristicWithResponseForService(
+        PRAXIOM_SERVICE,
+        BIO_AGE_CHAR,
+        base64Value
+      );
+
+      console.log('✅ Bio-Age sent to watch:', bioAge);
+
+      // Save last sync time
+      const now = new Date().toISOString();
+      await AsyncStorage.setItem('lastBioAgeSync', now);
+
+      return true;
+    } catch (error) {
+      console.log('⚠️  Could not send Bio-Age (watch may not have Praxiom firmware):', error.message);
+      return false;
+    }
   };
 
   const connectToDevice = async (device) => {
@@ -211,20 +249,19 @@ export default function WatchScreen() {
       setIsScanning(false);
       bleManager.stopDeviceScan();
       setConnectionStatus('connecting');
+      console.log('🔄 Attempting to connect to:', device.name);
 
-      console.log('Attempting to connect to:', device.name);
-      
       const connected = await bleManager.connectToDevice(device.id, {
-        timeout: 10000, // 10 second timeout
+        timeout: 10000,
       });
-      
+
       await connected.discoverAllServicesAndCharacteristics();
 
-      setConnectedDevice(device);
+      setConnectedDevice(connected);
       setConnectionStatus('connected');
-      await saveConnectionState(device, 'connected');
+      await saveConnectionState(device, true); // ✅ Save as connected
 
-      // Update discovered devices to show connection status
+      // Update discovered devices
       setDiscoveredDevices(prev =>
         prev.map(d => ({
           ...d,
@@ -232,12 +269,25 @@ export default function WatchScreen() {
         }))
       );
 
-      Alert.alert('Connected!', `Successfully connected to ${device.name}`);
-      console.log('Successfully connected to:', device.name);
+      // ✅ FIX 2: Send Bio-Age after successful connection
+      const bioAgeSent = await sendBioAgeToWatch(connected);
+
+      if (bioAgeSent) {
+        Alert.alert(
+          '✅ Connected!', 
+          `Successfully connected to ${device.name}.\n\nYour Bio-Age (${state.biologicalAge.toFixed(1)}) has been synced to the watch.`
+        );
+      } else {
+        Alert.alert(
+          '✅ Connected!', 
+          `Successfully connected to ${device.name}.\n\n⚠️  Bio-Age display requires Praxiom firmware on the watch.`
+        );
+      }
+
+      console.log('✅ Successfully connected to:', device.name);
     } catch (error) {
-      console.error('Connection error:', error);
+      console.error('❌ Connection error:', error);
       setConnectionStatus('disconnected');
-      
       Alert.alert(
         'Connection Failed',
         `Could not connect to ${device.name}. Make sure the device is nearby and not connected to another app.\n\nTip: Try unpairing it from your phone's Bluetooth settings first.`
@@ -252,21 +302,34 @@ export default function WatchScreen() {
     }
 
     try {
-      console.log('Disconnecting from:', connectedDevice.name);
-      
+      console.log('🔌 Disconnecting from:', connectedDevice.name);
       await bleManager.cancelDeviceConnection(connectedDevice.id);
-      
       await handleDisconnection();
-      
       Alert.alert('Disconnected', `Successfully disconnected from ${connectedDevice.name}`);
-      console.log('Successfully disconnected');
+      console.log('✅ Successfully disconnected');
     } catch (error) {
-      console.error('Disconnect error:', error);
-      
-      // Force disconnect even if there was an error
+      console.error('❌ Disconnect error:', error);
       await handleDisconnection();
-      
       Alert.alert('Disconnected', 'Device has been disconnected.');
+    }
+  };
+
+  // ✅ NEW: Manual Bio-Age sync function
+  const syncBioAgeNow = async () => {
+    if (!connectedDevice) {
+      Alert.alert('Not Connected', 'Please connect to your watch first.');
+      return;
+    }
+
+    try {
+      const success = await sendBioAgeToWatch(connectedDevice);
+      if (success) {
+        Alert.alert('✅ Synced!', `Bio-Age (${state.biologicalAge.toFixed(1)}) sent to watch.`);
+      } else {
+        Alert.alert('⚠️  Sync Failed', 'Could not send Bio-Age. Watch may need Praxiom firmware.');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to sync Bio-Age to watch.');
     }
   };
 
@@ -293,10 +356,7 @@ export default function WatchScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['rgba(255, 140, 0, 0.15)', 'rgba(0, 207, 193, 0.15)']}
-      style={styles.container}
-    >
+    <LinearGradient colors={['#FF6B00', '#FFB800']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.header}>PRAXIOM{'\n'}HEALTH</Text>
 
@@ -332,15 +392,29 @@ export default function WatchScreen() {
             disabled={isScanning || connectionStatus === 'connecting'}
           >
             <Text style={styles.scanButtonText}>
-              {isScanning ? 'Scanning...' : 
-               connectionStatus === 'connecting' ? 'Connecting...' : 
-               'Scan for Watch'}
+              {isScanning ? 'Scanning...' :
+                connectionStatus === 'connecting' ? 'Connecting...' :
+                  'Scan for Watch'}
             </Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.disconnectButton} onPress={disconnectDevice}>
-            <Text style={styles.disconnectButtonText}>Disconnect</Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              style={styles.syncButton}
+              onPress={syncBioAgeNow}
+            >
+              <Text style={styles.syncButtonText}>
+                🔄 Sync Bio-Age Now
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.disconnectButton}
+              onPress={disconnectDevice}
+            >
+              <Text style={styles.disconnectButtonText}>Disconnect</Text>
+            </TouchableOpacity>
+          </>
         )}
 
         {/* Show All Devices Toggle */}
@@ -349,8 +423,6 @@ export default function WatchScreen() {
           <Switch
             value={showAllDevices}
             onValueChange={setShowAllDevices}
-            trackColor={{ false: '#D0D0D0', true: '#00CFC1' }}
-            thumbColor={showAllDevices ? '#fff' : '#f4f3f4'}
           />
         </View>
 
@@ -379,6 +451,7 @@ export default function WatchScreen() {
                   <Text style={styles.deviceMac}>{device.id}</Text>
                   <Text style={styles.deviceSignal}>Signal: {device.rssi} dBm</Text>
                 </View>
+
                 {!device.isConnected && connectionStatus !== 'connecting' && (
                   <TouchableOpacity
                     style={styles.connectButton}
@@ -387,6 +460,7 @@ export default function WatchScreen() {
                     <Text style={styles.connectButtonText}>Connect</Text>
                   </TouchableOpacity>
                 )}
+
                 {device.isConnected && (
                   <View style={styles.connectedIndicator}>
                     <Text style={styles.connectedText}>✓</Text>
@@ -404,15 +478,9 @@ export default function WatchScreen() {
             <Text style={styles.troubleshootingTitle}>Troubleshooting:</Text>
           </View>
           <Text style={styles.troubleshootingText}>• Make sure watch is ON and NEARBY</Text>
-          <Text style={styles.troubleshootingText}>
-            • Turn on "Show All Devices" to see everything
-          </Text>
-          <Text style={styles.troubleshootingText}>
-            • If you see your watch but can't connect, unpair it from your phone's Bluetooth settings first
-          </Text>
-          <Text style={styles.troubleshootingText}>
-            • Try turning Bluetooth off and on if having issues
-          </Text>
+          <Text style={styles.troubleshootingText}>• Turn on "Show All Devices" to see everything</Text>
+          <Text style={styles.troubleshootingText}>• If you see your watch but can't connect, unpair it from your phone's Bluetooth settings first</Text>
+          <Text style={styles.troubleshootingText}>• Try turning Bluetooth off and on if having issues</Text>
         </View>
 
         {/* Firmware Notice */}
@@ -511,6 +579,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#B0B0B0',
   },
   scanButtonText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  syncButton: {
+    backgroundColor: '#00CFC1',
+    padding: 20,
+    borderRadius: 30,
+    alignItems: 'center',
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  syncButtonText: {
     color: '#fff',
     fontSize: 20,
     fontWeight: 'bold',
