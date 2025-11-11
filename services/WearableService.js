@@ -17,7 +17,7 @@ const PRAXIOM_SERVICE = '00001900-78fc-48fe-8e23-433b3a1942d0';
 const BIO_AGE_CHAR = '00001901-78fc-48fe-8e23-433b3a1942d0';
 const HEALTH_REQUEST_CHAR = '00001902-78fc-48fe-8e23-433b3a1942d0'; // ✅ Fixed: Added missing '0'
 
-export default class WearableService {
+class WearableService {
   constructor() {
     this.bleManager = new BleManager();
     this.connectedDevice = null;
@@ -555,15 +555,13 @@ export default class WearableService {
       this.disconnect();
     }
 
-    if (this.bleManager) {
-      this.bleManager.destroy();
-    }
+    this.bleManager.destroy();
     this.dataUpdateListeners = [];
     this.connectionListeners = [];
   }
 }
 
-// ✅ CRITICAL FIX: Export singleton instance instead of class
+// ✅ CORRECTED FIX: Export singleton instance instead of class
 // This fixes the "WearableService.isConnected is not a function" crash
 const wearableServiceInstance = new WearableService();
 export default wearableServiceInstance;
