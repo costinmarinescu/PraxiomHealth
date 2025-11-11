@@ -15,16 +15,8 @@ import { BleManager } from 'react-native-ble-plx';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppContext } from '../AppContext';
 
-// ✅ BLE Service UUIDs for PineTime/InfiniTime
-const HEART_RATE_SERVICE = '0000180D-0000-1000-8000-00805F9B34FB';
-const HEART_RATE_MEASUREMENT = '00002A37-0000-1000-8000-00805F9B34FB';
-
-// ✅ Praxiom Custom Service for Bio-Age
-const PRAXIOM_SERVICE = '00001900-78fc-48fe-8e23-433b3a1942d0';
-const BIO_AGE_CHAR = '00001901-78fc-48fe-8e23-433b3a1942d0';
-
 export default function WatchScreen() {
-  const { state } = useContext(AppContext);
+  const { state, updateState } = useContext(AppContext);
   const [bleManager] = useState(new BleManager());
   const [isScanning, setIsScanning] = useState(false);
   const [connectedDevice, setConnectedDevice] = useState(null);
@@ -34,7 +26,6 @@ export default function WatchScreen() {
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
 
   useEffect(() => {
-    // Check if Bluetooth is enabled
     const subscription = bleManager.onStateChange((bleState) => {
       setBleEnabled(bleState === 'PoweredOn');
       if (bleState !== 'PoweredOn' && connectedDevice) {
@@ -42,10 +33,8 @@ export default function WatchScreen() {
       }
     }, true);
 
-    // Load saved connection state
     loadConnectionState();
 
-    // Monitor connection status
     const connectionMonitor = setInterval(() => {
       if (connectedDevice) {
         checkConnectionHealth();
@@ -63,17 +52,15 @@ export default function WatchScreen() {
   }, []);
 
   useEffect(() => {
-    // Request Bluetooth permissions for Android 12+
     if (Platform.OS === 'android' && Platform.Version >= 31) {
       requestAndroidPermissions();
     }
   }, []);
 
-  // ✅ FIX 1: Use consistent AsyncStorage key 'watchConnected'
   const loadConnectionState = async () => {
     try {
       const savedDevice = await AsyncStorage.getItem('connectedDevice');
-      const status = await AsyncStorage.getItem('watchConnected'); // ✅ UNIFIED KEY
+      const status = await AsyncStorage.getItem('watchConnected');
       if (savedDevice && status === 'true') {
         const device = JSON.parse(savedDevice);
         setConnectedDevice(device);
@@ -85,17 +72,21 @@ export default function WatchScreen() {
     }
   };
 
-  // ✅ FIX 1: Use consistent AsyncStorage key 'watchConnected'
   const saveConnectionState = async (device, isConnected) => {
     try {
       if (device && isConnected) {
         await AsyncStorage.setItem('connectedDevice', JSON.stringify(device));
-        await AsyncStorage.setItem('watchConnected', 'true'); // ✅ UNIFIED KEY
-        console.log('✅ Saved connection state: true');
+        await AsyncStorage.setItem('watchConnected', 'true');
+        const now = new Date().toISOString();
+        await AsyncStorage.setItem('lastSync', now);
+        updateState({ lastSync: now });
+        console.log('✅ Saved connection state: connected');
       } else {
         await AsyncStorage.removeItem('connectedDevice');
-        await AsyncStorage.setItem('watchConnected', 'false'); // ✅ UNIFIED KEY
-        console.log('✅ Saved connection state: false');
+        await AsyncStorage.setItem('watchConnected', 'false');
+        await AsyncStorage.removeItem('lastSync');
+        updateState({ lastSync: null });
+        console.log('✅ Saved connection state: disconnected');
       }
     } catch (error) {
       console.error('❌ Error saving connection state:', error);
@@ -135,13 +126,12 @@ export default function WatchScreen() {
         PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
       ]);
-      if (
-        granted['android.permission.BLUETOOTH_SCAN'] === PermissionsAndroid.RESULTS.GRANTED &&
-        granted['android.permission.BLUETOOTH_CONNECT'] === PermissionsAndroid.RESULTS.GRANTED &&
-        granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
-      ) {
-        console.log('✅ Bluetooth permissions granted');
-      } else {
+
+      const allGranted = Object.values(granted).every(
+        status => status === PermissionsAndroid.RESULTS.GRANTED
+      );
+
+      if (!allGranted) {
         Alert.alert(
           'Permissions Required',
           'Bluetooth permissions are required to scan for and connect to your PineTime watch.'
@@ -205,40 +195,6 @@ export default function WatchScreen() {
     }, 15000);
   };
 
-  // ✅ FIX 2: Send Bio-Age to watch after connection
-  const sendBioAgeToWatch = async (device) => {
-    try {
-      console.log('📤 Attempting to send Bio-Age to watch...');
-
-      // Convert biological age to bytes (as float)
-      const bioAge = state.biologicalAge;
-      const buffer = new ArrayBuffer(4);
-      const view = new DataView(buffer);
-      view.setFloat32(0, bioAge, true); // little-endian
-
-      // Convert to base64 for BLE transmission
-      const bytes = new Uint8Array(buffer);
-      const base64Value = btoa(String.fromCharCode(...bytes));
-
-      await device.writeCharacteristicWithResponseForService(
-        PRAXIOM_SERVICE,
-        BIO_AGE_CHAR,
-        base64Value
-      );
-
-      console.log('✅ Bio-Age sent to watch:', bioAge);
-
-      // Save last sync time
-      const now = new Date().toISOString();
-      await AsyncStorage.setItem('lastBioAgeSync', now);
-
-      return true;
-    } catch (error) {
-      console.log('⚠️  Could not send Bio-Age (watch may not have Praxiom firmware):', error.message);
-      return false;
-    }
-  };
-
   const connectToDevice = async (device) => {
     if (connectedDevice && connectedDevice.id === device.id) {
       Alert.alert('Already Connected', 'This device is already connected.');
@@ -259,9 +215,8 @@ export default function WatchScreen() {
 
       setConnectedDevice(connected);
       setConnectionStatus('connected');
-      await saveConnectionState(device, true); // ✅ Save as connected
+      await saveConnectionState(device, true);
 
-      // Update discovered devices
       setDiscoveredDevices(prev =>
         prev.map(d => ({
           ...d,
@@ -269,20 +224,11 @@ export default function WatchScreen() {
         }))
       );
 
-      // ✅ FIX 2: Send Bio-Age after successful connection
-      const bioAgeSent = await sendBioAgeToWatch(connected);
-
-      if (bioAgeSent) {
-        Alert.alert(
-          '✅ Connected!', 
-          `Successfully connected to ${device.name}.\n\nYour Bio-Age (${state.biologicalAge.toFixed(1)}) has been synced to the watch.`
-        );
-      } else {
-        Alert.alert(
-          '✅ Connected!', 
-          `Successfully connected to ${device.name}.\n\n⚠️  Bio-Age display requires Praxiom firmware on the watch.`
-        );
-      }
+      // ✅ Simple success message - don't try to send Bio-Age
+      Alert.alert(
+        '✅ Connected!',
+        `Successfully connected to ${device.name}.\n\nYour watch will now sync heart rate, steps, and other health data to the app.\n\nYour Bio-Age (${state.biologicalAge.toFixed(1)} years) is calculated and displayed in the app.`
+      );
 
       console.log('✅ Successfully connected to:', device.name);
     } catch (error) {
@@ -290,7 +236,7 @@ export default function WatchScreen() {
       setConnectionStatus('disconnected');
       Alert.alert(
         'Connection Failed',
-        `Could not connect to ${device.name}. Make sure the device is nearby and not connected to another app.\n\nTip: Try unpairing it from your phone's Bluetooth settings first.`
+        `Could not connect to ${device.name}. Make sure the device is nearby and not connected to another app.`
       );
     }
   };
@@ -311,25 +257,6 @@ export default function WatchScreen() {
       console.error('❌ Disconnect error:', error);
       await handleDisconnection();
       Alert.alert('Disconnected', 'Device has been disconnected.');
-    }
-  };
-
-  // ✅ NEW: Manual Bio-Age sync function
-  const syncBioAgeNow = async () => {
-    if (!connectedDevice) {
-      Alert.alert('Not Connected', 'Please connect to your watch first.');
-      return;
-    }
-
-    try {
-      const success = await sendBioAgeToWatch(connectedDevice);
-      if (success) {
-        Alert.alert('✅ Synced!', `Bio-Age (${state.biologicalAge.toFixed(1)}) sent to watch.`);
-      } else {
-        Alert.alert('⚠️  Sync Failed', 'Could not send Bio-Age. Watch may need Praxiom firmware.');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to sync Bio-Age to watch.');
     }
   };
 
@@ -360,7 +287,6 @@ export default function WatchScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.header}>PRAXIOM{'\n'}HEALTH</Text>
 
-        {/* Watch Title */}
         <View style={styles.titleContainer}>
           <Text style={styles.title}>PineTime Watch</Text>
           <Text style={styles.subtitle}>Sync Your Bio-Age</Text>
@@ -377,7 +303,15 @@ export default function WatchScreen() {
             <Text style={styles.statusTitle}>{getConnectionStatusText()}</Text>
           </View>
           {connectedDevice && (
-            <Text style={styles.deviceName}>{connectedDevice.name}</Text>
+            <>
+              <Text style={styles.deviceName}>{connectedDevice.name}</Text>
+              <Text style={styles.bioAgeDisplay}>
+                Your Bio-Age: {state.biologicalAge.toFixed(1)} years
+              </Text>
+              <Text style={styles.bioAgeNote}>
+                (Displayed in app)
+              </Text>
+            </>
           )}
         </View>
 
@@ -398,23 +332,12 @@ export default function WatchScreen() {
             </Text>
           </TouchableOpacity>
         ) : (
-          <>
-            <TouchableOpacity
-              style={styles.syncButton}
-              onPress={syncBioAgeNow}
-            >
-              <Text style={styles.syncButtonText}>
-                🔄 Sync Bio-Age Now
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.disconnectButton}
-              onPress={disconnectDevice}
-            >
-              <Text style={styles.disconnectButtonText}>Disconnect</Text>
-            </TouchableOpacity>
-          </>
+          <TouchableOpacity
+            style={styles.disconnectButton}
+            onPress={disconnectDevice}
+          >
+            <Text style={styles.disconnectButtonText}>Disconnect</Text>
+          </TouchableOpacity>
         )}
 
         {/* Show All Devices Toggle */}
@@ -423,6 +346,8 @@ export default function WatchScreen() {
           <Switch
             value={showAllDevices}
             onValueChange={setShowAllDevices}
+            trackColor={{ false: '#767577', true: '#00CFC1' }}
+            thumbColor={showAllDevices ? '#0099DB' : '#f4f3f4'}
           />
         </View>
 
@@ -471,23 +396,22 @@ export default function WatchScreen() {
           </>
         )}
 
-        {/* Troubleshooting Section */}
+        {/* Info Card */}
+        <View style={styles.infoCard}>
+          <Text style={styles.infoTitle}>💡 Watch Features:</Text>
+          <Text style={styles.infoText}>✓ Syncs heart rate, steps, HRV to app</Text>
+          <Text style={styles.infoText}>✓ Real-time health monitoring</Text>
+          <Text style={styles.infoText}>✓ Bio-Age calculated and displayed in app</Text>
+          <Text style={styles.infoText}>✓ Works with standard InfiniTime firmware</Text>
+        </View>
+
+        {/* Troubleshooting Card */}
         <View style={styles.troubleshootingCard}>
-          <View style={styles.troubleshootingHeader}>
-            <Text style={styles.lightbulbIcon}>💡</Text>
-            <Text style={styles.troubleshootingTitle}>Troubleshooting:</Text>
-          </View>
+          <Text style={styles.troubleshootingTitle}>💡 Troubleshooting:</Text>
           <Text style={styles.troubleshootingText}>• Make sure watch is ON and NEARBY</Text>
           <Text style={styles.troubleshootingText}>• Turn on "Show All Devices" to see everything</Text>
           <Text style={styles.troubleshootingText}>• If you see your watch but can't connect, unpair it from your phone's Bluetooth settings first</Text>
           <Text style={styles.troubleshootingText}>• Try turning Bluetooth off and on if having issues</Text>
-        </View>
-
-        {/* Firmware Notice */}
-        <View style={styles.firmwareNotice}>
-          <Text style={styles.firmwareText}>
-            Your PineTime watch needs the Praxiom firmware installed to display Bio-Age.
-          </Text>
         </View>
       </ScrollView>
     </LinearGradient>
@@ -522,7 +446,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 18,
-    color: '#999',
+    color: '#666',
   },
   statusCard: {
     backgroundColor: '#fff',
@@ -563,6 +487,18 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 5,
   },
+  bioAgeDisplay: {
+    fontSize: 20,
+    color: '#FF6B00',
+    fontWeight: 'bold',
+    marginTop: 15,
+  },
+  bioAgeNote: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 3,
+    fontStyle: 'italic',
+  },
   scanButton: {
     backgroundColor: '#00CFC1',
     padding: 20,
@@ -579,23 +515,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#B0B0B0',
   },
   scanButtonText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  syncButton: {
-    backgroundColor: '#00CFC1',
-    padding: 20,
-    borderRadius: 30,
-    alignItems: 'center',
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  syncButtonText: {
     color: '#fff',
     fontSize: 20,
     fontWeight: 'bold',
@@ -714,43 +633,41 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
   },
+  infoCard: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 20,
+    padding: 20,
+    marginTop: 20,
+    marginBottom: 15,
+  },
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1976D2',
+    marginBottom: 12,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#1976D2',
+    marginBottom: 6,
+    lineHeight: 20,
+  },
   troubleshootingCard: {
     backgroundColor: '#FFF9E6',
     borderRadius: 20,
     padding: 20,
-    marginTop: 25,
     marginBottom: 20,
   },
-  troubleshootingHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  lightbulbIcon: {
-    fontSize: 24,
-    marginRight: 10,
-  },
   troubleshootingTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#856404',
+    marginBottom: 12,
   },
   troubleshootingText: {
     fontSize: 14,
-    color: '#666',
+    color: '#856404',
     marginBottom: 8,
-    lineHeight: 20,
-  },
-  firmwareNotice: {
-    backgroundColor: '#E3F2FD',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-  },
-  firmwareText: {
-    fontSize: 14,
-    color: '#1976D2',
-    textAlign: 'center',
     lineHeight: 20,
   },
 });

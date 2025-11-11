@@ -1,4 +1,4 @@
-import React, { useContext, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,38 +11,35 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { AppContext } from '../AppContext';
 
-export default function SettingsScreen({ navigation }) {
-  const { state, updateState } = useContext(AppContext);
-  const [notifications, setNotifications] = React.useState(true);
-  const [autoSync, setAutoSync] = React.useState(true);
+export default function SettingsScreen() {
+  const [notifications, setNotifications] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
+  const [autoSync, setAutoSync] = useState(true);
+  const [deviceName, setDeviceName] = useState('Not Connected');
 
   useEffect(() => {
     loadSettings();
-    // ✅ Check watch connection status
-    checkWatchConnection();
+    loadDeviceName();
   }, []);
-
-  // ✅ FIX: Use unified 'watchConnected' key
-  const checkWatchConnection = async () => {
-    try {
-      const watchStatus = await AsyncStorage.getItem('watchConnected');
-      updateState({ watchConnected: watchStatus === 'true' });
-    } catch (error) {
-      console.error('Error checking watch connection:', error);
-    }
-  };
 
   const loadSettings = async () => {
     try {
       const notif = await AsyncStorage.getItem('notifications');
+      const dark = await AsyncStorage.getItem('darkMode');
       const sync = await AsyncStorage.getItem('autoSync');
+      
       if (notif !== null) setNotifications(JSON.parse(notif));
+      if (dark !== null) setDarkMode(JSON.parse(dark));
       if (sync !== null) setAutoSync(JSON.parse(sync));
     } catch (error) {
       console.error('Error loading settings:', error);
     }
+  };
+
+  const loadDeviceName = async () => {
+    const name = await AsyncStorage.getItem('lastDeviceName');
+    if (name) setDeviceName(name);
   };
 
   const saveSetting = async (key, value) => {
@@ -53,20 +50,31 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
-  const handleNotificationsToggle = (value) => {
-    setNotifications(value);
-    saveSetting('notifications', value);
-  };
+  const handleExportData = async () => {
+    try {
+      const data = await AsyncStorage.getItem('healthData');
+      if (!data) {
+        Alert.alert('No Data', 'No health data to export');
+        return;
+      }
 
-  const handleAutoSyncToggle = (value) => {
-    setAutoSync(value);
-    saveSetting('autoSync', value);
+      const result = await Share.share({
+        message: `Praxiom Health Data:\n\n${data}`,
+        title: 'Health Data Export',
+      });
+
+      if (result.action === Share.sharedAction) {
+        Alert.alert('Success', 'Data exported successfully');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to export data');
+    }
   };
 
   const handleClearData = () => {
     Alert.alert(
       'Clear All Data',
-      'Are you sure you want to clear all health data? This action cannot be undone.',
+      'Are you sure you want to clear all health data? This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -74,16 +82,11 @@ export default function SettingsScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await AsyncStorage.multiRemove([
-                'praxiomHealthData',
-                'biomarkerHistory',
-                'watchConnected',
-                'connectedDevice',
-              ]);
-              Alert.alert('Success', 'All data has been cleared.');
-              updateState({ watchConnected: false });
+              await AsyncStorage.removeItem('healthData');
+              await AsyncStorage.removeItem('biomarkers');
+              Alert.alert('Success', 'All data cleared');
             } catch (error) {
-              Alert.alert('Error', 'Failed to clear data.');
+              Alert.alert('Error', 'Failed to clear data');
             }
           },
         },
@@ -91,106 +94,104 @@ export default function SettingsScreen({ navigation }) {
     );
   };
 
-  const handleShareReport = async () => {
-    try {
-      const message = `My Praxiom Bio-Age Report:\n\nChronological Age: ${state.chronologicalAge}\nBiological Age: ${state.biologicalAge.toFixed(1)}\nOral Health: ${state.oralHealthScore}%\nSystemic Health: ${state.systemicHealthScore}%\nFitness Score: ${state.fitnessScore}%`;
-
-      await Share.share({
-        message: message,
-        title: 'Praxiom Health Report',
-      });
-    } catch (error) {
-      Alert.alert('Error', 'Failed to share report.');
-    }
-  };
+  const SettingItem = ({ icon, title, subtitle, value, onValueChange, type = 'switch' }) => (
+    <View style={styles.settingItem}>
+      <View style={styles.settingLeft}>
+        <Ionicons name={icon} size={24} color="#00CFC1" style={styles.settingIcon} />
+        <View>
+          <Text style={styles.settingTitle}>{title}</Text>
+          {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
+        </View>
+      </View>
+      {type === 'switch' && (
+        <Switch
+          value={value}
+          onValueChange={onValueChange}
+          trackColor={{ false: '#767577', true: '#00CFC1' }}
+          thumbColor={value ? '#ffffff' : '#f4f3f4'}
+        />
+      )}
+      {type === 'button' && (
+        <Ionicons name="chevron-forward" size={24} color="#999" />
+      )}
+    </View>
+  );
 
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={styles.headerSubtitle}>Praxiom Health</Text>
       </View>
 
-      {/* Device Info Section */}
+      {/* Device Info */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Device</Text>
-
-        <View style={styles.settingItem}>
-          <View style={styles.settingInfo}>
-            <Ionicons name="watch" size={24} color="#0099DB" />
-            <Text style={styles.settingLabel}>Watch Connection</Text>
+        <Text style={styles.sectionTitle}>Connected Device</Text>
+        <View style={styles.deviceCard}>
+          <Ionicons name="watch" size={32} color="#00CFC1" />
+          <View style={styles.deviceInfo}>
+            <Text style={styles.deviceName}>{deviceName}</Text>
+            <Text style={styles.deviceStatus}>Disconnected</Text>
           </View>
-          <Text style={[
-            styles.statusText,
-            { color: state.watchConnected ? '#47C83E' : '#95A5A6' }
-          ]}>
-            {state.watchConnected ? 'Connected' : 'Not Connected'}
-          </Text>
-        </View>
-
-        {state.watchConnected && state.lastSync && (
-          <Text style={styles.syncInfo}>
-            Last synced: {new Date(state.lastSync).toLocaleString()}
-          </Text>
-        )}
-      </View>
-
-      {/* Preferences Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Preferences</Text>
-
-        <View style={styles.settingItem}>
-          <View style={styles.settingInfo}>
-            <Ionicons name="notifications" size={24} color="#0099DB" />
-            <Text style={styles.settingLabel}>Notifications</Text>
-          </View>
-          <Switch
-            value={notifications}
-            onValueChange={handleNotificationsToggle}
-            trackColor={{ false: '#E0E0E0', true: '#00CFC1' }}
-            thumbColor={notifications ? '#0099DB' : '#f4f3f4'}
-          />
-        </View>
-
-        <View style={styles.settingItem}>
-          <View style={styles.settingInfo}>
-            <Ionicons name="sync" size={24} color="#0099DB" />
-            <Text style={styles.settingLabel}>Auto-Sync</Text>
-          </View>
-          <Switch
-            value={autoSync}
-            onValueChange={handleAutoSyncToggle}
-            trackColor={{ false: '#E0E0E0', true: '#00CFC1' }}
-            thumbColor={autoSync ? '#0099DB' : '#f4f3f4'}
-          />
         </View>
       </View>
 
-      {/* Actions Section */}
+      {/* App Settings */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Actions</Text>
+        <Text style={styles.sectionTitle}>App Settings</Text>
+        <SettingItem
+          icon="notifications"
+          title="Notifications"
+          subtitle="Get notified about health updates"
+          value={notifications}
+          onValueChange={(val) => {
+            setNotifications(val);
+            saveSetting('notifications', val);
+          }}
+        />
+        <SettingItem
+          icon="moon"
+          title="Dark Mode"
+          subtitle="Switch to dark theme"
+          value={darkMode}
+          onValueChange={(val) => {
+            setDarkMode(val);
+            saveSetting('darkMode', val);
+          }}
+        />
+        <SettingItem
+          icon="sync"
+          title="Auto Sync"
+          subtitle="Automatically sync with watch"
+          value={autoSync}
+          onValueChange={(val) => {
+            setAutoSync(val);
+            saveSetting('autoSync', val);
+          }}
+        />
+      </View>
 
-        <TouchableOpacity style={styles.actionButton} onPress={handleShareReport}>
-          <Ionicons name="share-social" size={24} color="#0099DB" />
-          <Text style={styles.actionButtonText}>Share Report</Text>
-          <Ionicons name="chevron-forward" size={24} color="#7F8C8D" />
+      {/* Data Management */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Data Management</Text>
+        <TouchableOpacity style={styles.button} onPress={handleExportData}>
+          <Ionicons name="download" size={24} color="#00CFC1" />
+          <Text style={styles.buttonText}>Export Health Data</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButton} onPress={handleClearData}>
-          <Ionicons name="trash" size={24} color="#E74C3C" />
-          <Text style={[styles.actionButtonText, { color: '#E74C3C' }]}>Clear All Data</Text>
-          <Ionicons name="chevron-forward" size={24} color="#7F8C8D" />
+        <TouchableOpacity style={styles.button} onPress={handleClearData}>
+          <Ionicons name="trash" size={24} color="#ff4444" />
+          <Text style={[styles.buttonText, { color: '#ff4444' }]}>Clear All Data</Text>
         </TouchableOpacity>
       </View>
 
-      {/* About Section */}
+      {/* About */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>About</Text>
-
-        <View style={styles.infoCard}>
+        <View style={styles.aboutCard}>
           <Text style={styles.appName}>Praxiom Health</Text>
           <Text style={styles.version}>Version 1.0.0</Text>
           <Text style={styles.description}>
-            Bio-Age assessment using oral-systemic health markers
+            Track your biological age and health metrics with your PineTime smartwatch.
           </Text>
         </View>
       </View>
@@ -205,90 +206,114 @@ export default function SettingsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   header: {
     padding: 20,
-    paddingTop: 50,
-    backgroundColor: '#0099DB',
+    paddingTop: 60,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#FFF',
+    color: '#fff',
+  },
+  headerSubtitle: {
+    fontSize: 16,
+    color: '#00CFC1',
+    marginTop: 5,
   },
   section: {
-    backgroundColor: '#FFF',
-    marginTop: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    marginHorizontal: 20,
+    marginBottom: 20,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2C3E50',
-    marginBottom: 15,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 10,
+  },
+  deviceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 15,
+    borderRadius: 10,
+  },
+  deviceInfo: {
+    marginLeft: 15,
+  },
+  deviceName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  deviceStatus: {
+    fontSize: 14,
+    color: '#00CFC1',
+    marginTop: 2,
   },
   settingItem: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
   },
-  settingInfo: {
+  settingLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  settingLabel: {
-    fontSize: 16,
-    color: '#2C3E50',
-    marginLeft: 15,
+  settingIcon: {
+    marginRight: 15,
   },
-  statusText: {
-    fontSize: 14,
+  settingTitle: {
+    fontSize: 16,
     fontWeight: '600',
+    color: '#fff',
   },
-  syncInfo: {
+  settingSubtitle: {
     fontSize: 12,
-    color: '#7F8C8D',
-    marginTop: 5,
-    marginLeft: 39,
+    color: '#999',
+    marginTop: 2,
   },
-  actionButton: {
+  button: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
   },
-  actionButtonText: {
+  buttonText: {
     fontSize: 16,
-    color: '#2C3E50',
+    fontWeight: '600',
+    color: '#00CFC1',
     marginLeft: 15,
-    flex: 1,
   },
-  infoCard: {
+  aboutCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 20,
+    borderRadius: 10,
     alignItems: 'center',
-    paddingVertical: 20,
   },
   appName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#0099DB',
-    marginBottom: 5,
+    color: '#fff',
   },
   version: {
     fontSize: 14,
-    color: '#7F8C8D',
-    marginBottom: 10,
+    color: '#00CFC1',
+    marginTop: 5,
   },
   description: {
     fontSize: 14,
-    color: '#7F8C8D',
+    color: '#ccc',
     textAlign: 'center',
+    marginTop: 10,
     lineHeight: 20,
   },
   footer: {
@@ -297,6 +322,6 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 12,
-    color: '#95A5A6',
+    color: '#666',
   },
 });

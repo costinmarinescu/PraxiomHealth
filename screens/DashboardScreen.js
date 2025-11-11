@@ -9,14 +9,11 @@ export default function DashboardScreen({ navigation }) {
   const [showWatchAlert, setShowWatchAlert] = React.useState(false);
 
   useEffect(() => {
-    // ✅ Check watch connection status on mount and focus
     checkWatchConnection();
-    // Set up interval to check connection status
     const interval = setInterval(checkWatchConnection, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  // ✅ FIX: Use unified 'watchConnected' key
   const checkWatchConnection = async () => {
     try {
       const watchStatus = await AsyncStorage.getItem('watchConnected');
@@ -30,7 +27,7 @@ export default function DashboardScreen({ navigation }) {
     if (!state.watchConnected) {
       setShowWatchAlert(true);
     } else {
-      navigation.navigate('Watch');
+      navigation.getParent().navigate('Watch');
     }
   };
 
@@ -44,6 +41,14 @@ export default function DashboardScreen({ navigation }) {
     if (Math.abs(deviation) <= 5) return '#47C83E';
     if (Math.abs(deviation) <= 10) return '#FFB800';
     return '#E74C3C';
+  };
+
+  const handleRecalculateAge = () => {
+    const newBioAge = calculateScores();
+    Alert.alert(
+      '✅ Recalculated',
+      `Your new Bio-Age is ${newBioAge.toFixed(1)} years`
+    );
   };
 
   return (
@@ -107,9 +112,8 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </TouchableOpacity>
 
-        {/* Health Score Cards - 2x2 Grid */}
-        <View style={styles.scoresGrid}>
-          {/* Oral Health Card */}
+        {/* Health Score Cards - First Row (2x2 Grid) */}
+        <View style={styles.scoreCardsContainer}>
           <View style={styles.scoreCard}>
             <Text style={styles.scoreTitle}>Oral Health</Text>
             <Text style={[styles.scoreValue, { color: getScoreColor(state.oralHealthScore) }]}>
@@ -122,7 +126,6 @@ export default function DashboardScreen({ navigation }) {
             ]} />
           </View>
 
-          {/* Systemic Health Card */}
           <View style={styles.scoreCard}>
             <Text style={styles.scoreTitle}>Systemic Health</Text>
             <Text style={[styles.scoreValue, { color: getScoreColor(state.systemicHealthScore) }]}>
@@ -136,9 +139,8 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Second Row of Score Cards */}
-        <View style={styles.scoresGrid}>
-          {/* Fitness Score Card */}
+        {/* Health Score Cards - Second Row */}
+        <View style={styles.scoreCardsContainer}>
           <View style={styles.scoreCard}>
             <Text style={styles.scoreTitle}>Fitness Score</Text>
             <Text style={[styles.scoreValue, { color: getScoreColor(state.fitnessScore) }]}>
@@ -151,7 +153,6 @@ export default function DashboardScreen({ navigation }) {
             ]} />
           </View>
 
-          {/* Wearable Data Card */}
           <View style={styles.scoreCard}>
             <Text style={styles.scoreTitle}>Wearable Data</Text>
             <View style={styles.wearableData}>
@@ -162,24 +163,26 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Quick Actions - 2x2 Grid */}
+        {/* Quick Action Buttons - First Row */}
         <View style={styles.quickActions}>
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => navigation.navigate('BiomarkerInput')}
           >
-            <Text style={styles.actionButtonText}>📝 Enter Biomarkers</Text>
+            <Text style={styles.actionButtonText}>📝 Enter{'
+'}Biomarkers</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={calculateScores}
+            onPress={handleRecalculateAge}
           >
-            <Text style={styles.actionButtonText}>🔄 Recalculate Age</Text>
+            <Text style={styles.actionButtonText}>🔄 Recalculate{'
+'}Age</Text>
           </TouchableOpacity>
         </View>
 
-        {/* ✅ FIX 4: Added DNA Test and History buttons */}
+        {/* Quick Action Buttons - Second Row */}
         <View style={styles.quickActions}>
           <TouchableOpacity
             style={styles.actionButton}
@@ -224,7 +227,7 @@ export default function DashboardScreen({ navigation }) {
                 style={styles.modalButton}
                 onPress={() => {
                   setShowWatchAlert(false);
-                  navigation.navigate('Watch');
+                  navigation.getParent().navigate('Watch');
                 }}
               >
                 <Text style={styles.modalButtonText}>Go to Watch Tab</Text>
@@ -323,7 +326,6 @@ const styles = StyleSheet.create({
   watchButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     padding: 15,
     borderRadius: 10,
     marginBottom: 20,
@@ -354,7 +356,7 @@ const styles = StyleSheet.create({
     color: '#FFF',
     marginTop: 2,
   },
-  scoresGrid: {
+  scoreCardsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 15,
@@ -413,6 +415,8 @@ const styles = StyleSheet.create({
     padding: 15,
     width: '48%',
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 60,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -423,6 +427,7 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
   alertCard: {
     backgroundColor: '#FFF3CD',
