@@ -65,10 +65,9 @@ export default function WatchScreen() {
         const device = JSON.parse(savedDevice);
         setConnectedDevice(device);
         setConnectionStatus('connected');
-        console.log('✅ Restored connection to:', device.name);
       }
     } catch (error) {
-      console.error('❌ Error loading connection state:', error);
+      console.error('Error loading connection state:', error);
     }
   };
 
@@ -80,16 +79,14 @@ export default function WatchScreen() {
         const now = new Date().toISOString();
         await AsyncStorage.setItem('lastSync', now);
         updateState({ lastSync: now });
-        console.log('✅ Saved connection state: connected');
       } else {
         await AsyncStorage.removeItem('connectedDevice');
         await AsyncStorage.setItem('watchConnected', 'false');
         await AsyncStorage.removeItem('lastSync');
         updateState({ lastSync: null });
-        console.log('✅ Saved connection state: disconnected');
       }
     } catch (error) {
-      console.error('❌ Error saving connection state:', error);
+      console.error('Error saving connection state:', error);
     }
   };
 
@@ -98,11 +95,9 @@ export default function WatchScreen() {
     try {
       const isConnected = await bleManager.isDeviceConnected(connectedDevice.id);
       if (!isConnected) {
-        console.log('❌ Device disconnected, updating state...');
         handleDisconnection();
       }
     } catch (error) {
-      console.log('❌ Connection check failed, device likely disconnected');
       handleDisconnection();
     }
   };
@@ -112,10 +107,7 @@ export default function WatchScreen() {
     setConnectionStatus('disconnected');
     await saveConnectionState(null, false);
     setDiscoveredDevices(prev =>
-      prev.map(device => ({
-        ...device,
-        isConnected: false
-      }))
+      prev.map(device => ({ ...device, isConnected: false }))
     );
   };
 
@@ -205,12 +197,8 @@ export default function WatchScreen() {
       setIsScanning(false);
       bleManager.stopDeviceScan();
       setConnectionStatus('connecting');
-      console.log('🔄 Attempting to connect to:', device.name);
 
-      const connected = await bleManager.connectToDevice(device.id, {
-        timeout: 10000,
-      });
-
+      const connected = await bleManager.connectToDevice(device.id, { timeout: 10000 });
       await connected.discoverAllServicesAndCharacteristics();
 
       setConnectedDevice(connected);
@@ -218,21 +206,15 @@ export default function WatchScreen() {
       await saveConnectionState(device, true);
 
       setDiscoveredDevices(prev =>
-        prev.map(d => ({
-          ...d,
-          isConnected: d.id === device.id
-        }))
+        prev.map(d => ({ ...d, isConnected: d.id === device.id }))
       );
 
-      // ✅ Simple success message - don't try to send Bio-Age
       Alert.alert(
         '✅ Connected!',
-        `Successfully connected to ${device.name}.\n\nYour watch will now sync heart rate, steps, and other health data to the app.\n\nYour Bio-Age (${state.biologicalAge.toFixed(1)} years) is calculated and displayed in the app.`
+        `Successfully connected to ${device.name}.\n\nYour watch will now sync heart rate, steps, and other health data.\n\nYour Bio-Age (${state.biologicalAge.toFixed(1)} years) is calculated and displayed in the app.`
       );
-
-      console.log('✅ Successfully connected to:', device.name);
     } catch (error) {
-      console.error('❌ Connection error:', error);
+      console.error('Connection error:', error);
       setConnectionStatus('disconnected');
       Alert.alert(
         'Connection Failed',
@@ -248,13 +230,10 @@ export default function WatchScreen() {
     }
 
     try {
-      console.log('🔌 Disconnecting from:', connectedDevice.name);
       await bleManager.cancelDeviceConnection(connectedDevice.id);
       await handleDisconnection();
       Alert.alert('Disconnected', `Successfully disconnected from ${connectedDevice.name}`);
-      console.log('✅ Successfully disconnected');
     } catch (error) {
-      console.error('❌ Disconnect error:', error);
       await handleDisconnection();
       Alert.alert('Disconnected', 'Device has been disconnected.');
     }
@@ -262,37 +241,30 @@ export default function WatchScreen() {
 
   const getConnectionStatusText = () => {
     switch (connectionStatus) {
-      case 'connecting':
-        return 'Connecting...';
-      case 'connected':
-        return 'Connected';
-      default:
-        return 'Not Connected';
+      case 'connecting': return 'Connecting...';
+      case 'connected': return 'Connected';
+      default: return 'Not Connected';
     }
   };
 
   const getConnectionIcon = () => {
     switch (connectionStatus) {
-      case 'connecting':
-        return '🔄';
-      case 'connected':
-        return '✓';
-      default:
-        return '⚠';
+      case 'connecting': return '🔄';
+      case 'connected': return '✓';
+      default: return '⚠';
     }
   };
 
   return (
     <LinearGradient colors={['#FF6B00', '#FFB800']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.header}>PRAXIOM{'\n'}HEALTH</Text>
+        <Text style={styles.header}>{"PRAXIOM\nHEALTH"}</Text>
 
         <View style={styles.titleContainer}>
           <Text style={styles.title}>PineTime Watch</Text>
           <Text style={styles.subtitle}>Sync Your Bio-Age</Text>
         </View>
 
-        {/* Connection Status Card */}
         <View style={[
           styles.statusCard,
           connectionStatus === 'connected' && styles.connectedCard,
@@ -308,14 +280,11 @@ export default function WatchScreen() {
               <Text style={styles.bioAgeDisplay}>
                 Your Bio-Age: {state.biologicalAge.toFixed(1)} years
               </Text>
-              <Text style={styles.bioAgeNote}>
-                (Displayed in app)
-              </Text>
+              <Text style={styles.bioAgeNote}>(Displayed in app)</Text>
             </>
           )}
         </View>
 
-        {/* Connection Actions */}
         {connectionStatus !== 'connected' ? (
           <TouchableOpacity
             style={[
@@ -332,15 +301,11 @@ export default function WatchScreen() {
             </Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity
-            style={styles.disconnectButton}
-            onPress={disconnectDevice}
-          >
+          <TouchableOpacity style={styles.disconnectButton} onPress={disconnectDevice}>
             <Text style={styles.disconnectButtonText}>Disconnect</Text>
           </TouchableOpacity>
         )}
 
-        {/* Show All Devices Toggle */}
         <View style={styles.toggleContainer}>
           <Text style={styles.toggleLabel}>Show All Devices (Debug)</Text>
           <Switch
@@ -351,7 +316,6 @@ export default function WatchScreen() {
           />
         </View>
 
-        {/* Device List */}
         {discoveredDevices.length > 0 && (
           <>
             <Text style={styles.devicesFoundText}>
@@ -396,7 +360,6 @@ export default function WatchScreen() {
           </>
         )}
 
-        {/* Info Card */}
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>💡 Watch Features:</Text>
           <Text style={styles.infoText}>✓ Syncs heart rate, steps, HRV to app</Text>
@@ -405,12 +368,11 @@ export default function WatchScreen() {
           <Text style={styles.infoText}>✓ Works with standard InfiniTime firmware</Text>
         </View>
 
-        {/* Troubleshooting Card */}
         <View style={styles.troubleshootingCard}>
           <Text style={styles.troubleshootingTitle}>💡 Troubleshooting:</Text>
           <Text style={styles.troubleshootingText}>• Make sure watch is ON and NEARBY</Text>
           <Text style={styles.troubleshootingText}>• Turn on "Show All Devices" to see everything</Text>
-          <Text style={styles.troubleshootingText}>• If you see your watch but can't connect, unpair it from your phone's Bluetooth settings first</Text>
+          <Text style={styles.troubleshootingText}>• Unpair from phone's Bluetooth settings if connection fails</Text>
           <Text style={styles.troubleshootingText}>• Try turning Bluetooth off and on if having issues</Text>
         </View>
       </ScrollView>
@@ -419,35 +381,12 @@ export default function WatchScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  header: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#333',
-    marginBottom: 30,
-    lineHeight: 22,
-  },
-  titleContainer: {
-    alignItems: 'center',
-    marginBottom: 25,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 18,
-    color: '#666',
-  },
+  container: { flex: 1 },
+  scrollContent: { padding: 20, paddingBottom: 100 },
+  header: { fontSize: 16, fontWeight: 'bold', textAlign: 'center', color: '#333', marginBottom: 30, lineHeight: 22 },
+  titleContainer: { alignItems: 'center', marginBottom: 25 },
+  title: { fontSize: 32, fontWeight: 'bold', color: '#333', marginBottom: 8 },
+  subtitle: { fontSize: 18, color: '#666' },
   statusCard: {
     backgroundColor: '#fff',
     borderRadius: 30,
@@ -460,45 +399,14 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  connectedCard: {
-    borderWidth: 2,
-    borderColor: '#4CAF50',
-  },
-  connectingCard: {
-    borderWidth: 2,
-    borderColor: '#FF8C00',
-  },
-  statusHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  statusIcon: {
-    fontSize: 36,
-    marginRight: 15,
-  },
-  statusTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  deviceName: {
-    fontSize: 18,
-    color: '#666',
-    marginTop: 5,
-  },
-  bioAgeDisplay: {
-    fontSize: 20,
-    color: '#FF6B00',
-    fontWeight: 'bold',
-    marginTop: 15,
-  },
-  bioAgeNote: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 3,
-    fontStyle: 'italic',
-  },
+  connectedCard: { borderWidth: 2, borderColor: '#4CAF50' },
+  connectingCard: { borderWidth: 2, borderColor: '#FF8C00' },
+  statusHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  statusIcon: { fontSize: 36, marginRight: 15 },
+  statusTitle: { fontSize: 28, fontWeight: 'bold', color: '#333' },
+  deviceName: { fontSize: 18, color: '#666', marginTop: 5 },
+  bioAgeDisplay: { fontSize: 20, color: '#FF6B00', fontWeight: 'bold', marginTop: 15 },
+  bioAgeNote: { fontSize: 12, color: '#999', marginTop: 3, fontStyle: 'italic' },
   scanButton: {
     backgroundColor: '#00CFC1',
     padding: 20,
@@ -511,14 +419,8 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  scanButtonDisabled: {
-    backgroundColor: '#B0B0B0',
-  },
-  scanButtonText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
+  scanButtonDisabled: { backgroundColor: '#B0B0B0' },
+  scanButtonText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
   disconnectButton: {
     backgroundColor: '#FF5252',
     padding: 20,
@@ -531,11 +433,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  disconnectButtonText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
+  disconnectButtonText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
   toggleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -550,23 +448,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  toggleLabel: {
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '500',
-  },
-  devicesFoundText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  pineTimeHint: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 15,
-    fontStyle: 'italic',
-  },
+  toggleLabel: { fontSize: 16, color: '#666', fontWeight: '500' },
+  devicesFoundText: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 8 },
+  pineTimeHint: { fontSize: 14, color: '#666', marginBottom: 15, fontStyle: 'italic' },
   deviceCard: {
     backgroundColor: '#fff',
     borderRadius: 20,
@@ -581,93 +465,20 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  pineTimeCard: {
-    borderWidth: 2,
-    borderColor: '#00CFC1',
-  },
-  connectedDeviceCard: {
-    borderWidth: 2,
-    borderColor: '#4CAF50',
-    backgroundColor: '#F8FFF8',
-  },
-  deviceInfo: {
-    flex: 1,
-  },
-  deviceNameText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  deviceMac: {
-    fontSize: 14,
-    color: '#999',
-    marginTop: 4,
-  },
-  deviceSignal: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 2,
-  },
-  connectButton: {
-    backgroundColor: '#00CFC1',
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    borderRadius: 20,
-  },
-  connectButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  connectedIndicator: {
-    backgroundColor: '#4CAF50',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  connectedText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  infoCard: {
-    backgroundColor: '#E3F2FD',
-    borderRadius: 20,
-    padding: 20,
-    marginTop: 20,
-    marginBottom: 15,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1976D2',
-    marginBottom: 12,
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#1976D2',
-    marginBottom: 6,
-    lineHeight: 20,
-  },
-  troubleshootingCard: {
-    backgroundColor: '#FFF9E6',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-  },
-  troubleshootingTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#856404',
-    marginBottom: 12,
-  },
-  troubleshootingText: {
-    fontSize: 14,
-    color: '#856404',
-    marginBottom: 8,
-    lineHeight: 20,
-  },
+  pineTimeCard: { borderWidth: 2, borderColor: '#00CFC1' },
+  connectedDeviceCard: { borderWidth: 2, borderColor: '#4CAF50', backgroundColor: '#F8FFF8' },
+  deviceInfo: { flex: 1 },
+  deviceNameText: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 4 },
+  deviceMac: { fontSize: 14, color: '#999', marginTop: 4 },
+  deviceSignal: { fontSize: 12, color: '#999', marginTop: 2 },
+  connectButton: { backgroundColor: '#00CFC1', paddingVertical: 12, paddingHorizontal: 25, borderRadius: 20 },
+  connectButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  connectedIndicator: { backgroundColor: '#4CAF50', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  connectedText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+  infoCard: { backgroundColor: '#E3F2FD', borderRadius: 20, padding: 20, marginTop: 20, marginBottom: 15 },
+  infoTitle: { fontSize: 16, fontWeight: 'bold', color: '#1976D2', marginBottom: 12 },
+  infoText: { fontSize: 14, color: '#1976D2', marginBottom: 6, lineHeight: 20 },
+  troubleshootingCard: { backgroundColor: '#FFF9E6', borderRadius: 20, padding: 20, marginBottom: 20 },
+  troubleshootingTitle: { fontSize: 16, fontWeight: 'bold', color: '#856404', marginBottom: 12 },
+  troubleshootingText: { fontSize: 14, color: '#856404', marginBottom: 8, lineHeight: 20 },
 });

@@ -54,7 +54,6 @@ export default function DashboardScreen({ navigation }) {
   return (
     <LinearGradient colors={['#FF6B00', '#FFB800']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Bio-Age Overview Card */}
         <View style={styles.bioAgeCard}>
           <View style={styles.bioAgeHeader}>
             <Text style={styles.targetIcon}>🎯</Text>
@@ -89,7 +88,6 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Watch Connection Button */}
         <TouchableOpacity
           style={[
             styles.watchButton,
@@ -112,7 +110,6 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </TouchableOpacity>
 
-        {/* Health Score Cards - First Row (2x2 Grid) */}
         <View style={styles.scoreCardsContainer}>
           <View style={styles.scoreCard}>
             <Text style={styles.scoreTitle}>Oral Health</Text>
@@ -139,7 +136,6 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Health Score Cards - Second Row */}
         <View style={styles.scoreCardsContainer}>
           <View style={styles.scoreCard}>
             <Text style={styles.scoreTitle}>Fitness Score</Text>
@@ -163,26 +159,22 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Quick Action Buttons - First Row */}
         <View style={styles.quickActions}>
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => navigation.navigate('BiomarkerInput')}
           >
-            <Text style={styles.actionButtonText}>📝 Enter{'
-'}Biomarkers</Text>
+            <Text style={styles.actionButtonText}>{"📝 Enter\nBiomarkers"}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.actionButton}
             onPress={handleRecalculateAge}
           >
-            <Text style={styles.actionButtonText}>🔄 Recalculate{'
-'}Age</Text>
+            <Text style={styles.actionButtonText}>{"🔄 Recalculate\nAge"}</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Quick Action Buttons - Second Row */}
         <View style={styles.quickActions}>
           <TouchableOpacity
             style={styles.actionButton}
@@ -199,7 +191,6 @@ export default function DashboardScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Tier Upgrade Alert */}
         {(state.oralHealthScore < 75 || state.systemicHealthScore < 75) && (
           <View style={styles.alertCard}>
             <Text style={styles.alertTitle}>⚠️ Tier Upgrade Recommended</Text>
@@ -209,7 +200,6 @@ export default function DashboardScreen({ navigation }) {
           </View>
         )}
 
-        {/* Watch Alert Modal */}
         <Modal
           visible={showWatchAlert}
           transparent={true}
@@ -248,13 +238,8 @@ export default function DashboardScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 100,
-  },
+  container: { flex: 1 },
+  scrollContent: { padding: 20, paddingBottom: 100 },
   bioAgeCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
@@ -266,46 +251,15 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-  bioAgeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  targetIcon: {
-    fontSize: 24,
-    marginRight: 10,
-  },
-  bioAgeTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2C3E50',
-  },
-  ageContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 20,
-  },
-  ageBox: {
-    alignItems: 'center',
-  },
-  ageLabel: {
-    fontSize: 14,
-    color: '#7F8C8D',
-    marginBottom: 5,
-  },
-  ageValue: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#2C3E50',
-  },
-  bioAge: {
-    color: '#FF6B00',
-  },
-  ageUnit: {
-    fontSize: 16,
-    color: '#7F8C8D',
-    marginTop: 5,
-  },
+  bioAgeHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  targetIcon: { fontSize: 24, marginRight: 10 },
+  bioAgeTitle: { fontSize: 24, fontWeight: 'bold', color: '#2C3E50' },
+  ageContainer: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 },
+  ageBox: { alignItems: 'center' },
+  ageLabel: { fontSize: 14, color: '#7F8C8D', marginBottom: 5 },
+  ageValue: { fontSize: 48, fontWeight: 'bold', color: '#2C3E50' },
+  bioAge: { color: '#FF6B00' },
+  ageUnit: { fontSize: 16, color: '#7F8C8D', marginTop: 5 },
   deviationContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -314,15 +268,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E0E0E0',
   },
-  deviationLabel: {
-    fontSize: 16,
-    color: '#7F8C8D',
-    marginRight: 10,
-  },
-  deviationValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+  deviationLabel: { fontSize: 16, color: '#7F8C8D', marginRight: 10 },
+  deviationValue: { fontSize: 18, fontWeight: 'bold' },
   watchButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -335,32 +282,12 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-  watchConnected: {
-    backgroundColor: '#47C83E',
-  },
-  watchDisconnected: {
-    backgroundColor: '#95A5A6',
-  },
-  watchButtonIcon: {
-    fontSize: 24,
-    marginRight: 10,
-    color: '#FFF',
-  },
-  watchButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFF',
-  },
-  syncText: {
-    fontSize: 12,
-    color: '#FFF',
-    marginTop: 2,
-  },
-  scoreCardsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 15,
-  },
+  watchConnected: { backgroundColor: '#47C83E' },
+  watchDisconnected: { backgroundColor: '#95A5A6' },
+  watchButtonIcon: { fontSize: 24, marginRight: 10, color: '#FFF' },
+  watchButtonText: { fontSize: 18, fontWeight: 'bold', color: '#FFF' },
+  syncText: { fontSize: 12, color: '#FFF', marginTop: 2 },
+  scoreCardsContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
   scoreCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 15,
@@ -373,42 +300,13 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-  scoreTitle: {
-    fontSize: 14,
-    color: '#7F8C8D',
-    marginBottom: 10,
-  },
-  scoreValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  scoreTarget: {
-    fontSize: 12,
-    color: '#95A5A6',
-    marginBottom: 10,
-  },
-  scoreIndicator: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginTop: 10,
-  },
-  wearableData: {
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  wearableItem: {
-    fontSize: 14,
-    color: '#2C3E50',
-    marginVertical: 2,
-  },
-  quickActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 5,
-    marginBottom: 10,
-  },
+  scoreTitle: { fontSize: 14, color: '#7F8C8D', marginBottom: 10 },
+  scoreValue: { fontSize: 32, fontWeight: 'bold', marginBottom: 5 },
+  scoreTarget: { fontSize: 12, color: '#95A5A6', marginBottom: 10 },
+  scoreIndicator: { width: 50, height: 50, borderRadius: 25, marginTop: 10 },
+  wearableData: { alignItems: 'center', marginTop: 10 },
+  wearableItem: { fontSize: 14, color: '#2C3E50', marginVertical: 2 },
+  quickActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5, marginBottom: 10 },
   actionButton: {
     backgroundColor: '#0099DB',
     borderRadius: 10,
@@ -423,12 +321,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-  actionButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
+  actionButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
   alertCard: {
     backgroundColor: '#FFF3CD',
     borderRadius: 10,
@@ -437,60 +330,14 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#FFB800',
   },
-  alertTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#856404',
-    marginBottom: 5,
-  },
-  alertText: {
-    fontSize: 14,
-    color: '#856404',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#FFF',
-    borderRadius: 15,
-    padding: 20,
-    width: '80%',
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#2C3E50',
-    marginBottom: 10,
-  },
-  modalText: {
-    fontSize: 16,
-    color: '#7F8C8D',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  modalButton: {
-    backgroundColor: '#0099DB',
-    borderRadius: 10,
-    padding: 15,
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  modalButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  modalCancelButton: {
-    backgroundColor: '#E0E0E0',
-  },
-  modalCancelButtonText: {
-    color: '#7F8C8D',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  alertTitle: { fontSize: 16, fontWeight: 'bold', color: '#856404', marginBottom: 5 },
+  alertText: { fontSize: 14, color: '#856404' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#FFF', borderRadius: 15, padding: 20, width: '80%', alignItems: 'center' },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#2C3E50', marginBottom: 10 },
+  modalText: { fontSize: 16, color: '#7F8C8D', textAlign: 'center', marginBottom: 20 },
+  modalButton: { backgroundColor: '#0099DB', borderRadius: 10, padding: 15, width: '100%', alignItems: 'center', marginBottom: 10 },
+  modalButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  modalCancelButton: { backgroundColor: '#E0E0E0' },
+  modalCancelButtonText: { color: '#7F8C8D', fontSize: 16, fontWeight: 'bold' },
 });
