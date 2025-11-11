@@ -555,8 +555,15 @@ export default class WearableService {
       this.disconnect();
     }
 
-    this.bleManager.destroy();
+    if (this.bleManager) {
+      this.bleManager.destroy();
+    }
     this.dataUpdateListeners = [];
     this.connectionListeners = [];
   }
 }
+
+// ✅ CRITICAL FIX: Export singleton instance instead of class
+// This fixes the "WearableService.isConnected is not a function" crash
+const wearableServiceInstance = new WearableService();
+export default wearableServiceInstance;
