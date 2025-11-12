@@ -494,7 +494,13 @@ class WearableService {
     }
   }
 
-  async isConnected() {
+  // Synchronous connection check (for use in conditions)
+  isConnected() {
+    return this.connectedDevice !== null;
+  }
+
+  // Async connection check (verifies actual BLE state)
+  async isConnectedAsync() {
     if (!this.connectedDevice) return false;
 
     try {
@@ -507,6 +513,23 @@ class WearableService {
 
   getLatestData() {
     return { ...this.latestData };
+  }
+
+  // Individual data getters
+  async getHeartRate() {
+    return this.latestData.heartRate;
+  }
+
+  async getStepCount() {
+    return this.latestData.steps;
+  }
+
+  async getBatteryLevel() {
+    return this.latestData.battery;
+  }
+
+  async getHRV() {
+    return this.latestData.hrv;
   }
 
   // Listener management
