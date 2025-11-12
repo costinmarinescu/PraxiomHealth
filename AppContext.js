@@ -52,8 +52,8 @@ export const AppContextProvider = ({ children }) => {
           
           // Update state with new data
           updateState({
-            heartRate: heartRate || state.heartRate,
-            steps: steps || state.steps,
+            heartRate: heartRate || null,
+            steps: steps || 0,
             watchConnected: true,
           });
         } catch (error) {
@@ -68,9 +68,7 @@ export const AppContextProvider = ({ children }) => {
         const watchStatus = await AsyncStorage.getItem('watchConnected');
         const isConnected = watchStatus === 'true' && WearableService.isConnected();
         
-        if (state.watchConnected !== isConnected) {
-          updateState({ watchConnected: isConnected });
-        }
+        updateState({ watchConnected: isConnected });
       } catch (error) {
         console.error('Error checking watch connection:', error);
       }
@@ -80,7 +78,7 @@ export const AppContextProvider = ({ children }) => {
       clearInterval(interval);
       clearInterval(connectionInterval);
     };
-  }, [state.heartRate, state.steps, state.watchConnected]);
+  }, []); // Empty deps - only run once on mount
 
   const loadSavedData = async () => {
     try {
