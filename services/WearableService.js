@@ -19,7 +19,9 @@ const HEALTH_REQUEST_CHAR = '00001902-78fc-48fe-8e23-433b3a1942d0'; // ✅ Fixed
 
 class WearableService {
   constructor() {
-    this.bleManager = new BleManager();
+    this.bleManager = null;
+    this.bleInitialized = false;
+    this.bleError = null;
     this.connectedDevice = null;
     this.isScanning = false;
     this.reconnectAttempts = 0;
@@ -39,11 +41,30 @@ class WearableService {
       sleepEfficiency: null,
     };
 
-    // Initialize BLE manager with retry logic
-    this.initializeBLE();
+    // Initialize BLE manager lazily to prevent crashes
+    this.initializeBLESafe();
+  }
+
+  async initializeBLESafe() {
+    try {
+      const { BleManager: BleManagerClass } = await import('react-native-ble-plx');
+      this.bleManager = new BleManagerClass();
+      await this.initializeBLE();
+      this.bleInitialized = true;
+    } catch (error) {
+      console.error('BLE initialization failed:', error);
+      this.bleError = error;
+      this.bleInitialized = false;
+      // Don't crash - just log the error and continue
+    }
   }
 
   async initializeBLE() {
+    if (!this.bleManager) {
+      console.warn('BLE Manager not initialized');
+      return;
+    }
+    
     try {
       const state = await this.bleManager.state();
       console.log('Initial BLE state:', state);
@@ -94,6 +115,10 @@ class WearableService {
   }
 
   async scanForDevices(duration = 10000) {
+    if (!this.bleManager || !this.bleInitialized) {
+      throw new Error('Bluetooth is not available. Please ensure your device supports BLE.');
+    }
+    
     const hasPermissions = await this.requestPermissions();
     if (!hasPermissions) {
       throw new Error('Bluetooth permissions not granted');
@@ -496,6 +521,9 @@ class WearableService {
 
   // Synchronous connection check (for use in conditions)
   isConnected() {
+    if (!this.bleManager || !this.bleInitialized) {
+      return false;
+    }
     return this.connectedDevice !== null;
   }
 
