@@ -6,7 +6,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { AppContextProvider } from './AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
-
 import DashboardScreen from './screens/DashboardScreen';
 import WatchScreen from './screens/WatchScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -32,7 +31,11 @@ const MyTheme = {
 
 function DashboardStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
       <Stack.Screen name="DashboardHome" component={DashboardScreen} />
       <Stack.Screen name="BiomarkerInput" component={BiomarkerInputScreen} />
       <Stack.Screen name="Tier1BiomarkerInput" component={Tier1BiomarkerInputScreen} />
@@ -51,23 +54,26 @@ export default function App() {
     <ErrorBoundary>
       <AppContextProvider>
         <ImageBackground
-          source={require('./assets/praxiom_background.png')}
+          source={require('./assets/praxiom-bg.png')}
           style={styles.backgroundImage}
-          resizeMode="cover"
-          onError={(error) => console.log('Background image error, using fallback')}
+          onError={() => console.log('Background image error, using fallback')}
         >
           <NavigationContainer theme={MyTheme}>
             <Tab.Navigator
               screenOptions={({ route }) => ({
                 tabBarIcon: ({ focused, color, size }) => {
                   let iconName;
+
                   if (route.name === 'Dashboard') {
                     iconName = focused ? 'home' : 'home-outline';
                   } else if (route.name === 'Watch') {
                     iconName = focused ? 'watch' : 'watch-outline';
                   } else if (route.name === 'Settings') {
                     iconName = focused ? 'settings' : 'settings-outline';
+                  } else {
+                    iconName = 'ellipsis-horizontal';
                   }
+
                   return <Ionicons name={iconName} size={size} color={color} />;
                 },
                 headerShown: false,
