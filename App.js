@@ -54,7 +54,7 @@ export default function App() {
     <ErrorBoundary>
       <AppContextProvider>
         <ImageBackground
-          source={require('./assets/praxiom-bg.png')}
+          source={require('./assets/praxiom_background.png')}
           style={styles.backgroundImage}
           onError={() => console.log('Background image error, using fallback')}
         >
