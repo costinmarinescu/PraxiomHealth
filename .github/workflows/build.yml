@@ -26,5 +26,5 @@ jobs:
       - name: Install dependencies
         run: npm install
       
-      - name: Build Android APK
-        run: eas build --platform android --profile preview --non-interactive
+      - name: Build Android APK with cleared cache
+        run: eas build --platform android --profile preview --non-interactive --clear-cache
