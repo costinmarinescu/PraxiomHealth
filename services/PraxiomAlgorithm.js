@@ -1,21 +1,20 @@
 // Praxiom Bio-Age Algorithm - Tier 1
 // Based on validated oral-systemic biomarker protocol
+// Formula: Bio-Age = Chronological Age + [(100 - OHS) × α + (100 - SHS) × β]
 
 class PraxiomAlgorithm {
-  // Age-stratified coefficients
+  // Age-stratified coefficients as per Praxiom documentation
   static AGE_COEFFICIENTS = {
-    '18-35': { base: 0.85, oral: 0.30, systemic: 0.45, fitness: 0.25 },
-    '36-50': { base: 0.90, oral: 0.35, systemic: 0.50, fitness: 0.15 },
-    '51-65': { base: 0.95, oral: 0.40, systemic: 0.55, fitness: 0.05 },
-    '66+': { base: 1.00, oral: 0.45, systemic: 0.50, fitness: 0.05 },
+    '<50': { alpha: 0.08, beta: 0.15 },
+    '50-70': { alpha: 0.12, beta: 0.20 },
+    '>70': { alpha: 0.15, beta: 0.25 },
   };
 
   // Get age group
   static getAgeGroup(chronologicalAge) {
-    if (chronologicalAge >= 18 && chronologicalAge <= 35) return '18-35';
-    if (chronologicalAge >= 36 && chronologicalAge <= 50) return '36-50';
-    if (chronologicalAge >= 51 && chronologicalAge <= 65) return '51-65';
-    return '66+';
+    if (chronologicalAge < 50) return '<50';
+    if (chronologicalAge >= 50 && chronologicalAge <= 70) return '50-70';
+    return '>70';
   }
 
   // Calculate Oral Health Score (0-100)
@@ -30,9 +29,10 @@ class PraxiomAlgorithm {
     }
 
     // Active MMP-8 scoring (optimal: <60 ng/mL)
+    // Weight: 2.5x due to CVD correlation
     if (activeMMP8 > 60) {
       const excess = Math.min(activeMMP8 - 60, 200); // Cap at 260
-      score -= (excess / 200) * 30; // Up to -30 points
+      score -= (excess / 200) * 30 * 2.5; // Up to -75 points (weighted)
     }
 
     // Salivary Flow Rate scoring (optimal: >1.5 mL/min)
@@ -48,33 +48,36 @@ class PraxiomAlgorithm {
     let score = 100;
 
     // hs-CRP scoring (optimal: <1.0 mg/L)
-    // Weight: 1.5x - CVD correlation
+    // Weight: 2.0x - CVD correlation
     if (hsCRP > 1.0) {
       const excess = Math.min(hsCRP - 1.0, 9.0); // Cap at 10
-      score -= (excess / 9.0) * 25 * 1.5; // Up to -37.5 points
+      score -= (excess / 9.0) * 20 * 2.0; // Up to -40 points (weighted)
     }
 
     // Omega-3 Index scoring (optimal: >8%)
+    // Weight: 2.0x - cardiovascular health
     if (omega3Index < 8) {
-      score -= ((8 - omega3Index) / 8) * 15; // Up to -15 points
+      score -= ((8 - omega3Index) / 8) * 15 * 2.0; // Up to -30 points (weighted)
     }
 
     // HbA1c scoring (optimal: <5.7%)
     // Weight: 1.5x - ADA validated
     if (hbA1c > 5.7) {
       const excess = Math.min(hbA1c - 5.7, 8.3); // Cap at 14
-      score -= (excess / 8.3) * 20 * 1.5; // Up to -30 points
+      score -= (excess / 8.3) * 20 * 1.5; // Up to -30 points (weighted)
     }
 
     // GDF-15 scoring (optimal: <1200 pg/mL)
+    // Weight: 2.0x - strongest aging predictor
     if (gdf15 > 1200) {
       const excess = Math.min(gdf15 - 1200, 3800); // Cap at 5000
-      score -= (excess / 3800) * 15; // Up to -15 points
+      score -= (excess / 3800) * 12 * 2.0; // Up to -24 points (weighted)
     }
 
     // Vitamin D scoring (optimal: >30 ng/mL)
+    // Weight: 1.0x
     if (vitaminD < 30) {
-      score -= ((30 - vitaminD) / 30) * 12.5; // Up to -12.5 points
+      score -= ((30 - vitaminD) / 30) * 10; // Up to -10 points
     }
 
     return Math.max(0, Math.min(100, score));
@@ -104,40 +107,45 @@ class PraxiomAlgorithm {
     return Math.max(0, Math.min(100, score));
   }
 
-  // Calculate Praxiom Bio-Age
-  static calculateBioAge(chronologicalAge, oralScore, systemicScore, fitnessScore) {
+  // Calculate Praxiom Bio-Age using official formula
+  // Bio-Age = Chronological Age + [(100 - OHS) × α + (100 - SHS) × β]
+  static calculateBioAge(chronologicalAge, oralScore, systemicScore, fitnessScore = null) {
     const ageGroup = this.getAgeGroup(chronologicalAge);
     const coeffs = this.AGE_COEFFICIENTS[ageGroup];
 
-    // Composite score (0-100)
-    const compositeScore = (
-      oralScore * coeffs.oral +
-      systemicScore * coeffs.systemic +
-      fitnessScore * coeffs.fitness
-    ) / (coeffs.oral + coeffs.systemic + coeffs.fitness);
+    // Main formula components
+    const oralDeviation = (100 - oralScore) * coeffs.alpha;
+    const systemicDeviation = (100 - systemicScore) * coeffs.beta;
 
-    // Convert score to age modifier
-    // Score 100 = 0.80x age (20% younger)
-    // Score 50 = 1.00x age (actual age)
-    // Score 0 = 1.30x age (30% older)
-    const modifier = 1.30 - (compositeScore / 100) * 0.50;
+    // Calculate base bio-age
+    let bioAge = chronologicalAge + oralDeviation + systemicDeviation;
 
-    // Calculate bio-age
-    const bioAge = chronologicalAge * coeffs.base * modifier;
+    // Optional: Add fitness modifier (small adjustment)
+    if (fitnessScore !== null && fitnessScore !== undefined) {
+      // Fitness has minor impact: -1 to +1 year based on score
+      const fitnessAdjustment = ((100 - fitnessScore) / 100) * 2 - 1;
+      bioAge += fitnessAdjustment;
+    }
 
     return {
       bioAge: parseFloat(bioAge.toFixed(1)),
-      compositeScore: Math.round(compositeScore),
       oralScore: Math.round(oralScore),
       systemicScore: Math.round(systemicScore),
-      fitnessScore: Math.round(fitnessScore),
+      fitnessScore: fitnessScore !== null ? Math.round(fitnessScore) : null,
       ageGroup,
-      modifier: parseFloat(modifier.toFixed(2)),
+      coefficients: coeffs,
+      deviation: parseFloat((bioAge - chronologicalAge).toFixed(1)),
     };
   }
 
   // Full Tier 1 calculation from biomarker inputs
   static calculateFromBiomarkers(data) {
+    // Validate required fields
+    if (!data.age || !data.salivaryPH || !data.activeMMP8 || !data.salivaryFlowRate ||
+        !data.hsCRP || !data.omega3Index || !data.hbA1c || !data.gdf15 || !data.vitaminD) {
+      throw new Error('Missing required biomarker data');
+    }
+
     const oralScore = this.calculateOralScore(
       data.salivaryPH,
       data.activeMMP8,
@@ -152,12 +160,16 @@ class PraxiomAlgorithm {
       data.vitaminD
     );
 
-    const fitnessScore = this.calculateFitnessScore(
-      data.heartRate,
-      data.steps,
-      data.spO2,
-      data.age
-    );
+    // Fitness score is optional
+    let fitnessScore = null;
+    if (data.heartRate && data.steps && data.spO2) {
+      fitnessScore = this.calculateFitnessScore(
+        data.heartRate,
+        data.steps,
+        data.spO2,
+        data.age
+      );
+    }
 
     return this.calculateBioAge(
       data.age,
@@ -169,35 +181,63 @@ class PraxiomAlgorithm {
 
   // Get health status label
   static getHealthStatus(score) {
-    if (score >= 80) return { label: 'Excellent', color: '#00d4ff' };
-    if (score >= 65) return { label: 'Good', color: '#4ade80' };
-    if (score >= 50) return { label: 'Fair', color: '#fbbf24' };
-    if (score >= 35) return { label: 'Poor', color: '#fb923c' };
+    if (score >= 85) return { label: 'Excellent', color: '#47C83E' };
+    if (score >= 75) return { label: 'Good', color: '#4ade80' };
+    if (score >= 60) return { label: 'Fair', color: '#fbbf24' };
+    if (score >= 50) return { label: 'Poor', color: '#fb923c' };
     return { label: 'Critical', color: '#ef4444' };
   }
 
-  // Calculate age difference
+  // Calculate age difference with status
   static getAgeDifference(chronologicalAge, bioAge) {
     const diff = bioAge - chronologicalAge;
-    const percentage = ((diff / chronologicalAge) * 100).toFixed(1);
+    const percentage = ((Math.abs(diff) / chronologicalAge) * 100).toFixed(1);
     
-    if (diff < 0) {
+    if (diff < -0.5) {
       return {
         message: `${Math.abs(diff).toFixed(1)} years younger`,
-        percentage: `${Math.abs(percentage)}% younger`,
+        percentage: `${percentage}% younger`,
         status: 'positive',
+        color: '#47C83E',
       };
-    } else if (diff > 0) {
+    } else if (diff > 0.5) {
       return {
         message: `${diff.toFixed(1)} years older`,
         percentage: `${percentage}% older`,
         status: 'negative',
+        color: '#ef4444',
       };
     } else {
       return {
         message: 'Matches chronological age',
         percentage: '0%',
         status: 'neutral',
+        color: '#4ade80',
+      };
+    }
+  }
+
+  // Get recommendation based on scores
+  static getRecommendation(oralScore, systemicScore) {
+    if (oralScore < 75 && systemicScore < 75) {
+      return {
+        level: 'urgent',
+        message: 'Both Oral and Systemic Health scores are below target. Consider Tier 2 assessment for detailed analysis.',
+      };
+    } else if (oralScore < 75) {
+      return {
+        level: 'attention',
+        message: 'Oral Health score is below target. Focus on improving oral hygiene and consider professional dental assessment.',
+      };
+    } else if (systemicScore < 75) {
+      return {
+        level: 'attention',
+        message: 'Systemic Health score is below target. Consult with healthcare provider for targeted interventions.',
+      };
+    } else {
+      return {
+        level: 'maintain',
+        message: 'Both scores are in good range. Continue current health practices and monitor regularly.',
       };
     }
   }
