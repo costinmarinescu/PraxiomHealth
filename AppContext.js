@@ -41,6 +41,30 @@ export const AppContextProvider = ({ children }) => {
     saveData();
   }, [state.biologicalAge, state.oralHealthScore, state.systemicHealthScore]);
 
+  // ✨ NEW: Auto-push Bio-Age to watch when it changes and watch is connected
+  useEffect(() => {
+    const pushBioAgeToWatch = async () => {
+      if (state.watchConnected && state.biologicalAge) {
+        try {
+          await WearableService.sendBioAge({
+            praxiomAge: state.biologicalAge
+          });
+          
+          const now = new Date().toISOString();
+          await AsyncStorage.setItem('lastBioAgeSync', now);
+          updateState({ lastSync: now });
+          
+          console.log('✅ Bio-Age automatically pushed to watch:', state.biologicalAge);
+        } catch (error) {
+          console.error('❌ Auto-push Bio-Age failed:', error);
+          // Don't throw - this is a background operation
+        }
+      }
+    };
+    
+    pushBioAgeToWatch();
+  }, [state.biologicalAge, state.watchConnected]); // Trigger when either changes
+
   // Subscribe to wearable data updates
   useEffect(() => {
     const interval = setInterval(async () => {
