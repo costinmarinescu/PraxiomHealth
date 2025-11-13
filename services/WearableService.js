@@ -26,6 +26,7 @@ class WearableService {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 2000;
+    this.keepAliveInterval = null; // ✨ NEW: Keep-alive timer
 
     // Data listeners
     this.dataUpdateListeners = [];
@@ -204,6 +205,9 @@ class WearableService {
       // Subscribe to all services
       await this.subscribeToServices(device);
 
+      // ✨ NEW: Start keep-alive mechanism
+      this.startKeepAlive();
+
       console.log('All services subscribed successfully');
       return true;
     } catch (error) {
@@ -211,6 +215,48 @@ class WearableService {
       this.connectedDevice = null;
       this.notifyConnectionChange(false);
       throw error;
+    }
+  }
+
+  // ✨ NEW: Keep-alive mechanism to prevent disconnection
+  startKeepAlive() {
+    // Clear any existing keep-alive
+    if (this.keepAliveInterval) {
+      clearInterval(this.keepAliveInterval);
+    }
+
+    // Read battery level every 30 seconds to keep connection alive
+    this.keepAliveInterval = setInterval(async () => {
+      if (this.connectedDevice) {
+        try {
+          console.log('📡 Keep-alive: Reading battery level...');
+          const battery = await this.connectedDevice.readCharacteristicForService(
+            BATTERY_SERVICE,
+            BATTERY_LEVEL
+          );
+          
+          if (battery?.value) {
+            this.handleBatteryData(battery.value);
+          }
+          
+          console.log('✅ Keep-alive successful');
+        } catch (error) {
+          console.warn('⚠️ Keep-alive failed:', error.message);
+          // Don't trigger full disconnection on keep-alive failure
+          // The onDisconnected handler will catch real disconnections
+        }
+      }
+    }, 30000); // Every 30 seconds
+
+    console.log('✅ Keep-alive mechanism started');
+  }
+
+  // ✨ NEW: Stop keep-alive mechanism
+  stopKeepAlive() {
+    if (this.keepAliveInterval) {
+      clearInterval(this.keepAliveInterval);
+      this.keepAliveInterval = null;
+      console.log('🛑 Keep-alive mechanism stopped');
     }
   }
 
@@ -284,64 +330,94 @@ class WearableService {
       );
       console.log('✓ Heart Rate monitoring started');
     } catch (error) {
-      console.error('Failed to subscribe to Heart Rate:', error);
+      console.log('⚠️ Heart Rate service not available');
     }
 
-    // Subscribe to Step Count
+    // ✨ FIXED: Subscribe to Step Count with proper notification enable
     try {
-      device.monitorCharacteristicForService(
-        MOTION_SERVICE,
-        STEP_COUNT_CHAR,
-        (error, characteristic) => {
-          if (error) {
-            console.error('Step monitoring error:', error);
-            return;
-          }
+      // First, enable notifications by writing to CCCD
+      const services = await device.services();
+      const motionService = services.find(s => s.uuid.toUpperCase() === MOTION_SERVICE.toUpperCase());
+      
+      if (motionService) {
+        console.log('✓ Motion Service found');
+        
+        // Monitor the step count characteristic
+        device.monitorCharacteristicForService(
+          MOTION_SERVICE,
+          STEP_COUNT_CHAR,
+          (error, characteristic) => {
+            if (error) {
+              console.error('❌ Step monitoring error:', error);
+              return;
+            }
 
-          if (characteristic?.value) {
-            this.handleStepData(characteristic.value);
+            if (characteristic?.value) {
+              console.log('📊 Step data received');
+              this.handleStepData(characteristic.value);
+            }
           }
-        }
-      );
-      console.log('✓ Step Count monitoring started');
+        );
+        
+        console.log('✅ Step Count monitoring started and notifications enabled');
+      } else {
+        console.log('⚠️ Motion Service not found on device');
+      }
     } catch (error) {
-      console.error('Failed to subscribe to Steps:', error);
+      console.error('❌ Step Count subscription error:', error);
     }
 
-    // Subscribe to Battery Level
+    // ✨ FIXED: Subscribe to Battery Level with periodic reads
     try {
-      device.monitorCharacteristicForService(
+      // Read battery immediately
+      const battery = await device.readCharacteristicForService(
         BATTERY_SERVICE,
-        BATTERY_LEVEL,
-        (error, characteristic) => {
-          if (error) {
-            console.error('Battery monitoring error:', error);
-            return;
-          }
-
-          if (characteristic?.value) {
-            this.handleBatteryData(characteristic.value);
-          }
-        }
+        BATTERY_LEVEL
       );
-      console.log('✓ Battery monitoring started');
+      
+      if (battery?.value) {
+        this.handleBatteryData(battery.value);
+        console.log('✅ Initial battery level read');
+      }
+
+      // Monitor battery changes (some watches support notifications)
+      try {
+        device.monitorCharacteristicForService(
+          BATTERY_SERVICE,
+          BATTERY_LEVEL,
+          (error, characteristic) => {
+            if (error) {
+              // Not all watches support battery notifications, that's OK
+              return;
+            }
+
+            if (characteristic?.value) {
+              console.log('🔋 Battery update received');
+              this.handleBatteryData(characteristic.value);
+            }
+          }
+        );
+        console.log('✅ Battery monitoring started');
+      } catch (monitorError) {
+        console.log('ℹ️ Battery notifications not supported, using periodic reads');
+      }
     } catch (error) {
-      console.error('Failed to subscribe to Battery:', error);
+      console.log('⚠️ Battery service not available:', error.message);
     }
 
-    // Try to subscribe to custom Praxiom service if available
+    // Subscribe to Custom Praxiom Service (if available)
     try {
       device.monitorCharacteristicForService(
         PRAXIOM_SERVICE,
         HEALTH_REQUEST_CHAR,
         (error, characteristic) => {
           if (error) {
-            console.error('Praxiom service monitoring error:', error);
             return;
           }
 
           if (characteristic?.value) {
-            console.log('Received data from Praxiom service');
+            // Handle requests from watch (future feature)
+            console.log('Praxiom request received from watch');
           }
         }
       );
@@ -404,7 +480,10 @@ class WearableService {
         bytes[i] = data.charCodeAt(i);
       }
 
+      // Step count is 4-byte uint32 (little-endian)
       const steps = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24);
+      
+      console.log('📊 Steps parsed:', steps);
       this.latestData.steps = steps;
       this.notifyDataUpdate({ steps });
     } catch (error) {
@@ -416,6 +495,8 @@ class WearableService {
     try {
       const data = base64.decode(base64Value);
       const battery = data.charCodeAt(0);
+      
+      console.log('🔋 Battery parsed:', battery + '%');
       this.latestData.battery = battery;
       this.notifyDataUpdate({ battery });
     } catch (error) {
@@ -484,6 +565,9 @@ class WearableService {
   }
 
   async disconnect() {
+    // Stop keep-alive first
+    this.stopKeepAlive();
+    
     if (this.connectedDevice) {
       try {
         await this.bleManager.cancelDeviceConnection(this.connectedDevice.id);
@@ -497,6 +581,9 @@ class WearableService {
   }
 
   handleDisconnection() {
+    // Stop keep-alive
+    this.stopKeepAlive();
+    
     this.connectedDevice = null;
     this.notifyConnectionChange(false);
 
@@ -504,6 +591,7 @@ class WearableService {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
       console.log(`Attempting reconnection ${this.reconnectAttempts}/${this.maxReconnectAttempts}...`);
+      
       setTimeout(() => {
         this.attemptReconnection();
       }, this.reconnectDelay * this.reconnectAttempts);
@@ -602,6 +690,9 @@ class WearableService {
 
   // Cleanup
   destroy() {
+    // Stop keep-alive
+    this.stopKeepAlive();
+    
     if (this.bleManager && this.isScanning) {
       this.bleManager.stopDeviceScan();
     }
