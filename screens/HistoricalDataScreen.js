@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   RefreshControl,
-} from 'react';
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import PraxiomBackground from '../components/PraxiomBackground';
 import StorageService from '../services/StorageService';
