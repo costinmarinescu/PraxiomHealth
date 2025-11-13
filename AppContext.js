@@ -355,8 +355,8 @@ export const AppContextProvider = ({ children }) => {
       vitalityIndex: Math.round(vitalityIndex)
     });
     
-    // Recalculate biological age with new scores
-    calculateBiologicalAge();
+    // Recalculate biological age with new scores and return it
+    return calculateBiologicalAge();
   };
 
   return (
