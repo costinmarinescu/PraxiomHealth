@@ -45,10 +45,17 @@ export default function DashboardScreen({ navigation }) {
 
   const handleRecalculateAge = () => {
     const newBioAge = calculateScores();
-    Alert.alert(
-      '✅ Recalculated',
-      `Your new Bio-Age is ${newBioAge.toFixed(1)} years`
-    );
+    if (newBioAge && !isNaN(newBioAge)) {
+      Alert.alert(
+        '✅ Recalculated',
+        `Your Bio-Age has been recalculated based on your latest biomarkers.\n\nNew Bio-Age: ${newBioAge.toFixed(1)} years`
+      );
+    } else {
+      Alert.alert(
+        'Unable to Calculate',
+        'Please enter your biomarkers first to calculate your biological age.'
+      );
+    }
   };
 
   return (

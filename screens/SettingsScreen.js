@@ -14,23 +14,26 @@ import { Ionicons } from '@expo/vector-icons';
 
 export default function SettingsScreen() {
   const [notifications, setNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
   const [autoSync, setAutoSync] = useState(true);
   const [deviceName, setDeviceName] = useState('Not Connected');
+  const [watchConnected, setWatchConnected] = useState(false);
 
   useEffect(() => {
     loadSettings();
     loadDeviceName();
+    checkWatchConnection();
+    
+    // Check watch connection periodically
+    const interval = setInterval(checkWatchConnection, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadSettings = async () => {
     try {
       const notif = await AsyncStorage.getItem('notifications');
-      const dark = await AsyncStorage.getItem('darkMode');
       const sync = await AsyncStorage.getItem('autoSync');
       
       if (notif !== null) setNotifications(JSON.parse(notif));
-      if (dark !== null) setDarkMode(JSON.parse(dark));
       if (sync !== null) setAutoSync(JSON.parse(sync));
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -40,6 +43,15 @@ export default function SettingsScreen() {
   const loadDeviceName = async () => {
     const name = await AsyncStorage.getItem('lastDeviceName');
     if (name) setDeviceName(name);
+  };
+
+  const checkWatchConnection = async () => {
+    try {
+      const watchStatus = await AsyncStorage.getItem('watchConnected');
+      setWatchConnected(watchStatus === 'true');
+    } catch (error) {
+      console.error('Error checking watch connection:', error);
+    }
   };
 
   const saveSetting = async (key, value) => {
@@ -131,7 +143,12 @@ export default function SettingsScreen() {
           <Ionicons name="watch" size={32} color="#00CFC1" />
           <View style={styles.deviceInfo}>
             <Text style={styles.deviceName}>{deviceName}</Text>
-            <Text style={styles.deviceStatus}>Disconnected</Text>
+            <Text style={[
+              styles.deviceStatus,
+              watchConnected ? styles.deviceConnected : styles.deviceDisconnected
+            ]}>
+              {watchConnected ? 'Connected' : 'Disconnected'}
+            </Text>
           </View>
         </View>
       </View>
@@ -147,16 +164,6 @@ export default function SettingsScreen() {
           onValueChange={(val) => {
             setNotifications(val);
             saveSetting('notifications', val);
-          }}
-        />
-        <SettingItem
-          icon="moon"
-          title="Dark Mode"
-          subtitle="Switch to dark theme"
-          value={darkMode}
-          onValueChange={(val) => {
-            setDarkMode(val);
-            saveSetting('darkMode', val);
           }}
         />
         <SettingItem
@@ -251,6 +258,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#00CFC1',
     marginTop: 2,
+  },
+  deviceConnected: {
+    color: '#4ade80',
+  },
+  deviceDisconnected: {
+    color: '#ef4444',
   },
   settingItem: {
     flexDirection: 'row',
