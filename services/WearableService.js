@@ -1,4 +1,3 @@
-import { BleManager } from 'react-native-ble-plx';
 import { Platform, PermissionsAndroid } from 'react-native';
 import base64 from 'react-native-base64';
 
@@ -12,10 +11,10 @@ const BATTERY_LEVEL = '00002A19-0000-1000-8000-00805F9B34FB';
 const CURRENT_TIME_SERVICE = '00001805-0000-1000-8000-00805F9B34FB';
 const CURRENT_TIME_CHAR = '00002A2B-0000-1000-8000-00805F9B34FB';
 
-// ✅ FIXED: Custom Praxiom Health Service
+// Custom Praxiom Health Service
 const PRAXIOM_SERVICE = '00001900-78fc-48fe-8e23-433b3a1942d0';
 const BIO_AGE_CHAR = '00001901-78fc-48fe-8e23-433b3a1942d0';
-const HEALTH_REQUEST_CHAR = '00001902-78fc-48fe-8e23-433b3a1942d0'; // ✅ Fixed: Added missing '0'
+const HEALTH_REQUEST_CHAR = '00001902-78fc-48fe-8e23-433b3a1942d0';
 
 class WearableService {
   constructor() {
@@ -47,15 +46,23 @@ class WearableService {
 
   async initializeBLESafe() {
     try {
+      // Dynamic import to prevent crash on load
       const { BleManager: BleManagerClass } = await import('react-native-ble-plx');
+      
+      if (!BleManagerClass) {
+        throw new Error('BleManager class not available');
+      }
+      
       this.bleManager = new BleManagerClass();
       await this.initializeBLE();
       this.bleInitialized = true;
+      console.log('✅ BLE initialized successfully');
     } catch (error) {
-      console.error('BLE initialization failed:', error);
+      console.error('❌ BLE initialization failed:', error);
       this.bleError = error;
       this.bleInitialized = false;
       // Don't crash - just log the error and continue
+      // App will show "Bluetooth not available" message in UI
     }
   }
 
@@ -85,6 +92,7 @@ class WearableService {
       console.log('BLE Manager initialized successfully');
     } catch (error) {
       console.error('BLE initialization error:', error);
+      throw error;
     }
   }
 
@@ -116,7 +124,7 @@ class WearableService {
 
   async scanForDevices(duration = 10000) {
     if (!this.bleManager || !this.bleInitialized) {
-      throw new Error('Bluetooth is not available. Please ensure your device supports BLE.');
+      throw new Error('Bluetooth is not available. Please ensure your device supports BLE and it is enabled.');
     }
     
     const hasPermissions = await this.requestPermissions();
@@ -274,19 +282,19 @@ class WearableService {
           }
         }
       );
-      console.log('✅ Subscribed to Heart Rate');
+      console.log('✓ Heart Rate monitoring started');
     } catch (error) {
-      console.error('Failed to subscribe to HR:', error);
+      console.error('Failed to subscribe to Heart Rate:', error);
     }
 
-    // Subscribe to Steps
+    // Subscribe to Step Count
     try {
       device.monitorCharacteristicForService(
         MOTION_SERVICE,
         STEP_COUNT_CHAR,
         (error, characteristic) => {
           if (error) {
-            console.error('Steps monitoring error:', error);
+            console.error('Step monitoring error:', error);
             return;
           }
 
@@ -295,12 +303,12 @@ class WearableService {
           }
         }
       );
-      console.log('✅ Subscribed to Step Count');
+      console.log('✓ Step Count monitoring started');
     } catch (error) {
-      console.error('Failed to subscribe to steps:', error);
+      console.error('Failed to subscribe to Steps:', error);
     }
 
-    // Subscribe to Battery
+    // Subscribe to Battery Level
     try {
       device.monitorCharacteristicForService(
         BATTERY_SERVICE,
@@ -316,30 +324,28 @@ class WearableService {
           }
         }
       );
-      console.log('✅ Subscribed to Battery Level');
+      console.log('✓ Battery monitoring started');
     } catch (error) {
-      console.error('Failed to subscribe to battery:', error);
+      console.error('Failed to subscribe to Battery:', error);
     }
 
-    // Subscribe to Health Request (if watch supports it)
+    // Try to subscribe to custom Praxiom service if available
     try {
       device.monitorCharacteristicForService(
         PRAXIOM_SERVICE,
         HEALTH_REQUEST_CHAR,
         (error, characteristic) => {
           if (error) {
-            console.error('Health request monitoring error:', error);
+            console.error('Praxiom service monitoring error:', error);
             return;
           }
 
           if (characteristic?.value) {
-            console.log('✅ Watch requested Bio-Age update');
-            // Notify app that watch wants fresh data
-            this.notifyDataUpdate({ requestUpdate: true });
+            console.log('Received data from Praxiom service');
           }
         }
       );
-      console.log('✅ Subscribed to Praxiom Health Request (custom firmware detected)');
+      console.log('✓ Praxiom Health monitoring started');
     } catch (error) {
       console.log('⚠️ Custom Praxiom service not available (may be stock InfiniTime)');
     }
@@ -374,7 +380,7 @@ class WearableService {
         while (offset < bytes.length - 1) {
           const rr = bytes[offset] | (bytes[offset + 1] << 8);
           const rrMs = (rr / 1024.0) * 1000;
-          rrIntervals.push(rrMs); // ✅ Fixed: Changed from .append() to .push()
+          rrIntervals.push(rrMs);
           offset += 2;
         }
 
@@ -443,7 +449,7 @@ class WearableService {
     try {
       const { praxiomAge } = data;
 
-      // ✅ FIXED: Send 4-byte uint32 (matching firmware expectation)
+      // Send 4-byte uint32 (matching firmware expectation)
       const buffer = new ArrayBuffer(4);
       const view = new DataView(buffer);
       view.setUint32(0, Math.round(praxiomAge), true);
@@ -453,8 +459,6 @@ class WearableService {
       const base64Data = base64.encode(String.fromCharCode(...bytes));
 
       console.log('📤 Sending Bio-Age to watch:', Math.round(praxiomAge));
-      console.log('🔧 Using service UUID:', PRAXIOM_SERVICE);
-      console.log('🔧 Using characteristic UUID:', BIO_AGE_CHAR);
 
       await this.connectedDevice.writeCharacteristicWithResponseForService(
         PRAXIOM_SERVICE,
@@ -598,7 +602,7 @@ class WearableService {
 
   // Cleanup
   destroy() {
-    if (this.isScanning) {
+    if (this.bleManager && this.isScanning) {
       this.bleManager.stopDeviceScan();
     }
 
@@ -606,13 +610,15 @@ class WearableService {
       this.disconnect();
     }
 
-    this.bleManager.destroy();
+    if (this.bleManager) {
+      this.bleManager.destroy();
+    }
+    
     this.dataUpdateListeners = [];
     this.connectionListeners = [];
   }
 }
 
-// ✅ CORRECTED FIX: Export singleton instance instead of class
-// This fixes the "WearableService.isConnected is not a function" crash
+// Export singleton instance
 const wearableServiceInstance = new WearableService();
 export default wearableServiceInstance;
