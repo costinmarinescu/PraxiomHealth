@@ -12,7 +12,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
-export default function SettingsScreen() {
+export default function SettingsScreen({ navigation }) { // ✅ ADDED: navigation prop
   const [notifications, setNotifications] = useState(true);
   const [autoSync, setAutoSync] = useState(true);
   const [deviceName, setDeviceName] = useState('Not Connected');
@@ -151,6 +151,21 @@ export default function SettingsScreen() {
             </Text>
           </View>
         </View>
+      </View>
+
+      {/* ✅ ADDED: Personal Profile Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Personal Profile</Text>
+        <TouchableOpacity 
+          style={styles.button}
+          onPress={() => navigation.navigate('Profile')}>
+          <Ionicons name="person" size={24} color="#00CFC1" />
+          <Text style={styles.buttonText}>Edit Profile & Date of Birth</Text>
+          <Ionicons name="chevron-forward" size={24} color="#999" />
+        </TouchableOpacity>
+        <Text style={styles.settingSubtitle}>
+          ⚠️ Your age is required for accurate Bio-Age calculations
+        </Text>
       </View>
 
       {/* App Settings */}
