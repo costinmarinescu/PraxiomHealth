@@ -32,11 +32,7 @@ const MyTheme = {
 
 function DashboardStack() {
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-      }}
-    >
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="DashboardHome" component={DashboardScreen} />
       <Stack.Screen name="BiomarkerInput" component={BiomarkerInputScreen} />
       <Stack.Screen name="Tier1BiomarkerInput" component={Tier1BiomarkerInputScreen} />
@@ -51,14 +47,9 @@ function DashboardStack() {
   );
 }
 
-// ✅ NEW: SettingsStack so Profile is accessible from Settings
 function SettingsStack() {
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-      }}
-    >
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="SettingsHome" component={SettingsScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
     </Stack.Navigator>
@@ -79,7 +70,6 @@ export default function App() {
               screenOptions={({ route }) => ({
                 tabBarIcon: ({ focused, color, size }) => {
                   let iconName;
-
                   if (route.name === 'Dashboard') {
                     iconName = focused ? 'home' : 'home-outline';
                   } else if (route.name === 'Watch') {
@@ -89,7 +79,6 @@ export default function App() {
                   } else {
                     iconName = 'ellipsis-horizontal';
                   }
-
                   return <Ionicons name={iconName} size={size} color={color} />;
                 },
                 headerShown: false,
@@ -104,7 +93,7 @@ export default function App() {
             >
               <Tab.Screen name="Dashboard" component={DashboardStack} />
               <Tab.Screen name="Watch" component={WatchScreen} />
-              <Tab.Screen name="Settings" component={SettingsStack} /> {/* ✅ CHANGED: Use SettingsStack */}
+              <Tab.Screen name="Settings" component={SettingsStack} />
             </Tab.Navigator>
           </NavigationContainer>
         </ImageBackground>
