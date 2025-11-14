@@ -6,7 +6,8 @@ export const AppContext = createContext();
 
 export const AppContextProvider = ({ children }) => {
   const [state, setState] = useState({
-    chronologicalAge: 53,
+    chronologicalAge: 0, // ✅ FIXED: Changed from 53 to 0 - will be loaded from Profile
+    userName: '', // ✅ ADDED: User's name from Profile
     biologicalAge: 70.1,
     oralHealthScore: 50,
     systemicHealthScore: 45,
@@ -34,7 +35,31 @@ export const AppContextProvider = ({ children }) => {
   // Load saved data on mount
   useEffect(() => {
     loadSavedData();
+    loadUserProfile(); // ✅ ADDED: Load age and name from Profile
   }, []);
+
+  // ✅ ADDED: Load chronological age and user name from Profile screen
+  const loadUserProfile = async () => {
+    try {
+      const savedAge = await AsyncStorage.getItem('chronologicalAge');
+      const savedName = await AsyncStorage.getItem('userName');
+      
+      if (savedAge) {
+        const age = parseInt(savedAge);
+        if (age >= 18 && age <= 120) { // Validate age range
+          updateState({ chronologicalAge: age });
+          console.log('✅ Loaded user age from profile:', age);
+        }
+      }
+      
+      if (savedName) {
+        updateState({ userName: savedName });
+        console.log('✅ Loaded user name from profile:', savedName);
+      }
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+    }
+  };
 
   // Save critical data when it changes
   useEffect(() => {

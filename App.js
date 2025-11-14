@@ -17,6 +17,7 @@ import DNATestScreen from './screens/DNATestScreen';
 import HistoricalDataScreen from './screens/HistoricalDataScreen';
 import BiomarkerHistoryScreen from './screens/BiomarkerHistoryScreen';
 import ComparisonScreen from './screens/ComparisonScreen';
+import ProfileScreen from './screens/ProfileScreen'; // ✅ ADDED: ProfileScreen import
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -45,6 +46,7 @@ function DashboardStack() {
       <Stack.Screen name="HistoricalData" component={HistoricalDataScreen} />
       <Stack.Screen name="BiomarkerHistory" component={BiomarkerHistoryScreen} />
       <Stack.Screen name="Comparison" component={ComparisonScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} /> {/* ✅ ADDED: Profile screen */}
     </Stack.Navigator>
   );
 }
