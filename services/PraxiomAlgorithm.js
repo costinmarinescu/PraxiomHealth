@@ -84,44 +84,50 @@ class PraxiomAlgorithm {
   }
 
   // Calculate Fitness Score from wearable data (0-100)
-  // ✅ UPDATED: Now includes HRV as critical biomarker
+  // ✅ HRV is OPTIONAL but weighted heavily when available
   static calculateFitnessScore(heartRate, steps, spO2, hrv, age) {
     let score = 100;
+    let components = 0;
+    let totalPenalty = 0;
 
-    // HRV scoring (optimal: ≥70 ms for adults)
-    // Weight: 2.5x - strongest autonomic function & longevity predictor
-    // Studies show HRV declines with age: ~75ms at 30 → ~25ms at 80
-    if (hrv !== null && hrv !== undefined) {
+    // HRV scoring (OPTIONAL - optimal: ≥70 ms for adults)
+    // Weight: 2.5x when available - strongest autonomic function predictor
+    if (hrv !== null && hrv !== undefined && hrv > 0) {
       const optimalHRV = age < 40 ? 70 : age < 60 ? 55 : 40; // Age-adjusted
       
       if (hrv >= optimalHRV) {
         // Excellent HRV - no penalty
       } else if (hrv >= optimalHRV * 0.7) {
-        score -= 10 * 2.5; // -25 points (weighted)
+        totalPenalty += 10; // Good
       } else if (hrv >= optimalHRV * 0.4) {
-        score -= 20 * 2.5; // -50 points (weighted)
+        totalPenalty += 20; // Fair
       } else {
-        score -= 30 * 2.5; // -75 points (weighted) - severely compromised
+        totalPenalty += 30; // Poor
       }
+      components++;
     }
 
     // Resting Heart Rate scoring (age-adjusted)
     const optimalHR = age < 40 ? 60 : age < 60 ? 65 : 70;
     if (heartRate > optimalHR) {
       const excess = Math.min(heartRate - optimalHR, 40);
-      score -= (excess / 40) * 25; // Up to -25 points
+      totalPenalty += (excess / 40) * 25; // Up to 25 points
     }
+    components++;
 
     // Daily Steps scoring (optimal: >10,000)
     if (steps < 10000) {
-      score -= ((10000 - steps) / 10000) * 30; // Up to -30 points
+      totalPenalty += ((10000 - steps) / 10000) * 30; // Up to 30 points
     }
+    components++;
 
     // SpO2 scoring (optimal: >95%)
     if (spO2 < 95) {
-      score -= (95 - spO2) * 6; // Up to -30 points for severe hypoxia
+      totalPenalty += (95 - spO2) * 6; // Up to 30 points for severe hypoxia
     }
+    components++;
 
+    score -= totalPenalty;
     return Math.max(0, Math.min(100, score));
   }
 
@@ -141,7 +147,6 @@ class PraxiomAlgorithm {
     // Optional: Add fitness modifier (moderate adjustment)
     if (fitnessScore !== null && fitnessScore !== undefined) {
       // Fitness has moderate impact: -2 to +2 years based on score
-      // Improved from previous version to better reflect fitness importance
       const fitnessAdjustment = ((100 - fitnessScore) / 100) * 4 - 2;
       bioAge += fitnessAdjustment;
     }
@@ -179,15 +184,14 @@ class PraxiomAlgorithm {
       data.vitaminD
     );
 
-    // Fitness score calculation
-    // ✅ UPDATED: Now includes HRV along with other wearable metrics
+    // Fitness score calculation - HRV is OPTIONAL
     let fitnessScore = null;
-    if (data.heartRate && data.steps && data.spO2 && data.hrv !== null && data.hrv !== undefined) {
+    if (data.heartRate && data.steps && data.spO2) {
       fitnessScore = this.calculateFitnessScore(
         data.heartRate,
         data.steps,
         data.spO2,
-        data.hrv,
+        data.hrv || null, // HRV is optional
         data.age
       );
     }
