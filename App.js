@@ -17,7 +17,7 @@ import DNATestScreen from './screens/DNATestScreen';
 import HistoricalDataScreen from './screens/HistoricalDataScreen';
 import BiomarkerHistoryScreen from './screens/BiomarkerHistoryScreen';
 import ComparisonScreen from './screens/ComparisonScreen';
-import ProfileScreen from './screens/ProfileScreen'; // ✅ ADDED: ProfileScreen import
+import ProfileScreen from './screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -46,7 +46,21 @@ function DashboardStack() {
       <Stack.Screen name="HistoricalData" component={HistoricalDataScreen} />
       <Stack.Screen name="BiomarkerHistory" component={BiomarkerHistoryScreen} />
       <Stack.Screen name="Comparison" component={ComparisonScreen} />
-      <Stack.Screen name="Profile" component={ProfileScreen} /> {/* ✅ ADDED: Profile screen */}
+      <Stack.Screen name="Profile" component={ProfileScreen} />
+    </Stack.Navigator>
+  );
+}
+
+// ✅ NEW: SettingsStack so Profile is accessible from Settings
+function SettingsStack() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen name="SettingsHome" component={SettingsScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
     </Stack.Navigator>
   );
 }
@@ -90,7 +104,7 @@ export default function App() {
             >
               <Tab.Screen name="Dashboard" component={DashboardStack} />
               <Tab.Screen name="Watch" component={WatchScreen} />
-              <Tab.Screen name="Settings" component={SettingsScreen} />
+              <Tab.Screen name="Settings" component={SettingsStack} /> {/* ✅ CHANGED: Use SettingsStack */}
             </Tab.Navigator>
           </NavigationContainer>
         </ImageBackground>
