@@ -40,6 +40,7 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
   const [heartRate, setHeartRate] = useState('');
   const [steps, setSteps] = useState('');
   const [spO2, setSpO2] = useState('');
+  const [hrv, setHRV] = useState(''); // ✅ ADDED: HRV input field
 
   const [loading, setLoading] = useState(false);
 
@@ -68,6 +69,7 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
       { value: heartRate, name: 'Heart Rate' },
       { value: steps, name: 'Daily Steps' },
       { value: spO2, name: 'Oxygen Saturation' },
+      { value: hrv, name: 'HRV' }, // ✅ ADDED: HRV validation
     ];
 
     for (const field of requiredFields) {
@@ -100,6 +102,7 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
         heartRate: parseFloat(heartRate),
         steps: parseInt(steps),
         spO2: parseFloat(spO2),
+        hrv: parseFloat(hrv), // ✅ ADDED: HRV in biomarker data
       };
 
       // Calculate Bio-Age using Praxiom Algorithm
@@ -301,7 +304,7 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
 
         {/* Wearable Data */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Wearable Data (PineTime)</Text>
+          <Text style={styles.sectionTitle}>Wearable Data (Chest Band / PineTime)</Text>
           
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Heart Rate (bpm)</Text>
@@ -337,6 +340,22 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
               placeholder="e.g., 98"
               placeholderTextColor="#666"
             />
+          </View>
+
+          {/* ✅ ADDED: HRV Input Field */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>HRV - Heart Rate Variability (ms) (Optimal: ≥70)</Text>
+            <TextInput
+              style={styles.input}
+              value={hrv}
+              onChangeText={setHRV}
+              keyboardType="numeric"
+              placeholder="e.g., 55"
+              placeholderTextColor="#666"
+            />
+            <Text style={styles.hint}>
+              Weight: 2.5x - Measured with chest band. Higher HRV indicates better autonomic function and longevity.
+            </Text>
           </View>
         </View>
 

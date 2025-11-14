@@ -7,6 +7,7 @@ import {
   FlatList,
   ActivityIndicator,
   Alert,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,9 +22,11 @@ const WatchScreen = () => {
   const [batteryLevel, setBatteryLevel] = useState(null);
   const [heartRate, setHeartRate] = useState(null);
   const [steps, setSteps] = useState(null);
+  const [showAllDevices, setShowAllDevices] = useState(false); // ✅ ADDED: Debug toggle
 
   useEffect(() => {
     checkConnection();
+    loadDebugPreference(); // ✅ ADDED: Load saved debug preference
     
     // Subscribe to data updates
     const unsubscribeData = WearableService.onDataUpdate((data) => {
@@ -49,6 +52,28 @@ const WatchScreen = () => {
     };
   }, []);
 
+  // ✅ ADDED: Load debug preference from storage
+  const loadDebugPreference = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('showAllBLEDevices');
+      if (saved !== null) {
+        setShowAllDevices(saved === 'true');
+      }
+    } catch (error) {
+      console.error('Error loading debug preference:', error);
+    }
+  };
+
+  // ✅ ADDED: Save debug preference to storage
+  const toggleDebugMode = async (value) => {
+    try {
+      setShowAllDevices(value);
+      await AsyncStorage.setItem('showAllBLEDevices', value.toString());
+    } catch (error) {
+      console.error('Error saving debug preference:', error);
+    }
+  };
+
   const checkConnection = async () => {
     const isConnected = WearableService.isConnected();
     setConnected(isConnected);
@@ -71,13 +96,27 @@ const WatchScreen = () => {
       setDevices([]);
       
       const foundDevices = await WearableService.scanForDevices(10000);
-      setDevices(foundDevices);
       
-      if (foundDevices.length === 0) {
-        Alert.alert(
-          'No Devices Found',
-          'Make sure your PineTime watch is nearby and Bluetooth is enabled.'
-        );
+      // ✅ UPDATED: Filter devices based on debug toggle
+      let filteredDevices = foundDevices;
+      if (!showAllDevices) {
+        // Only show InfiniTime/PineTime watches
+        filteredDevices = foundDevices.filter(device => {
+          const name = device.name?.toLowerCase() || '';
+          return name.includes('infinit') || 
+                 name.includes('pinetime') || 
+                 name.includes('sealed');
+        });
+      }
+      
+      setDevices(filteredDevices);
+      
+      if (filteredDevices.length === 0) {
+        const message = showAllDevices 
+          ? 'No BLE devices found nearby. Make sure Bluetooth is enabled.'
+          : 'No PineTime watches found. Make sure your watch is nearby with Bluetooth enabled.\n\nTip: Enable "Show All Devices" to see other BLE devices.';
+        
+        Alert.alert('No Devices Found', message);
       }
     } catch (error) {
       Alert.alert('Scan Error', error.message);
@@ -131,7 +170,7 @@ const WatchScreen = () => {
     >
       <Ionicons name="watch" size={32} color="#00d4ff" />
       <View style={styles.deviceInfo}>
-        <Text style={styles.deviceName}>{item.name}</Text>
+        <Text style={styles.deviceName}>{item.name || 'Unknown Device'}</Text>
         <Text style={styles.deviceId}>{item.id}</Text>
         <Text style={styles.deviceRssi}>Signal: {item.rssi} dBm</Text>
       </View>
@@ -146,6 +185,28 @@ const WatchScreen = () => {
           <Ionicons name="watch" size={40} color="#00d4ff" />
           <Text style={styles.title}>PineTime Watch</Text>
         </View>
+
+        {/* ✅ ADDED: Debug Toggle */}
+        {!connected && (
+          <View style={styles.debugCard}>
+            <View style={styles.debugRow}>
+              <View style={styles.debugInfo}>
+                <Text style={styles.debugTitle}>Debug Mode</Text>
+                <Text style={styles.debugText}>
+                  {showAllDevices 
+                    ? 'Showing all BLE devices' 
+                    : 'Showing InfiniTime watches only'}
+                </Text>
+              </View>
+              <Switch
+                value={showAllDevices}
+                onValueChange={toggleDebugMode}
+                trackColor={{ false: '#2a2a3e', true: '#00d4ff' }}
+                thumbColor={showAllDevices ? '#ffffff' : '#8e8e93'}
+              />
+            </View>
+          </View>
+        )}
 
         {connected ? (
           <View style={styles.connectedContainer}>
@@ -245,6 +306,33 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#ffffff',
     marginTop: 10,
+  },
+  // ✅ ADDED: Debug toggle styles
+  debugCard: {
+    backgroundColor: '#1e1e2e',
+    borderRadius: 16,
+    padding: 15,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#2a2a3e',
+  },
+  debugRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  debugInfo: {
+    flex: 1,
+  },
+  debugTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#00d4ff',
+    marginBottom: 4,
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#8e8e93',
   },
   connectedContainer: {
     flex: 1,
