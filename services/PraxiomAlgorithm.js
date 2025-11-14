@@ -84,19 +84,37 @@ class PraxiomAlgorithm {
   }
 
   // Calculate Fitness Score from wearable data (0-100)
-  static calculateFitnessScore(heartRate, steps, spO2, age) {
+  // ✅ UPDATED: Now includes HRV as critical biomarker
+  static calculateFitnessScore(heartRate, steps, spO2, hrv, age) {
     let score = 100;
+
+    // HRV scoring (optimal: ≥70 ms for adults)
+    // Weight: 2.5x - strongest autonomic function & longevity predictor
+    // Studies show HRV declines with age: ~75ms at 30 → ~25ms at 80
+    if (hrv !== null && hrv !== undefined) {
+      const optimalHRV = age < 40 ? 70 : age < 60 ? 55 : 40; // Age-adjusted
+      
+      if (hrv >= optimalHRV) {
+        // Excellent HRV - no penalty
+      } else if (hrv >= optimalHRV * 0.7) {
+        score -= 10 * 2.5; // -25 points (weighted)
+      } else if (hrv >= optimalHRV * 0.4) {
+        score -= 20 * 2.5; // -50 points (weighted)
+      } else {
+        score -= 30 * 2.5; // -75 points (weighted) - severely compromised
+      }
+    }
 
     // Resting Heart Rate scoring (age-adjusted)
     const optimalHR = age < 40 ? 60 : age < 60 ? 65 : 70;
     if (heartRate > optimalHR) {
       const excess = Math.min(heartRate - optimalHR, 40);
-      score -= (excess / 40) * 30; // Up to -30 points
+      score -= (excess / 40) * 25; // Up to -25 points
     }
 
     // Daily Steps scoring (optimal: >10,000)
     if (steps < 10000) {
-      score -= ((10000 - steps) / 10000) * 40; // Up to -40 points
+      score -= ((10000 - steps) / 10000) * 30; // Up to -30 points
     }
 
     // SpO2 scoring (optimal: >95%)
@@ -120,10 +138,11 @@ class PraxiomAlgorithm {
     // Calculate base bio-age
     let bioAge = chronologicalAge + oralDeviation + systemicDeviation;
 
-    // Optional: Add fitness modifier (small adjustment)
+    // Optional: Add fitness modifier (moderate adjustment)
     if (fitnessScore !== null && fitnessScore !== undefined) {
-      // Fitness has minor impact: -1 to +1 year based on score
-      const fitnessAdjustment = ((100 - fitnessScore) / 100) * 2 - 1;
+      // Fitness has moderate impact: -2 to +2 years based on score
+      // Improved from previous version to better reflect fitness importance
+      const fitnessAdjustment = ((100 - fitnessScore) / 100) * 4 - 2;
       bioAge += fitnessAdjustment;
     }
 
@@ -160,13 +179,15 @@ class PraxiomAlgorithm {
       data.vitaminD
     );
 
-    // Fitness score is optional
+    // Fitness score calculation
+    // ✅ UPDATED: Now includes HRV along with other wearable metrics
     let fitnessScore = null;
-    if (data.heartRate && data.steps && data.spO2) {
+    if (data.heartRate && data.steps && data.spO2 && data.hrv !== null && data.hrv !== undefined) {
       fitnessScore = this.calculateFitnessScore(
         data.heartRate,
         data.steps,
         data.spO2,
+        data.hrv,
         data.age
       );
     }
@@ -218,27 +239,46 @@ class PraxiomAlgorithm {
   }
 
   // Get recommendation based on scores
-  static getRecommendation(oralScore, systemicScore) {
-    if (oralScore < 75 && systemicScore < 75) {
-      return {
-        level: 'urgent',
-        message: 'Both Oral and Systemic Health scores are below target. Consider Tier 2 assessment for detailed analysis.',
-      };
-    } else if (oralScore < 75) {
-      return {
+  static getRecommendation(oralScore, systemicScore, fitnessScore = null) {
+    const recommendations = [];
+    
+    if (oralScore < 75) {
+      recommendations.push({
+        category: 'Oral Health',
         level: 'attention',
         message: 'Oral Health score is below target. Focus on improving oral hygiene and consider professional dental assessment.',
-      };
-    } else if (systemicScore < 75) {
-      return {
+      });
+    }
+    
+    if (systemicScore < 75) {
+      recommendations.push({
+        category: 'Systemic Health',
         level: 'attention',
         message: 'Systemic Health score is below target. Consult with healthcare provider for targeted interventions.',
-      };
-    } else {
+      });
+    }
+    
+    if (fitnessScore !== null && fitnessScore < 70) {
+      recommendations.push({
+        category: 'Fitness',
+        level: 'attention',
+        message: 'Fitness score is below target. Consider increasing daily activity and monitoring HRV for stress management.',
+      });
+    }
+    
+    if (recommendations.length === 0) {
       return {
         level: 'maintain',
-        message: 'Both scores are in good range. Continue current health practices and monitor regularly.',
+        message: 'All scores are in good range. Continue current health practices and monitor regularly.',
       };
+    } else if (recommendations.length >= 2) {
+      return {
+        level: 'urgent',
+        message: 'Multiple health scores are below target. Consider Tier 2 assessment for detailed analysis.',
+        details: recommendations,
+      };
+    } else {
+      return recommendations[0];
     }
   }
 }
