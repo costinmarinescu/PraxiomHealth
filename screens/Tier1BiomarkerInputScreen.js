@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import {
   View,
   Text,
@@ -15,9 +15,12 @@ import PraxiomBackground from '../components/PraxiomBackground';
 import PraxiomAlgorithm from '../services/PraxiomAlgorithm';
 import StorageService from '../services/StorageService';
 import WearableService from '../services/WearableService';
+import { AppContext } from '../AppContext';
 
 const Tier1BiomarkerInputScreen = ({ navigation }) => {
-  // Date selection
+  const { updateState } = useContext(AppContext);
+  
+  // Date selection - FIX: Use state to prevent resetting
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -40,12 +43,16 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
   const [heartRate, setHeartRate] = useState('');
   const [steps, setSteps] = useState('');
   const [spO2, setSpO2] = useState('');
-  const [hrv, setHRV] = useState(''); // ✅ ADDED: HRV input field
+  const [hrv, setHRV] = useState(''); // ✅ ADDED: HRV input (OPTIONAL)
 
   const [loading, setLoading] = useState(false);
+  const [calculatedResult, setCalculatedResult] = useState(null); // Store result for push
 
+  // FIX: Proper date change handler
   const onDateChange = (event, date) => {
-    setShowDatePicker(Platform.OS === 'ios');
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
     if (date) {
       setSelectedDate(date);
     }
@@ -57,6 +64,7 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
       return false;
     }
 
+    // HRV is NOT required - all other fields are
     const requiredFields = [
       { value: salivaryPH, name: 'Salivary pH' },
       { value: activeMMP8, name: 'Active MMP-8' },
@@ -69,7 +77,6 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
       { value: heartRate, name: 'Heart Rate' },
       { value: steps, name: 'Daily Steps' },
       { value: spO2, name: 'Oxygen Saturation' },
-      { value: hrv, name: 'HRV' }, // ✅ ADDED: HRV validation
     ];
 
     for (const field of requiredFields) {
@@ -102,7 +109,7 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
         heartRate: parseFloat(heartRate),
         steps: parseInt(steps),
         spO2: parseFloat(spO2),
-        hrv: parseFloat(hrv), // ✅ ADDED: HRV in biomarker data
+        hrv: hrv && hrv.trim() !== '' ? parseFloat(hrv) : null, // ✅ Optional HRV
       };
 
       // Calculate Bio-Age using Praxiom Algorithm
@@ -113,40 +120,72 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
         ...biomarkerData,
         ...results,
         timestamp: selectedDate.toISOString(),
+        dateEntered: selectedDate.toLocaleDateString(),
         tier: 1,
       };
 
       // Save to storage
       await StorageService.saveBiomarkerEntry(entry);
 
-      // Send to watch if connected
-      if (WearableService.isConnected()) {
-        try {
-          await WearableService.sendBioAge({ praxiomAge: results.bioAge });
-          
-          Alert.alert(
-            'Success!',
-            `Bio-Age: ${results.bioAge} years\nData saved and synced to watch!`,
-            [{ text: 'OK', onPress: () => navigation.goBack() }]
-          );
-        } catch (bleError) {
-          console.error('BLE sync error:', bleError);
-          Alert.alert(
-            'Partial Success',
-            `Bio-Age: ${results.bioAge} years\nData saved but watch sync failed.`,
-            [{ text: 'OK', onPress: () => navigation.goBack() }]
-          );
-        }
-      } else {
-        Alert.alert(
-          'Success!',
-          `Bio-Age: ${results.bioAge} years\nData saved successfully!`,
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
-        );
-      }
+      // Update app context
+      updateState({
+        biologicalAge: results.bioAge,
+        oralHealthScore: results.oralScore,
+        systemicHealthScore: results.systemicScore,
+        fitnessScore: results.fitnessScore,
+      });
+
+      // Store result for push to watch
+      setCalculatedResult(results);
+
+      // Show success with result
+      Alert.alert(
+        'Success!',
+        `Praxiom Age: ${results.bioAge} years\n` +
+        `Oral Health: ${results.oralScore}%\n` +
+        `Systemic Health: ${results.systemicScore}%\n` +
+        (results.fitnessScore ? `Fitness: ${results.fitnessScore}%\n` : '') +
+        `\nData saved successfully!${WearableService.isConnected() ? '\n\nTap "Push to Watch" to sync.' : ''}`,
+        [{ text: 'OK' }]
+      );
+
     } catch (error) {
       console.error('Calculation error:', error);
-      Alert.alert('Error', 'Failed to calculate Bio-Age. Please try again.');
+      Alert.alert('Error', error.message || 'Failed to calculate Bio-Age. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ NEW: Push to Watch function
+  const handlePushToWatch = async () => {
+    if (!calculatedResult) {
+      Alert.alert('No Data', 'Please calculate Bio-Age first');
+      return;
+    }
+
+    if (!WearableService.isConnected()) {
+      Alert.alert('Not Connected', 'Please connect your PineTime watch first');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await WearableService.sendBioAge({
+        praxiomAge: calculatedResult.bioAge,
+        chronologicalAge: parseFloat(age),
+        oralScore: calculatedResult.oralScore,
+        systemicScore: calculatedResult.systemicScore,
+        fitnessScore: calculatedResult.fitnessScore || 0,
+      });
+
+      Alert.alert(
+        'Synced!',
+        `Bio-Age ${calculatedResult.bioAge} sent to watch successfully!`
+      );
+    } catch (error) {
+      console.error('Push to watch error:', error);
+      Alert.alert('Sync Failed', 'Could not send data to watch. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -155,7 +194,7 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
   return (
     <PraxiomBackground>
       <ScrollView style={styles.container}>
-        {/* Date Selection */}
+        {/* Date Selection - FIXED */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Assessment Date</Text>
           <TouchableOpacity
@@ -307,7 +346,7 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
           <Text style={styles.sectionTitle}>Wearable Data (Chest Band / PineTime)</Text>
           
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Heart Rate (bpm)</Text>
+            <Text style={styles.label}>Heart Rate (bpm) *</Text>
             <TextInput
               style={styles.input}
               value={heartRate}
@@ -319,7 +358,7 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Daily Steps</Text>
+            <Text style={styles.label}>Daily Steps *</Text>
             <TextInput
               style={styles.input}
               value={steps}
@@ -331,7 +370,7 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Oxygen Saturation (%)</Text>
+            <Text style={styles.label}>Oxygen Saturation (%) *</Text>
             <TextInput
               style={styles.input}
               value={spO2}
@@ -342,19 +381,19 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
             />
           </View>
 
-          {/* ✅ ADDED: HRV Input Field */}
+          {/* ✅ ADDED: HRV Input Field (OPTIONAL) */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>HRV - Heart Rate Variability (ms) (Optimal: ≥70)</Text>
+            <Text style={styles.label}>HRV - Heart Rate Variability (ms) (Optional)</Text>
             <TextInput
               style={styles.input}
               value={hrv}
               onChangeText={setHRV}
               keyboardType="numeric"
-              placeholder="e.g., 55"
+              placeholder="e.g., 55 (leave blank if not available)"
               placeholderTextColor="#666"
             />
             <Text style={styles.hint}>
-              Weight: 2.5x - Measured with chest band. Higher HRV indicates better autonomic function and longevity.
+              Optimal: ≥70ms - Measured with chest band. Higher HRV = better health. Leave blank if not measured.
             </Text>
           </View>
         </View>
@@ -366,10 +405,26 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
             onPress={handleCalculate}
             disabled={loading}
           >
+            <Ionicons name="calculator" size={20} color="#000" />
             <Text style={styles.buttonText}>
               {loading ? 'Calculating...' : 'Calculate Praxiom Bio-Age'}
             </Text>
           </TouchableOpacity>
+
+          {/* ✅ NEW: Push to Watch Button */}
+          {calculatedResult && (
+            <TouchableOpacity
+              style={[styles.button, styles.watchButton, 
+                     !WearableService.isConnected() && styles.buttonDisabled]}
+              onPress={handlePushToWatch}
+              disabled={loading || !WearableService.isConnected()}
+            >
+              <Ionicons name="watch" size={20} color="#fff" />
+              <Text style={styles.watchButtonText}>
+                {WearableService.isConnected() ? 'Push to Watch' : 'Watch Not Connected'}
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={[styles.button, styles.secondaryButton]}
@@ -443,9 +498,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   primaryButton: {
     backgroundColor: '#4ade80',
+  },
+  watchButton: {
+    backgroundColor: '#00d4ff',
+  },
+  buttonDisabled: {
+    backgroundColor: '#666',
+    opacity: 0.5,
   },
   secondaryButton: {
     backgroundColor: 'transparent',
@@ -456,6 +520,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#000000',
+    marginLeft: 8,
+  },
+  watchButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginLeft: 8,
   },
   secondaryButtonText: {
     fontSize: 16,

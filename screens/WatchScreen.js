@@ -22,11 +22,11 @@ const WatchScreen = () => {
   const [batteryLevel, setBatteryLevel] = useState(null);
   const [heartRate, setHeartRate] = useState(null);
   const [steps, setSteps] = useState(null);
-  const [showAllDevices, setShowAllDevices] = useState(false); // ✅ ADDED: Debug toggle
+  const [showAllDevices, setShowAllDevices] = useState(false); // ✅ Debug toggle
 
   useEffect(() => {
     checkConnection();
-    loadDebugPreference(); // ✅ ADDED: Load saved debug preference
+    loadDebugPreference();
     
     // Subscribe to data updates
     const unsubscribeData = WearableService.onDataUpdate((data) => {
@@ -52,7 +52,6 @@ const WatchScreen = () => {
     };
   }, []);
 
-  // ✅ ADDED: Load debug preference from storage
   const loadDebugPreference = async () => {
     try {
       const saved = await AsyncStorage.getItem('showAllBLEDevices');
@@ -64,7 +63,6 @@ const WatchScreen = () => {
     }
   };
 
-  // ✅ ADDED: Save debug preference to storage
   const toggleDebugMode = async (value) => {
     try {
       setShowAllDevices(value);
@@ -97,10 +95,9 @@ const WatchScreen = () => {
       
       const foundDevices = await WearableService.scanForDevices(10000);
       
-      // ✅ UPDATED: Filter devices based on debug toggle
+      // Filter devices based on debug toggle
       let filteredDevices = foundDevices;
       if (!showAllDevices) {
-        // Only show InfiniTime/PineTime watches
         filteredDevices = foundDevices.filter(device => {
           const name = device.name?.toLowerCase() || '';
           return name.includes('infinit') || 
@@ -186,7 +183,7 @@ const WatchScreen = () => {
           <Text style={styles.title}>PineTime Watch</Text>
         </View>
 
-        {/* ✅ ADDED: Debug Toggle */}
+        {/* Debug Toggle */}
         {!connected && (
           <View style={styles.debugCard}>
             <View style={styles.debugRow}>
@@ -307,7 +304,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginTop: 10,
   },
-  // ✅ ADDED: Debug toggle styles
   debugCard: {
     backgroundColor: '#1e1e2e',
     borderRadius: 16,
