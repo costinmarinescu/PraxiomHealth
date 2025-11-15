@@ -21,6 +21,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export default function BiomarkerInputScreen({ navigation }) {
   const { updateState } = useContext(AppContext);
   
+  // ✅ Tier selection state
+  const [selectedTier, setSelectedTier] = useState('tier1');
+  
   // ✅ FIXED: Date picker with proper state
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -78,24 +81,15 @@ export default function BiomarkerInputScreen({ navigation }) {
     }
   };
 
-  // ✅ FIXED: Proper date change handler
+  // ✅ FIXED: Proper date change handler that prevents jumping
   const onDateChange = (event, date) => {
-    // Close picker on Android immediately
-    if (Platform.OS === 'android') {
-      setShowDatePicker(false);
-    }
+    // Always close picker first to prevent re-triggers
+    setShowDatePicker(false);
     
-    // Only update date if user actually selected one (not cancelled)
-    if (event.type === 'set' && date) {
+    // Only update if user confirmed selection (not cancelled)
+    if (date && event.type !== 'dismissed') {
       setSelectedDate(date);
       console.log('✅ Assessment date selected:', date.toLocaleDateString());
-    } else if (event.type === 'dismissed') {
-      console.log('Date picker cancelled');
-    }
-    
-    // On iOS, keep picker open
-    if (Platform.OS === 'ios' && date) {
-      setSelectedDate(date);
     }
   };
 
@@ -262,7 +256,48 @@ export default function BiomarkerInputScreen({ navigation }) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.title}>Tier 1 Biomarkers</Text>
+          <Text style={styles.title}>Biomarker Input</Text>
+        </View>
+
+        {/* ✅ Tier Selection */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Select Assessment Tier</Text>
+          <View style={styles.tierSelector}>
+            <TouchableOpacity
+              style={[
+                styles.tierButton,
+                selectedTier === 'tier1' && styles.tierButtonActive
+              ]}
+              onPress={() => setSelectedTier('tier1')}
+            >
+              <Text style={[
+                styles.tierButtonText,
+                selectedTier === 'tier1' && styles.tierButtonTextActive
+              ]}>
+                Tier 1
+              </Text>
+              <Text style={styles.tierButtonSubtext}>Foundation Biomarkers</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.tierButton,
+                selectedTier === 'tier2' && styles.tierButtonActive
+              ]}
+              onPress={() => {
+                setSelectedTier('tier2');
+                navigation.navigate('Tier2BiomarkerInput');
+              }}
+            >
+              <Text style={[
+                styles.tierButtonText,
+                selectedTier === 'tier2' && styles.tierButtonTextActive
+              ]}>
+                Tier 2
+              </Text>
+              <Text style={styles.tierButtonSubtext}>Advanced Analysis</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* ✅ Date Selection - FIXED */}
@@ -540,6 +575,36 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 15,
+  },
+  tierSelector: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  tierButton: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    padding: 15,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
+  },
+  tierButtonActive: {
+    backgroundColor: 'rgba(255,184,0,0.3)',
+    borderColor: '#FFB800',
+  },
+  tierButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  tierButtonTextActive: {
+    color: '#FFB800',
+  },
+  tierButtonSubtext: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 4,
   },
   dateButton: {
     flexDirection: 'row',

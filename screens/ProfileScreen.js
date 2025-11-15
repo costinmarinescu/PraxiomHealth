@@ -61,27 +61,15 @@ export default function ProfileScreen({ navigation }) {
     return age;
   };
 
-  // ✅ FIXED: Proper date change handler that doesn't reset
+  // ✅ FIXED: Proper date change handler that prevents jumping
   const onDateChange = (event, selectedDate) => {
-    // Close picker on Android immediately
-    if (Platform.OS === 'android') {
-      setShowDatePicker(false);
-    }
+    // Always close picker first to prevent re-triggers
+    setShowDatePicker(false);
     
-    // Only update date if user actually selected one (not cancelled)
-    if (event.type === 'set' && selectedDate) {
+    // Only update if user confirmed selection (not cancelled)
+    if (selectedDate && event.type !== 'dismissed') {
       setDateOfBirth(selectedDate);
       console.log('Date selected:', selectedDate.toISOString());
-    } else if (event.type === 'dismissed') {
-      // User cancelled - keep current date
-      console.log('Date picker cancelled');
-    }
-    
-    // On iOS, keep picker open until user closes it
-    if (Platform.OS === 'ios') {
-      if (selectedDate) {
-        setDateOfBirth(selectedDate);
-      }
     }
   };
 
