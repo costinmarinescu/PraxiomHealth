@@ -18,6 +18,7 @@ import HistoricalDataScreen from './screens/HistoricalDataScreen';
 import BiomarkerHistoryScreen from './screens/BiomarkerHistoryScreen';
 import ComparisonScreen from './screens/ComparisonScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import PraxiomAgeBLETest from './services/PraxiomAgeBLETest'; // ✅ NEW: Test screen
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -43,6 +44,7 @@ function DashboardStack() {
       <Stack.Screen name="BiomarkerHistory" component={BiomarkerHistoryScreen} />
       <Stack.Screen name="Comparison" component={ComparisonScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="BLETest" component={PraxiomAgeBLETest} /> {/* ✅ NEW: Test route */}
     </Stack.Navigator>
   );
 }
@@ -52,6 +54,7 @@ function SettingsStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="SettingsHome" component={SettingsScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="BLETest" component={PraxiomAgeBLETest} /> {/* ✅ NEW: Test route */}
     </Stack.Navigator>
   );
 }
