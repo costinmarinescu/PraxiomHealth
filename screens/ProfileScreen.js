@@ -1,9 +1,8 @@
 /**
- * ProfileScreen.js
+ * ProfileScreen.js - FIXED VERSION
  * 
- * FIXED VERSION - Working DOB Calendar Picker
- * 
- * This version handles the calendar properly without jumping.
+ * Simple, reliable date of birth input using text fields
+ * Avoids calendar picker issues entirely
  */
 
 import React, { useState, useEffect, useContext } from 'react';
@@ -14,10 +13,8 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
-  Platform,
   Alert,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppContext } from '../AppContext';
@@ -30,15 +27,36 @@ export default function ProfileScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   
-  // DOB state - THIS IS THE KEY PART
-  const [dateOfBirth, setDateOfBirth] = useState(new Date(1990, 0, 1)); // Default: Jan 1, 1990
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [tempDate, setTempDate] = useState(new Date(1990, 0, 1)); // Temporary date while picking
+  // DOB state - using separate fields for year, month, day
+  const [birthYear, setBirthYear] = useState('');
+  const [birthMonth, setBirthMonth] = useState('');
+  const [birthDay, setBirthDay] = useState('');
+  const [calculatedAge, setCalculatedAge] = useState(null);
   
   // Load saved profile
   useEffect(() => {
     loadProfile();
   }, []);
+
+  // Calculate age whenever DOB fields change
+  useEffect(() => {
+    if (birthYear && birthMonth && birthDay) {
+      const year = parseInt(birthYear);
+      const month = parseInt(birthMonth);
+      const day = parseInt(birthDay);
+
+      if (year >= 1920 && year <= new Date().getFullYear() &&
+          month >= 1 && month <= 12 &&
+          day >= 1 && day <= 31) {
+        const age = calculateAgeFromDate(year, month, day);
+        setCalculatedAge(age);
+      } else {
+        setCalculatedAge(null);
+      }
+    } else {
+      setCalculatedAge(null);
+    }
+  }, [birthYear, birthMonth, birthDay]);
 
   const loadProfile = async () => {
     try {
@@ -48,9 +66,12 @@ export default function ProfileScreen({ navigation }) {
         setName(profile.name || '');
         setEmail(profile.email || '');
         setPhone(profile.phone || '');
-        if (profile.dateOfBirth) {
-          setDateOfBirth(new Date(profile.dateOfBirth));
-          setTempDate(new Date(profile.dateOfBirth));
+        
+        // Load DOB if available
+        if (profile.birthYear) {
+          setBirthYear(profile.birthYear.toString());
+          setBirthMonth(profile.birthMonth.toString());
+          setBirthDay(profile.birthDay.toString());
         }
       }
     } catch (error) {
@@ -58,10 +79,10 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  // Calculate age from date of birth
-  const calculateAge = (dob) => {
+  const calculateAgeFromDate = (year, month, day) => {
     const today = new Date();
-    const birthDate = new Date(dob);
+    const birthDate = new Date(year, month - 1, day);
+    
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
     
@@ -72,53 +93,63 @@ export default function ProfileScreen({ navigation }) {
     return age;
   };
 
-  // Format date for display
-  const formatDate = (date) => {
-    const d = new Date(date);
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-  };
+  const validateDOB = () => {
+    const year = parseInt(birthYear);
+    const month = parseInt(birthMonth);
+    const day = parseInt(birthDay);
 
-  /**
-   * 🔧 THE FIX: Proper date picker handling
-   * 
-   * This handles both Android and iOS correctly:
-   * - Android: Shows dialog, only updates on "OK"
-   * - iOS: Shows inline picker, updates immediately
-   */
-  const onDateChange = (event, selectedDate) => {
-    if (Platform.OS === 'android') {
-      // Android behavior
-      setShowDatePicker(false);
-      
-      if (event.type === 'set' && selectedDate) {
-        // User clicked "OK"
-        setDateOfBirth(selectedDate);
-        setTempDate(selectedDate);
-        console.log('✅ DOB set to:', formatDate(selectedDate));
-      } else {
-        // User clicked "Cancel"
-        console.log('❌ DOB selection cancelled');
-      }
-    } else {
-      // iOS behavior
-      if (selectedDate) {
-        setTempDate(selectedDate);
-        // For iOS, we update immediately
-        setDateOfBirth(selectedDate);
-      }
+    const currentYear = new Date().getFullYear();
+
+    if (!birthYear || !birthMonth || !birthDay) {
+      Alert.alert('Invalid Date', 'Please enter your complete date of birth');
+      return false;
     }
+
+    if (isNaN(year) || isNaN(month) || isNaN(day)) {
+      Alert.alert('Invalid Date', 'Please enter valid numbers');
+      return false;
+    }
+
+    if (year < 1920 || year > currentYear) {
+      Alert.alert('Invalid Year', `Year must be between 1920 and ${currentYear}`);
+      return false;
+    }
+
+    if (month < 1 || month > 12) {
+      Alert.alert('Invalid Month', 'Month must be between 1 and 12');
+      return false;
+    }
+
+    if (day < 1 || day > 31) {
+      Alert.alert('Invalid Day', 'Day must be between 1 and 31');
+      return false;
+    }
+
+    // Check if date is valid
+    const testDate = new Date(year, month - 1, day);
+    if (testDate.getMonth() !== month - 1) {
+      Alert.alert('Invalid Date', 'This date does not exist (e.g., Feb 31)');
+      return false;
+    }
+
+    return true;
   };
 
   const saveProfile = async () => {
+    if (!validateDOB()) {
+      return;
+    }
+
     try {
-      const age = calculateAge(dateOfBirth);
+      const age = calculatedAge;
       
       const profile = {
         name,
         email,
         phone,
-        dateOfBirth: dateOfBirth.toISOString(),
+        birthYear: parseInt(birthYear),
+        birthMonth: parseInt(birthMonth),
+        birthDay: parseInt(birthDay),
         age,
       };
 
@@ -134,7 +165,7 @@ export default function ProfileScreen({ navigation }) {
 
       console.log('✅ Profile saved');
       console.log('   Name:', name);
-      console.log('   DOB:', formatDate(dateOfBirth));
+      console.log('   DOB:', `${birthYear}-${birthMonth}-${birthDay}`);
       console.log('   Age:', age);
 
       Alert.alert(
@@ -192,43 +223,63 @@ export default function ProfileScreen({ navigation }) {
           />
         </View>
 
-        {/* Date of Birth - THE FIXED VERSION */}
+        {/* Date of Birth - SIMPLIFIED VERSION */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Date of Birth</Text>
+          <Text style={styles.helpText}>Enter your birth date (numbers only)</Text>
           
-          {/* Display selected date */}
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <Text style={styles.dateButtonText}>
-              {formatDate(dateOfBirth)}
-            </Text>
-            <Text style={styles.ageText}>
-              (Age: {calculateAge(dateOfBirth)} years)
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.dateRow}>
+            <View style={styles.dateField}>
+              <Text style={styles.dateLabel}>Year</Text>
+              <TextInput
+                style={styles.dateInput}
+                placeholder="1990"
+                value={birthYear}
+                onChangeText={setBirthYear}
+                keyboardType="number-pad"
+                maxLength={4}
+              />
+            </View>
 
-          {/* Date Picker */}
-          {showDatePicker && (
-            <DateTimePicker
-              value={tempDate}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={onDateChange}
-              maximumDate={new Date()} // Can't be born in the future
-              minimumDate={new Date(1920, 0, 1)} // Reasonable minimum
-            />
+            <View style={styles.dateField}>
+              <Text style={styles.dateLabel}>Month</Text>
+              <TextInput
+                style={styles.dateInput}
+                placeholder="12"
+                value={birthMonth}
+                onChangeText={setBirthMonth}
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+            </View>
+
+            <View style={styles.dateField}>
+              <Text style={styles.dateLabel}>Day</Text>
+              <TextInput
+                style={styles.dateInput}
+                placeholder="25"
+                value={birthDay}
+                onChangeText={setBirthDay}
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+            </View>
+          </View>
+
+          {calculatedAge !== null && (
+            <View style={styles.ageDisplay}>
+              <Text style={styles.ageText}>
+                ✅ Age: {calculatedAge} years
+              </Text>
+            </View>
           )}
 
-          {/* iOS Done Button */}
-          {Platform.OS === 'ios' && showDatePicker && (
-            <TouchableOpacity
-              style={styles.doneButton}
-              onPress={() => setShowDatePicker(false)}
-            >
-              <Text style={styles.doneButtonText}>Done</Text>
-            </TouchableOpacity>
+          {birthYear && birthMonth && birthDay && calculatedAge === null && (
+            <View style={styles.errorDisplay}>
+              <Text style={styles.errorText}>
+                ⚠️ Invalid date
+              </Text>
+            </View>
           )}
         </View>
 
@@ -267,6 +318,12 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 8,
   },
+  helpText: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 10,
+    fontStyle: 'italic',
+  },
   input: {
     backgroundColor: 'white',
     borderRadius: 10,
@@ -275,36 +332,56 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
   },
-  dateButton: {
+  dateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  dateField: {
+    flex: 1,
+    marginHorizontal: 5,
+  },
+  dateLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 5,
+    textAlign: 'center',
+  },
+  dateInput: {
     backgroundColor: 'white',
     borderRadius: 10,
     padding: 15,
+    fontSize: 16,
     borderWidth: 1,
     borderColor: '#ddd',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    textAlign: 'center',
   },
-  dateButtonText: {
-    fontSize: 16,
-    color: '#333',
+  ageDisplay: {
+    backgroundColor: '#e6f7f5',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#00CFC1',
   },
   ageText: {
-    fontSize: 14,
-    color: '#00CFC1',
-    fontWeight: '600',
-  },
-  doneButton: {
-    backgroundColor: '#00CFC1',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 10,
-    alignItems: 'center',
-  },
-  doneButtonText: {
-    color: 'white',
     fontSize: 16,
+    color: '#00CFC1',
     fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  errorDisplay: {
+    backgroundColor: '#fee',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#fcc',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#c00',
+    textAlign: 'center',
   },
   saveButton: {
     backgroundColor: '#00CFC1',
