@@ -63,13 +63,23 @@ export default function ProfileScreen({ navigation }) {
 
   // ✅ FIXED: Proper date change handler that prevents jumping
   const onDateChange = (event, selectedDate) => {
-    // Always close picker first to prevent re-triggers
-    setShowDatePicker(false);
+    // Android fires 'set' when user confirms, 'dismissed' when cancelled
+    // iOS fires onChange repeatedly while scrolling
     
-    // Only update if user confirmed selection (not cancelled)
-    if (selectedDate && event.type !== 'dismissed') {
-      setDateOfBirth(selectedDate);
-      console.log('Date selected:', selectedDate.toISOString());
+    if (Platform.OS === 'android') {
+      // On Android, only act on set or dismissed events
+      if (event.type === 'set' && selectedDate) {
+        setDateOfBirth(selectedDate);
+        setShowDatePicker(false);
+        console.log('Date selected:', selectedDate.toISOString());
+      } else if (event.type === 'dismissed') {
+        setShowDatePicker(false);
+      }
+    } else {
+      // On iOS, update in real-time while scrolling
+      if (selectedDate) {
+        setDateOfBirth(selectedDate);
+      }
     }
   };
 

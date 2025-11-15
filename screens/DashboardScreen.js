@@ -182,25 +182,26 @@ export default function DashboardScreen({ navigation }) {
             style={styles.actionButton}
             onPress={() => navigation.navigate('Tier1BiomarkerInput')}
           >
-            <Text style={styles.actionButtonText}>📝 Enter</Text>
+            <Text style={styles.actionButtonText}>📝 Tier 1</Text>
             <Text style={styles.actionButtonText}>Biomarkers</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={handleRecalculateAge}
+            onPress={() => navigation.navigate('Tier2BiomarkerInput')}
           >
-            <Text style={styles.actionButtonText}>🔄 Recalculate</Text>
-            <Text style={styles.actionButtonText}>Age</Text>
+            <Text style={styles.actionButtonText}>🔥 Tier 2</Text>
+            <Text style={styles.actionButtonText}>Advanced</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.quickActions}>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => navigation.navigate('DNATest')}
+            onPress={handleRecalculateAge}
           >
-            <Text style={styles.actionButtonText}>🧬 DNA Test</Text>
+            <Text style={styles.actionButtonText}>🔄 Recalculate</Text>
+            <Text style={styles.actionButtonText}>Age</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

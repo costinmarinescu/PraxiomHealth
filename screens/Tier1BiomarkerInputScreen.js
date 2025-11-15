@@ -50,20 +50,21 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
 
   // ✅ FIXED: Proper date change handler that prevents jumping
   const onDateChange = (event, date) => {
-    const currentPlatform = Platform.OS;
+    // Android fires 'set' when user confirms, 'dismissed' when cancelled
+    // iOS fires onChange repeatedly while scrolling
     
-    // On Android, modal auto-closes, so we close our state
-    if (currentPlatform === 'android') {
-      setShowDatePicker(false);
-    }
-    
-    // Only update date if user didn't cancel (event.type !== 'dismissed')
-    if (date && event.type !== 'dismissed') {
-      setSelectedDate(date);
-    } else if (event.type === 'dismissed') {
-      // User cancelled - on iOS close the picker
-      if (currentPlatform === 'ios') {
+    if (Platform.OS === 'android') {
+      // On Android, only act on set or dismissed events
+      if (event.type === 'set' && date) {
+        setSelectedDate(date);
         setShowDatePicker(false);
+      } else if (event.type === 'dismissed') {
+        setShowDatePicker(false);
+      }
+    } else {
+      // On iOS, update in real-time while scrolling
+      if (date) {
+        setSelectedDate(date);
       }
     }
   };
@@ -195,7 +196,21 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
       );
     } catch (error) {
       console.error('Push to watch error:', error);
-      Alert.alert('Sync Failed', 'Could not send data to watch. Please try again.');
+      
+      // Check if error is about missing firmware service
+      if (error.message && error.message.includes('firmware')) {
+        Alert.alert(
+          'Firmware Not Supported',
+          error.message,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Sync Failed',
+          'Could not send data to watch. Please ensure:\n\n1. Watch is connected\n2. Watch has Praxiom custom firmware installed\n3. Bluetooth is enabled',
+          [{ text: 'OK' }]
+        );
+      }
     } finally {
       setLoading(false);
     }

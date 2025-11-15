@@ -37,17 +37,21 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
 
   const onDateChange = (event, date) => {
-    const currentPlatform = Platform.OS;
+    // Android fires 'set' when user confirms, 'dismissed' when cancelled
+    // iOS fires onChange repeatedly while scrolling
     
-    if (currentPlatform === 'android') {
-      setShowDatePicker(false);
-    }
-    
-    if (date && event.type !== 'dismissed') {
-      setSelectedDate(date);
-    } else if (event.type === 'dismissed') {
-      if (currentPlatform === 'ios') {
+    if (Platform.OS === 'android') {
+      // On Android, only act on set or dismissed events
+      if (event.type === 'set' && date) {
+        setSelectedDate(date);
         setShowDatePicker(false);
+      } else if (event.type === 'dismissed') {
+        setShowDatePicker(false);
+      }
+    } else {
+      // On iOS, update in real-time while scrolling
+      if (date) {
+        setSelectedDate(date);
       }
     }
   };
