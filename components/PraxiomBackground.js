@@ -5,9 +5,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 const PraxiomBackground = ({ children, style }) => {
   return (
     <LinearGradient
-      colors={['#0a0a1e', '#1a1a2e', '#16213e']}
+      colors={['#FF6B00', '#FFB800', '#00CFC1']}
       start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      end={{ x: 0, y: 1 }}
       style={[styles.gradient, style]}
     >
       {children}
