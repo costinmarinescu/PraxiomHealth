@@ -87,7 +87,6 @@ class PraxiomAlgorithm {
   // ✅ HRV is OPTIONAL but weighted heavily when available
   static calculateFitnessScore(heartRate, steps, spO2, hrv, age) {
     let score = 100;
-    let components = 0;
     let totalPenalty = 0;
 
     // HRV scoring (OPTIONAL - optimal: ≥70 ms for adults)
@@ -104,7 +103,6 @@ class PraxiomAlgorithm {
       } else {
         totalPenalty += 30; // Poor
       }
-      components++;
     }
 
     // Resting Heart Rate scoring (age-adjusted)
@@ -113,19 +111,16 @@ class PraxiomAlgorithm {
       const excess = Math.min(heartRate - optimalHR, 40);
       totalPenalty += (excess / 40) * 25; // Up to 25 points
     }
-    components++;
 
     // Daily Steps scoring (optimal: >10,000)
     if (steps < 10000) {
       totalPenalty += ((10000 - steps) / 10000) * 30; // Up to 30 points
     }
-    components++;
 
     // SpO2 scoring (optimal: >95%)
     if (spO2 < 95) {
       totalPenalty += (95 - spO2) * 6; // Up to 30 points for severe hypoxia
     }
-    components++;
 
     score -= totalPenalty;
     return Math.max(0, Math.min(100, score));
