@@ -8,10 +8,8 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// import * as Print from 'expo-print';  // COMMENTED OUT - not in dependencies
 import * as Sharing from 'expo-sharing';
 import { AppContext } from '../AppContext';
 import PraxiomBackground from '../components/PraxiomBackground';
@@ -19,6 +17,7 @@ import PraxiomBackground from '../components/PraxiomBackground';
 const BiomarkerHistoryScreen = ({ navigation }) => {
   const { state } = useContext(AppContext);
   const [history, setHistory] = useState([]);
+  const [expandedId, setExpandedId] = useState(null); // ✅ NEW: Track which entry is expanded
 
   useEffect(() => {
     loadHistory();
@@ -26,9 +25,11 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
 
   const loadHistory = async () => {
     try {
-      const historyData = await AsyncStorage.getItem('biomarkerHistory');
+      const historyData = await AsyncStorage.getItem('@praxiom_biomarker_history');
       if (historyData) {
-        setHistory(JSON.parse(historyData));
+        const parsed = JSON.parse(historyData);
+        console.log('📋 Loaded history entries:', parsed.length);
+        setHistory(parsed);
       }
     } catch (error) {
       console.error('Error loading history:', error);
@@ -39,7 +40,7 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
     try {
       const dataToExport = JSON.stringify(history, null, 2);
       
-      if (Sharing.isAvailableAsync()) {
+      if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(
           dataToExport,
           {
@@ -55,22 +56,22 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
     }
   };
 
-  const deleteEntry = async (id) => {
+  const deleteEntry = async (timestamp) => {
     Alert.alert(
       'Delete Entry',
-      'Are you sure?',
+      'Are you sure you want to delete this entry?',
       [
         {
           text: 'Cancel',
-          onPress: () => { },
           style: 'cancel',
         },
         {
           text: 'Delete',
           onPress: async () => {
-            const updated = history.filter(h => h.id !== id);
+            const updated = history.filter(h => h.timestamp !== timestamp);
             setHistory(updated);
-            await AsyncStorage.setItem('biomarkerHistory', JSON.stringify(updated));
+            await AsyncStorage.setItem('@praxiom_biomarker_history', JSON.stringify(updated));
+            console.log('🗑️ Entry deleted');
           },
           style: 'destructive',
         },
@@ -78,40 +79,141 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
     );
   };
 
-  const renderHistoryItem = ({ item }) => (
-    <View style={styles.historyCard}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.dateText}>
-          {new Date(item.timestamp).toLocaleDateString()}
-        </Text>
-        <TouchableOpacity
-          onPress={() => deleteEntry(item.id)}
-          style={styles.deleteButton}
-        >
-          <Ionicons name="trash-outline" size={20} color="#ff4444" />
-        </TouchableOpacity>
-      </View>
+  // ✅ NEW: Toggle expansion of entry details
+  const toggleExpand = (timestamp) => {
+    setExpandedId(expandedId === timestamp ? null : timestamp);
+  };
 
-      <View style={styles.cardContent}>
-        <View style={styles.row}>
-          <Text style={styles.label}>Bio-Age:</Text>
-          <Text style={styles.value}>{item.bioAge?.toFixed(1) || 'N/A'} years</Text>
+  const renderHistoryItem = ({ item }) => {
+    const isExpanded = expandedId === item.timestamp;
+    const date = new Date(item.timestamp);
+    
+    return (
+      <View style={styles.historyCard}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.dateText}>
+            {date.toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}
+          </Text>
+          <TouchableOpacity
+            onPress={() => deleteEntry(item.timestamp)}
+            style={styles.deleteButton}
+          >
+            <Ionicons name="trash-outline" size={20} color="#ff4444" />
+          </TouchableOpacity>
         </View>
-        <View style={styles.row}>
-          <Text style={styles.label}>Oral Score:</Text>
-          <Text style={styles.value}>{item.oralScore || 'N/A'}</Text>
+
+        {/* Summary View */}
+        <View style={styles.cardContent}>
+          <View style={styles.row}>
+            <Text style={styles.label}>Bio-Age:</Text>
+            <Text style={[styles.value, styles.bioAgeValue]}>
+              {item.bioAge?.toFixed(1) || 'N/A'} years
+            </Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Oral Health:</Text>
+            <Text style={styles.value}>{item.oralScore || 'N/A'}%</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Systemic Health:</Text>
+            <Text style={styles.value}>{item.systemicScore || 'N/A'}%</Text>
+          </View>
+          {item.fitnessScore && (
+            <View style={styles.row}>
+              <Text style={styles.label}>Fitness:</Text>
+              <Text style={styles.value}>{item.fitnessScore}%</Text>
+            </View>
+          )}
         </View>
-        <View style={styles.row}>
-          <Text style={styles.label}>Systemic Score:</Text>
-          <Text style={styles.value}>{item.systemicScore || 'N/A'}</Text>
-        </View>
-        <View style={styles.row}>
-          <Text style={styles.label}>Fitness Score:</Text>
-          <Text style={styles.value}>{item.fitnessScore || 'N/A'}</Text>
-        </View>
+
+        {/* ✅ NEW: View Details Button */}
+        <TouchableOpacity
+          style={styles.detailsButton}
+          onPress={() => toggleExpand(item.timestamp)}
+        >
+          <Text style={styles.detailsButtonText}>
+            {isExpanded ? 'Hide Details' : 'View Details'}
+          </Text>
+          <Ionicons
+            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+            size={20}
+            color="#00d4ff"
+          />
+        </TouchableOpacity>
+
+        {/* ✅ NEW: Expandable Details Section */}
+        {isExpanded && (
+          <View style={styles.expandedDetails}>
+            <View style={styles.detailsSection}>
+              <Text style={styles.sectionTitle}>🦷 Oral Health Biomarkers</Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Salivary pH:</Text>
+                <Text style={styles.detailValue}>{item.salivaryPH || 'N/A'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Active MMP-8 (ng/mL):</Text>
+                <Text style={styles.detailValue}>{item.activeMMP8 || 'N/A'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Salivary Flow (mL/min):</Text>
+                <Text style={styles.detailValue}>{item.salivaryFlowRate || 'N/A'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.detailsSection}>
+              <Text style={styles.sectionTitle}>🩸 Systemic Health Biomarkers</Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>hs-CRP (mg/L):</Text>
+                <Text style={styles.detailValue}>{item.hsCRP || 'N/A'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Omega-3 Index (%):</Text>
+                <Text style={styles.detailValue}>{item.omega3Index || 'N/A'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>HbA1c (%):</Text>
+                <Text style={styles.detailValue}>{item.hbA1c || 'N/A'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>GDF-15 (pg/mL):</Text>
+                <Text style={styles.detailValue}>{item.gdf15 || 'N/A'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Vitamin D (ng/mL):</Text>
+                <Text style={styles.detailValue}>{item.vitaminD || 'N/A'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.detailsSection}>
+              <Text style={styles.sectionTitle}>⌚ Wearable Data</Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Heart Rate (bpm):</Text>
+                <Text style={styles.detailValue}>{item.heartRate || 'N/A'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Daily Steps:</Text>
+                <Text style={styles.detailValue}>{item.steps?.toLocaleString() || 'N/A'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>SpO2 (%):</Text>
+                <Text style={styles.detailValue}>{item.spO2 || 'N/A'}</Text>
+              </View>
+              {item.hrv && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>HRV (ms):</Text>
+                  <Text style={styles.detailValue}>{item.hrv}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <PraxiomBackground>
@@ -144,7 +246,7 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
           <FlatList
             data={history}
             renderItem={renderHistoryItem}
-            keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+            keyExtractor={(item) => item.timestamp || Math.random().toString()}
             scrollEnabled={false}
             contentContainerStyle={styles.listContent}
           />
@@ -163,7 +265,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingTop: 50,
+    paddingBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#2a2a3e',
   },
@@ -220,7 +323,56 @@ const styles = StyleSheet.create({
   value: {
     fontSize: 14,
     fontWeight: 'bold',
+    color: '#4ade80',
+  },
+  bioAgeValue: {
+    color: '#FFB800',
+    fontSize: 16,
+  },
+  detailsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    backgroundColor: '#2a2a3e',
+    borderRadius: 8,
+  },
+  detailsButtonText: {
     color: '#00d4ff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginRight: 5,
+  },
+  expandedDetails: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#2a2a3e',
+  },
+  detailsSection: {
+    marginBottom: 15,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#00d4ff',
+    marginBottom: 10,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  detailLabel: {
+    fontSize: 13,
+    color: '#888',
+  },
+  detailValue: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#ffffff',
   },
   emptyState: {
     flex: 1,

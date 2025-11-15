@@ -53,6 +53,7 @@ export default function BiomarkerInputScreen({ navigation }) {
   // ✅ Check watch connection on mount
   React.useEffect(() => {
     checkWatchConnection();
+    loadAgeFromProfile(); // ✅ NEW: Auto-load age
   }, []);
 
   const checkWatchConnection = async () => {
@@ -64,12 +65,36 @@ export default function BiomarkerInputScreen({ navigation }) {
     }
   };
 
+  // ✅ NEW: Load age from profile automatically
+  const loadAgeFromProfile = async () => {
+    try {
+      const savedAge = await AsyncStorage.getItem('chronologicalAge');
+      if (savedAge) {
+        setAge(savedAge);
+        console.log('✅ Age auto-loaded from profile:', savedAge);
+      }
+    } catch (error) {
+      console.error('Error loading age from profile:', error);
+    }
+  };
+
   // ✅ FIXED: Proper date change handler
   const onDateChange = (event, date) => {
+    // Close picker on Android immediately
     if (Platform.OS === 'android') {
       setShowDatePicker(false);
     }
-    if (date) {
+    
+    // Only update date if user actually selected one (not cancelled)
+    if (event.type === 'set' && date) {
+      setSelectedDate(date);
+      console.log('✅ Assessment date selected:', date.toLocaleDateString());
+    } else if (event.type === 'dismissed') {
+      console.log('Date picker cancelled');
+    }
+    
+    // On iOS, keep picker open
+    if (Platform.OS === 'ios' && date) {
       setSelectedDate(date);
     }
   };

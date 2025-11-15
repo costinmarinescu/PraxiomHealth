@@ -39,7 +39,9 @@ export default function ProfileScreen({ navigation }) {
 
       if (savedName) setName(savedName);
       if (savedEmail) setEmail(savedEmail);
-      if (savedDOB) setDateOfBirth(new Date(savedDOB));
+      if (savedDOB) {
+        setDateOfBirth(new Date(savedDOB));
+      }
       if (savedHeight) setHeight(savedHeight);
       if (savedWeight) setWeight(savedWeight);
     } catch (error) {
@@ -59,10 +61,27 @@ export default function ProfileScreen({ navigation }) {
     return age;
   };
 
+  // ✅ FIXED: Proper date change handler that doesn't reset
   const onDateChange = (event, selectedDate) => {
-    setShowDatePicker(Platform.OS === 'ios');
-    if (selectedDate) {
+    // Close picker on Android immediately
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    
+    // Only update date if user actually selected one (not cancelled)
+    if (event.type === 'set' && selectedDate) {
       setDateOfBirth(selectedDate);
+      console.log('Date selected:', selectedDate.toISOString());
+    } else if (event.type === 'dismissed') {
+      // User cancelled - keep current date
+      console.log('Date picker cancelled');
+    }
+    
+    // On iOS, keep picker open until user closes it
+    if (Platform.OS === 'ios') {
+      if (selectedDate) {
+        setDateOfBirth(selectedDate);
+      }
     }
   };
 
@@ -89,6 +108,8 @@ export default function ProfileScreen({ navigation }) {
         userName: name,
       });
 
+      console.log('✅ Profile saved - Age:', age, 'DOB:', dateOfBirth.toISOString());
+
       Alert.alert(
         'Success!',
         `Profile saved!\nYour age: ${age} years\n\nThis will be used for all Bio-Age calculations.`,
@@ -106,12 +127,10 @@ export default function ProfileScreen({ navigation }) {
     <PraxiomBackground>
       <ScrollView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity 
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#ffffff" />
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Profile</Text>
+          <Text style={styles.title}>Profile</Text>
         </View>
 
         {/* Personal Information */}
@@ -119,7 +138,7 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.sectionTitle}>Personal Information</Text>
           
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Name</Text>
+            <Text style={styles.label}>Full Name</Text>
             <TextInput
               style={styles.input}
               value={name}
@@ -135,7 +154,7 @@ export default function ProfileScreen({ navigation }) {
               style={styles.input}
               value={email}
               onChangeText={setEmail}
-              placeholder="Enter your email"
+              placeholder="your.email@example.com"
               placeholderTextColor="#666"
               keyboardType="email-address"
               autoCapitalize="none"
@@ -213,23 +232,19 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Current Age Display */}
-        <View style={styles.ageCard}>
-          <Ionicons name="person" size={48} color="#00d4ff" />
-          <Text style={styles.ageCardTitle}>Your Chronological Age</Text>
-          <Text style={styles.ageCardValue}>{currentAge} years</Text>
-          <Text style={styles.ageCardHint}>
-            This will be compared to your Praxiom Bio-Age
-          </Text>
-        </View>
-
         {/* Save Button */}
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Ionicons name="checkmark-circle" size={24} color="#000000" />
-          <Text style={styles.saveButtonText}>Save Profile</Text>
-        </TouchableOpacity>
+        <View style={styles.actions}>
+          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+            <Ionicons name="checkmark-circle" size={24} color="#000" />
+            <Text style={styles.saveButtonText}>Save Profile</Text>
+          </TouchableOpacity>
 
-        <View style={styles.spacer} />
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={() => navigation.goBack()}>
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </PraxiomBackground>
   );
@@ -243,15 +258,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 20,
-    paddingTop: 60,
+    paddingTop: 50,
   },
   backButton: {
     marginRight: 15,
   },
-  headerTitle: {
+  title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: '#fff',
   },
   section: {
     padding: 20,
@@ -270,7 +285,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#ffffff',
     marginBottom: 8,
-    fontWeight: '600',
   },
   input: {
     backgroundColor: '#1e1e2e',
@@ -282,12 +296,12 @@ const styles = StyleSheet.create({
     borderColor: '#2a2a3e',
   },
   dateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: '#1e1e2e',
     padding: 15,
     borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     borderWidth: 2,
     borderColor: '#00d4ff',
   },
@@ -298,67 +312,54 @@ const styles = StyleSheet.create({
   },
   dateTextContainer: {
     marginLeft: 15,
+    flex: 1,
   },
   dateText: {
     fontSize: 16,
     color: '#ffffff',
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
   ageText: {
     fontSize: 14,
     color: '#4ade80',
     marginTop: 4,
-    fontWeight: 'bold',
   },
   hint: {
     fontSize: 12,
-    color: '#fbbf24',
-    marginTop: 10,
-    fontStyle: 'italic',
-    lineHeight: 18,
-  },
-  ageCard: {
-    backgroundColor: 'rgba(0, 212, 255, 0.1)',
-    margin: 20,
-    padding: 30,
-    borderRadius: 16,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#00d4ff',
-  },
-  ageCardTitle: {
-    fontSize: 16,
-    color: '#ffffff',
-    marginTop: 15,
-    marginBottom: 10,
-  },
-  ageCardValue: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#00d4ff',
-  },
-  ageCardHint: {
-    fontSize: 12,
     color: '#8e8e93',
-    marginTop: 10,
-    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  actions: {
+    padding: 20,
+    paddingBottom: 40,
   },
   saveButton: {
-    flexDirection: 'row',
     backgroundColor: '#4ade80',
-    margin: 20,
+    padding: 18,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  saveButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000000',
+    marginLeft: 8,
+  },
+  cancelButton: {
+    backgroundColor: 'transparent',
     padding: 18,
     borderRadius: 12,
     alignItems: 'center',
-    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#8e8e93',
   },
-  saveButtonText: {
+  cancelButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#000000',
-    marginLeft: 10,
-  },
-  spacer: {
-    height: 40,
+    color: '#8e8e93',
   },
 });
