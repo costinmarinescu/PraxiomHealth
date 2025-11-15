@@ -1,84 +1,57 @@
-import { Platform, PermissionsAndroid } from 'react-native';
-import base64 from 'react-native-base64';
+/**
+ * WearableService.js - FIXED VERSION
+ * 
+ * Unified BLE service with all required functions
+ * Compatible with both Tier1BiomarkerInputScreen and WatchScreen
+ */
 
-// BLE Service UUIDs
+import { Platform, PermissionsAndroid } from 'react-native';
+import { BleManager } from 'react-native-ble-plx';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Standard BLE Services
 const HEART_RATE_SERVICE = '0000180D-0000-1000-8000-00805F9B34FB';
 const HEART_RATE_MEASUREMENT = '00002A37-0000-1000-8000-00805F9B34FB';
 const MOTION_SERVICE = '00030000-78fc-48fe-8e23-433b3a1942d0';
 const STEP_COUNT_CHAR = '00030001-78fc-48fe-8e23-433b3a1942d0';
 const BATTERY_SERVICE = '0000180F-0000-1000-8000-00805F9B34FB';
 const BATTERY_LEVEL = '00002A19-0000-1000-8000-00805F9B34FB';
-const CURRENT_TIME_SERVICE = '00001805-0000-1000-8000-00805F9B34FB';
-const CURRENT_TIME_CHAR = '00002A2B-0000-1000-8000-00805F9B34FB';
 
 // Custom Praxiom Health Service
 const PRAXIOM_SERVICE = '00001900-78fc-48fe-8e23-433b3a1942d0';
 const BIO_AGE_CHAR = '00001901-78fc-48fe-8e23-433b3a1942d0';
-const HEALTH_REQUEST_CHAR = '00001902-78fc-48fe-8e23-433b3a1942d0';
 
 class WearableService {
   constructor() {
     this.bleManager = null;
-    this.bleInitialized = false;
-    this.bleError = null;
     this.connectedDevice = null;
+    this.keepAliveInterval = null;
     this.isScanning = false;
-    this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5;
-    this.reconnectDelay = 2000;
-    this.keepAliveInterval = null; // ✨ NEW: Keep-alive timer
 
     // Data listeners
     this.dataUpdateListeners = [];
     this.connectionListeners = [];
 
-    // Cached data
+    // Latest data cache
     this.latestData = {
       heartRate: null,
       steps: null,
       battery: null,
       hrv: null,
-      sleepEfficiency: null,
     };
 
-    // Initialize BLE manager lazily to prevent crashes
-    this.initializeBLESafe();
-  }
-
-  async initializeBLESafe() {
-    try {
-      // Dynamic import to prevent crash on load
-      const { BleManager: BleManagerClass } = await import('react-native-ble-plx');
-      
-      if (!BleManagerClass) {
-        throw new Error('BleManager class not available');
-      }
-      
-      this.bleManager = new BleManagerClass();
-      await this.initializeBLE();
-      this.bleInitialized = true;
-      console.log('✅ BLE initialized successfully');
-    } catch (error) {
-      console.error('❌ BLE initialization failed:', error);
-      this.bleError = error;
-      this.bleInitialized = false;
-      // Don't crash - just log the error and continue
-      // App will show "Bluetooth not available" message in UI
-    }
+    // Initialize BLE
+    this.initializeBLE();
   }
 
   async initializeBLE() {
-    if (!this.bleManager) {
-      console.warn('BLE Manager not initialized');
-      return;
-    }
-    
     try {
+      this.bleManager = new BleManager();
       const state = await this.bleManager.state();
-      console.log('Initial BLE state:', state);
+      console.log('✅ BLE initialized, state:', state);
 
       if (state !== 'PoweredOn') {
-        console.log('Waiting for Bluetooth to be ready...');
+        console.log('Waiting for Bluetooth to power on...');
         await new Promise((resolve) => {
           const subscription = this.bleManager.onStateChange((newState) => {
             console.log('BLE state changed:', newState);
@@ -89,18 +62,14 @@ class WearableService {
           }, true);
         });
       }
-
-      console.log('BLE Manager initialized successfully');
     } catch (error) {
-      console.error('BLE initialization error:', error);
-      throw error;
+      console.error('❌ BLE initialization failed:', error);
     }
   }
 
   async requestPermissions() {
     if (Platform.OS === 'android') {
       if (Platform.Version >= 31) {
-        // Android 12+
         const permissions = await PermissionsAndroid.requestMultiple([
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
@@ -113,21 +82,20 @@ class WearableService {
           permissions['android.permission.ACCESS_FINE_LOCATION'] === 'granted'
         );
       } else {
-        // Android 11 and below
         const granted = await PermissionsAndroid.request(
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
         );
         return granted === PermissionsAndroid.RESULTS.GRANTED;
       }
     }
-    return true; // iOS handles permissions automatically
+    return true;
   }
 
   async scanForDevices(duration = 10000) {
-    if (!this.bleManager || !this.bleInitialized) {
-      throw new Error('Bluetooth is not available. Please ensure your device supports BLE and it is enabled.');
+    if (!this.bleManager) {
+      throw new Error('Bluetooth is not available');
     }
-    
+
     const hasPermissions = await this.requestPermissions();
     if (!hasPermissions) {
       throw new Error('Bluetooth permissions not granted');
@@ -151,18 +119,14 @@ class WearableService {
         }
 
         if (device && device.name) {
-          const name = device.name.toLowerCase();
-          // Look for InfiniTime watches (PineTime, Sealed, etc.)
-          if (name.includes('infini') || name.includes('pine') || name.includes('sealed')) {
-            const exists = devices.find(d => d.id === device.id);
-            if (!exists) {
-              console.log('Found watch:', device.name, device.id);
-              devices.push({
-                id: device.id,
-                name: device.name,
-                rssi: device.rssi,
-              });
-            }
+          const exists = devices.find(d => d.id === device.id);
+          if (!exists) {
+            console.log('Found device:', device.name, device.id);
+            devices.push({
+              id: device.id,
+              name: device.name,
+              rssi: device.rssi,
+            });
           }
         }
       });
@@ -178,136 +142,34 @@ class WearableService {
 
   async connectToDevice(deviceId) {
     try {
-      console.log('Connecting to device:', deviceId);
+      console.log('🔗 Connecting to device:', deviceId);
 
-      // Connect to device
       const device = await this.bleManager.connectToDevice(deviceId, {
         autoConnect: false,
         requestMTU: 256,
       });
 
-      console.log('Connected, discovering services...');
+      console.log('✅ Connected, discovering services...');
       await device.discoverAllServicesAndCharacteristics();
 
       this.connectedDevice = device;
-      this.reconnectAttempts = 0;
       this.notifyConnectionChange(true);
 
-      // Set up disconnect handler
-      device.onDisconnected((error, disconnectedDevice) => {
+      device.onDisconnected((error) => {
         console.log('Device disconnected:', error);
         this.handleDisconnection();
       });
 
-      // Sync time first
-      await this.syncTime(device);
-
-      // Subscribe to all services
       await this.subscribeToServices(device);
-
-      // ✨ NEW: Start keep-alive mechanism
       this.startKeepAlive();
 
-      console.log('All services subscribed successfully');
+      console.log('✅ All services subscribed successfully');
       return true;
     } catch (error) {
-      console.error('Connection error:', error);
+      console.error('❌ Connection error:', error);
       this.connectedDevice = null;
       this.notifyConnectionChange(false);
       throw error;
-    }
-  }
-
-  // ✨ NEW: Keep-alive mechanism to prevent disconnection
-  startKeepAlive() {
-    // Clear any existing keep-alive
-    if (this.keepAliveInterval) {
-      clearInterval(this.keepAliveInterval);
-    }
-
-    // Read battery level every 30 seconds to keep connection alive
-    this.keepAliveInterval = setInterval(async () => {
-      if (this.connectedDevice) {
-        try {
-          console.log('📡 Keep-alive: Reading battery level...');
-          const battery = await this.connectedDevice.readCharacteristicForService(
-            BATTERY_SERVICE,
-            BATTERY_LEVEL
-          );
-          
-          if (battery?.value) {
-            this.handleBatteryData(battery.value);
-          }
-          
-          console.log('✅ Keep-alive successful');
-        } catch (error) {
-          console.warn('⚠️ Keep-alive failed:', error.message);
-          // Don't trigger full disconnection on keep-alive failure
-          // The onDisconnected handler will catch real disconnections
-        }
-      }
-    }, 30000); // Every 30 seconds
-
-    console.log('✅ Keep-alive mechanism started');
-  }
-
-  // ✨ NEW: Stop keep-alive mechanism
-  stopKeepAlive() {
-    if (this.keepAliveInterval) {
-      clearInterval(this.keepAliveInterval);
-      this.keepAliveInterval = null;
-      console.log('🛑 Keep-alive mechanism stopped');
-    }
-  }
-
-  async syncTime(device) {
-    try {
-      console.log('Syncing time...');
-      const now = new Date();
-      const timeData = new Uint8Array(10);
-
-      // Year (little-endian)
-      const year = now.getFullYear();
-      timeData[0] = year & 0xFF;
-      timeData[1] = (year >> 8) & 0xFF;
-
-      // Month (1-12)
-      timeData[2] = now.getMonth() + 1;
-
-      // Day
-      timeData[3] = now.getDate();
-
-      // Hour
-      timeData[4] = now.getHours();
-
-      // Minute
-      timeData[5] = now.getMinutes();
-
-      // Second
-      timeData[6] = now.getSeconds();
-
-      // Day of week (1=Monday, 7=Sunday)
-      const dayOfWeek = ((now.getDay() + 6) % 7) + 1;
-      timeData[7] = dayOfWeek;
-
-      // Fractions256
-      timeData[8] = 0;
-
-      // Adjust reason (0 = manual)
-      timeData[9] = 0;
-
-      const base64Data = base64.encode(String.fromCharCode(...timeData));
-
-      await device.writeCharacteristicWithResponseForService(
-        CURRENT_TIME_SERVICE,
-        CURRENT_TIME_CHAR,
-        base64Data
-      );
-
-      console.log('Time synchronized successfully');
-    } catch (error) {
-      console.error('Time sync error:', error);
-      // Non-critical error, continue with connection
     }
   }
 
@@ -333,140 +195,68 @@ class WearableService {
       console.log('⚠️ Heart Rate service not available');
     }
 
-    // ✨ FIXED: Subscribe to Step Count with proper notification enable
-    try {
-      // First, enable notifications by writing to CCCD
-      const services = await device.services();
-      const motionService = services.find(s => s.uuid.toUpperCase() === MOTION_SERVICE.toUpperCase());
-      
-      if (motionService) {
-        console.log('✓ Motion Service found');
-        
-        // Monitor the step count characteristic
-        device.monitorCharacteristicForService(
-          MOTION_SERVICE,
-          STEP_COUNT_CHAR,
-          (error, characteristic) => {
-            if (error) {
-              console.error('❌ Step monitoring error:', error);
-              return;
-            }
-
-            if (characteristic?.value) {
-              console.log('📊 Step data received');
-              this.handleStepData(characteristic.value);
-            }
-          }
-        );
-        
-        console.log('✅ Step Count monitoring started and notifications enabled');
-      } else {
-        console.log('⚠️ Motion Service not found on device');
-      }
-    } catch (error) {
-      console.error('❌ Step Count subscription error:', error);
-    }
-
-    // ✨ FIXED: Subscribe to Battery Level with periodic reads
-    try {
-      // Read battery immediately
-      const battery = await device.readCharacteristicForService(
-        BATTERY_SERVICE,
-        BATTERY_LEVEL
-      );
-      
-      if (battery?.value) {
-        this.handleBatteryData(battery.value);
-        console.log('✅ Initial battery level read');
-      }
-
-      // Monitor battery changes (some watches support notifications)
-      try {
-        device.monitorCharacteristicForService(
-          BATTERY_SERVICE,
-          BATTERY_LEVEL,
-          (error, characteristic) => {
-            if (error) {
-              // Not all watches support battery notifications, that's OK
-              return;
-            }
-
-            if (characteristic?.value) {
-              console.log('🔋 Battery update received');
-              this.handleBatteryData(characteristic.value);
-            }
-          }
-        );
-        console.log('✅ Battery monitoring started');
-      } catch (monitorError) {
-        console.log('ℹ️ Battery notifications not supported, using periodic reads');
-      }
-    } catch (error) {
-      console.log('⚠️ Battery service not available:', error.message);
-    }
-
-    // Subscribe to Custom Praxiom Service (if available)
+    // Subscribe to Steps
     try {
       device.monitorCharacteristicForService(
-        PRAXIOM_SERVICE,
-        HEALTH_REQUEST_CHAR,
+        MOTION_SERVICE,
+        STEP_COUNT_CHAR,
         (error, characteristic) => {
           if (error) {
+            console.error('Step monitoring error:', error);
             return;
           }
 
           if (characteristic?.value) {
-            // Handle requests from watch (future feature)
-            console.log('Praxiom request received from watch');
+            this.handleStepData(characteristic.value);
           }
         }
       );
-      console.log('✓ Praxiom Health monitoring started');
+      console.log('✓ Step Count monitoring started');
     } catch (error) {
-      console.log('⚠️ Custom Praxiom service not available (may be stock InfiniTime)');
+      console.log('⚠️ Motion Service not available');
+    }
+
+    // Subscribe to Battery
+    try {
+      const battery = await device.readCharacteristicForService(
+        BATTERY_SERVICE,
+        BATTERY_LEVEL
+      );
+
+      if (battery?.value) {
+        this.handleBatteryData(battery.value);
+      }
+
+      device.monitorCharacteristicForService(
+        BATTERY_SERVICE,
+        BATTERY_LEVEL,
+        (error, characteristic) => {
+          if (!error && characteristic?.value) {
+            this.handleBatteryData(characteristic.value);
+          }
+        }
+      );
+      console.log('✓ Battery monitoring started');
+    } catch (error) {
+      console.log('⚠️ Battery service not available');
     }
   }
 
   handleHeartRateData(base64Value) {
     try {
-      const data = base64.decode(base64Value);
-      const bytes = new Uint8Array(data.length);
-      for (let i = 0; i < data.length; i++) {
-        bytes[i] = data.charCodeAt(i);
-      }
-
-      const flags = bytes[0];
+      const buffer = Buffer.from(base64Value, 'base64');
+      const flags = buffer[0];
       const isUint16 = (flags & 0x01) !== 0;
 
       let heartRate;
       if (isUint16) {
-        heartRate = bytes[1] | (bytes[2] << 8);
+        heartRate = buffer[1] | (buffer[2] << 8);
       } else {
-        heartRate = bytes[1];
+        heartRate = buffer[1];
       }
 
       this.latestData.heartRate = heartRate;
       this.notifyDataUpdate({ heartRate });
-
-      // Parse RR intervals for HRV if present
-      if ((flags & 0x10) !== 0 && bytes.length > 3) {
-        const rrIntervals = [];
-        let offset = isUint16 ? 3 : 2;
-
-        while (offset < bytes.length - 1) {
-          const rr = bytes[offset] | (bytes[offset + 1] << 8);
-          const rrMs = (rr / 1024.0) * 1000;
-          rrIntervals.push(rrMs);
-          offset += 2;
-        }
-
-        if (rrIntervals.length > 0) {
-          // Calculate simple HRV score (RMSSD)
-          const hrv = this.calculateHRV(rrIntervals);
-          this.latestData.hrv = hrv;
-          this.notifyDataUpdate({ hrv });
-        }
-      }
     } catch (error) {
       console.error('Error parsing HR data:', error);
     }
@@ -474,16 +264,10 @@ class WearableService {
 
   handleStepData(base64Value) {
     try {
-      const data = base64.decode(base64Value);
-      const bytes = new Uint8Array(data.length);
-      for (let i = 0; i < data.length; i++) {
-        bytes[i] = data.charCodeAt(i);
-      }
+      const buffer = Buffer.from(base64Value, 'base64');
+      const steps = buffer[0] | (buffer[1] << 8) | (buffer[2] << 16) | (buffer[3] << 24);
 
-      // Step count is 4-byte uint32 (little-endian)
-      const steps = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24);
-      
-      console.log('📊 Steps parsed:', steps);
+      console.log('📊 Steps:', steps);
       this.latestData.steps = steps;
       this.notifyDataUpdate({ steps });
     } catch (error) {
@@ -493,10 +277,10 @@ class WearableService {
 
   handleBatteryData(base64Value) {
     try {
-      const data = base64.decode(base64Value);
-      const battery = data.charCodeAt(0);
-      
-      console.log('🔋 Battery parsed:', battery + '%');
+      const buffer = Buffer.from(base64Value, 'base64');
+      const battery = buffer[0];
+
+      console.log('🔋 Battery:', battery + '%');
       this.latestData.battery = battery;
       this.notifyDataUpdate({ battery });
     } catch (error) {
@@ -504,76 +288,114 @@ class WearableService {
     }
   }
 
-  calculateHRV(rrIntervals) {
-    if (rrIntervals.length < 2) return null;
-
-    // Calculate RMSSD (Root Mean Square of Successive Differences)
-    let sumSquaredDiffs = 0;
-    for (let i = 1; i < rrIntervals.length; i++) {
-      const diff = rrIntervals[i] - rrIntervals[i - 1];
-      sumSquaredDiffs += diff * diff;
-    }
-
-    const rmssd = Math.sqrt(sumSquaredDiffs / (rrIntervals.length - 1));
-
-    // Convert to HRV score (0-100)
-    // Typical RMSSD: 20-80ms, higher is better
-    const hrvScore = Math.min(100, Math.max(0, (rmssd / 80) * 100));
-    return Math.round(hrvScore);
-  }
-
-  async sendBioAge(data) {
+  /**
+   * ✅ FIXED: Send Praxiom Age to Watch
+   * This function name matches what Tier1BiomarkerInputScreen expects
+   */
+  async sendPraxiomAgeToWatch(age) {
     if (!this.connectedDevice) {
-      throw new Error('No device connected');
+      console.log('❌ No device connected');
+      return false;
     }
 
     try {
-      const { praxiomAge } = data;
+      // Validate age
+      if (age < 18 || age > 120 || isNaN(age)) {
+        console.error('❌ Invalid age:', age);
+        return false;
+      }
 
-      // Send 4-byte uint32 (matching firmware expectation)
-      const buffer = new ArrayBuffer(4);
-      const view = new DataView(buffer);
-      view.setUint32(0, Math.round(praxiomAge), true);
+      const ageInt = Math.round(age);
+      console.log('📤 Sending Praxiom Age to watch:', ageInt);
+
+      // Create 4-byte buffer (uint32 little-endian)
+      const buffer = Buffer.alloc(4);
+      buffer.writeUInt32LE(ageInt, 0);
 
       // Convert to base64
-      const bytes = new Uint8Array(buffer);
-      const base64Data = base64.encode(String.fromCharCode(...bytes));
+      const base64Value = buffer.toString('base64');
 
-      console.log('📤 Sending Bio-Age to watch:', Math.round(praxiomAge));
+      console.log(`   Raw bytes: [${Array.from(buffer).join(', ')}]`);
+      console.log(`   Base64: ${base64Value}`);
 
+      // Write to watch
       await this.connectedDevice.writeCharacteristicWithResponseForService(
         PRAXIOM_SERVICE,
         BIO_AGE_CHAR,
-        base64Data
+        base64Value
       );
 
-      console.log('✅ Bio-Age data sent successfully to watch');
+      console.log(`✅ Praxiom Age ${ageInt} sent successfully!`);
+      
+      // Store for auto-sync
+      await AsyncStorage.setItem('lastPraxiomAge', ageInt.toString());
+
       return true;
     } catch (error) {
-      console.error('❌ Error sending Bio-Age:', error);
-
-      // If service not found, it means watch doesn't have custom firmware yet
-      if (error.message && (error.message.includes('not found') || error.message.includes('Unknown'))) {
-        throw new Error(
-          'Watch firmware does not support Praxiom Health Service. ' +
-          'Please ensure you have the Praxiom custom firmware installed on your watch.'
-        );
+      console.error('❌ Error sending Praxiom Age:', error.message);
+      
+      if (error.message && error.message.includes('not found')) {
+        console.log('⚠️ Watch may not have custom Praxiom firmware installed');
       }
+      
+      return false;
+    }
+  }
 
-      throw error;
+  /**
+   * Sync stored age on connection
+   */
+  async syncStoredPraxiomAge() {
+    try {
+      const storedAge = await AsyncStorage.getItem('lastPraxiomAge');
+      if (storedAge) {
+        const age = parseInt(storedAge);
+        console.log('🔄 Syncing stored age:', age);
+        await this.sendPraxiomAgeToWatch(age);
+      }
+    } catch (error) {
+      console.log('Could not sync stored age:', error);
+    }
+  }
+
+  startKeepAlive() {
+    if (this.keepAliveInterval) {
+      clearInterval(this.keepAliveInterval);
+    }
+
+    this.keepAliveInterval = setInterval(async () => {
+      if (this.connectedDevice) {
+        try {
+          await this.connectedDevice.readCharacteristicForService(
+            BATTERY_SERVICE,
+            BATTERY_LEVEL
+          );
+        } catch (error) {
+          console.warn('Keep-alive failed:', error.message);
+        }
+      }
+    }, 30000);
+
+    console.log('✅ Keep-alive started');
+  }
+
+  stopKeepAlive() {
+    if (this.keepAliveInterval) {
+      clearInterval(this.keepAliveInterval);
+      this.keepAliveInterval = null;
+      console.log('🛑 Keep-alive stopped');
     }
   }
 
   async disconnect() {
-    // Stop keep-alive first
     this.stopKeepAlive();
-    
+
     if (this.connectedDevice) {
       try {
         await this.bleManager.cancelDeviceConnection(this.connectedDevice.id);
         this.connectedDevice = null;
         this.notifyConnectionChange(false);
-        console.log('Disconnected successfully');
+        console.log('✅ Disconnected successfully');
       } catch (error) {
         console.error('Disconnect error:', error);
       }
@@ -581,81 +403,21 @@ class WearableService {
   }
 
   handleDisconnection() {
-    // Stop keep-alive
     this.stopKeepAlive();
-    
     this.connectedDevice = null;
     this.notifyConnectionChange(false);
-
-    // Attempt reconnection if not at max attempts
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      console.log(`Attempting reconnection ${this.reconnectAttempts}/${this.maxReconnectAttempts}...`);
-      
-      setTimeout(() => {
-        this.attemptReconnection();
-      }, this.reconnectDelay * this.reconnectAttempts);
-    } else {
-      console.log('Max reconnection attempts reached');
-    }
   }
 
-  async attemptReconnection() {
-    try {
-      const devices = await this.scanForDevices(5000);
-      if (devices.length > 0) {
-        await this.connectToDevice(devices[0].id);
-      }
-    } catch (error) {
-      console.error('Reconnection failed:', error);
-    }
-  }
-
-  // Synchronous connection check (for use in conditions)
   isConnected() {
-    if (!this.bleManager || !this.bleInitialized) {
-      return false;
-    }
     return this.connectedDevice !== null;
-  }
-
-  // Async connection check (verifies actual BLE state)
-  async isConnectedAsync() {
-    if (!this.connectedDevice) return false;
-
-    try {
-      const connected = await this.connectedDevice.isConnected();
-      return connected;
-    } catch {
-      return false;
-    }
   }
 
   getLatestData() {
     return { ...this.latestData };
   }
 
-  // Individual data getters
-  async getHeartRate() {
-    return this.latestData.heartRate;
-  }
-
-  async getStepCount() {
-    return this.latestData.steps;
-  }
-
-  async getBatteryLevel() {
-    return this.latestData.battery;
-  }
-
-  async getHRV() {
-    return this.latestData.hrv;
-  }
-
-  // Listener management
   onDataUpdate(callback) {
     this.dataUpdateListeners.push(callback);
-    // Return unsubscribe function
     return () => {
       this.dataUpdateListeners = this.dataUpdateListeners.filter(cb => cb !== callback);
     };
@@ -679,37 +441,21 @@ class WearableService {
   }
 
   notifyConnectionChange(isConnected) {
+    // Sync age when connected
+    if (isConnected) {
+      setTimeout(() => {
+        this.syncStoredPraxiomAge();
+      }, 2000);
+    }
+
     this.connectionListeners.forEach(callback => {
       try {
         callback(isConnected);
       } catch (error) {
-        console.error('Error in connection change listener:', error);
+        console.error('Error in connection listener:', error);
       }
     });
   }
-
-  // Cleanup
-  destroy() {
-    // Stop keep-alive
-    this.stopKeepAlive();
-    
-    if (this.bleManager && this.isScanning) {
-      this.bleManager.stopDeviceScan();
-    }
-
-    if (this.connectedDevice) {
-      this.disconnect();
-    }
-
-    if (this.bleManager) {
-      this.bleManager.destroy();
-    }
-    
-    this.dataUpdateListeners = [];
-    this.connectionListeners = [];
-  }
 }
 
-// Export singleton instance
-const wearableServiceInstance = new WearableService();
-export default wearableServiceInstance;
+export default new WearableService();
