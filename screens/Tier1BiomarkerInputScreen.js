@@ -1,12 +1,7 @@
 /**
  * Tier1BiomarkerInputScreen.js
  * 
- * Enhanced with automatic Praxiom Age transmission to watch
- * 
- * CHANGES:
- * - Imports WearableService
- * - Calls sendPraxiomAgeToWatch() after successful calculation
- * - Shows confirmation when data is sent to watch
+ * FIXED VERSION with detailed error logging and validation
  */
 
 import React, { useState, useContext } from 'react';
@@ -23,7 +18,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { AppContext } from '../AppContext';
 import StorageService from '../services/StorageService';
-import WearableService from '../services/WearableService';  // 🆕 ADDED
+import WearableService from '../services/WearableService';
 
 export default function Tier1BiomarkerInputScreen({ navigation }) {
   const { state, dispatch } = useContext(AppContext);
@@ -46,20 +41,28 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
   };
 
   const validateInputs = () => {
+    console.log('🔍 Validating inputs...');
+    console.log('Current biomarkers:', biomarkers);
+    
     // Check all fields are filled
     for (const [key, value] of Object.entries(biomarkers)) {
       if (!value || value.trim() === '') {
-        Alert.alert('Missing Data', `Please enter ${getFieldLabel(key)}`);
+        const label = getFieldLabel(key);
+        console.log(`❌ Validation failed: ${label} is empty`);
+        Alert.alert('Missing Data', `Please enter ${label}`);
         return false;
       }
       
       const numValue = parseFloat(value);
       if (isNaN(numValue)) {
-        Alert.alert('Invalid Data', `${getFieldLabel(key)} must be a number`);
+        const label = getFieldLabel(key);
+        console.log(`❌ Validation failed: ${label} is not a number`);
+        Alert.alert('Invalid Data', `${label} must be a number`);
         return false;
       }
     }
     
+    console.log('✅ All inputs validated');
     return true;
   };
 
@@ -78,7 +81,12 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
   };
 
   const calculatePraxiomAge = async () => {
-    if (!validateInputs()) return;
+    console.log('📊 Starting Praxiom Age calculation...');
+    
+    if (!validateInputs()) {
+      console.log('❌ Validation failed, aborting calculation');
+      return;
+    }
 
     setIsCalculating(true);
 
@@ -95,38 +103,111 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
         vitaminD: parseFloat(biomarkers.vitaminD),
       };
 
+      console.log('📝 Parsed biomarker values:', values);
+
       // Calculate Oral Health Score (0-100)
+      console.log('🦷 Calculating Oral Health Score...');
       const phScore = calculatePHScore(values.salivaryPH);
       const mmp8Score = calculateMMP8Score(values.mmp8);
       const flowScore = calculateFlowRateScore(values.flowRate);
       const oralHealthScore = (phScore + mmp8Score + flowScore) / 3;
+      
+      console.log(`  pH Score: ${phScore.toFixed(1)}`);
+      console.log(`  MMP-8 Score: ${mmp8Score.toFixed(1)}`);
+      console.log(`  Flow Score: ${flowScore.toFixed(1)}`);
+      console.log(`  → Oral Health Score: ${oralHealthScore.toFixed(1)}%`);
 
       // Calculate Systemic Health Score (0-100)
+      console.log('💉 Calculating Systemic Health Score...');
       const crpScore = calculateCRPScore(values.hsCRP);
       const omega3Score = calculateOmega3Score(values.omega3Index);
       const hba1cScore = calculateHbA1cScore(values.hba1c);
       const gdf15Score = calculateGDF15Score(values.gdf15);
       const vitaminDScore = calculateVitaminDScore(values.vitaminD);
       const systemicHealthScore = (crpScore + omega3Score + hba1cScore + gdf15Score + vitaminDScore) / 5;
+      
+      console.log(`  CRP Score: ${crpScore.toFixed(1)}`);
+      console.log(`  Omega-3 Score: ${omega3Score.toFixed(1)}`);
+      console.log(`  HbA1c Score: ${hba1cScore.toFixed(1)}`);
+      console.log(`  GDF-15 Score: ${gdf15Score.toFixed(1)}`);
+      console.log(`  Vitamin D Score: ${vitaminDScore.toFixed(1)}`);
+      console.log(`  → Systemic Health Score: ${systemicHealthScore.toFixed(1)}%`);
+
+      // Get chronological age
+      let chronologicalAge = state.chronologicalAge;
+      
+      // If no chronological age is set, ask user
+      if (!chronologicalAge) {
+        console.log('⚠️ No chronological age found in state');
+        Alert.alert(
+          'Age Required',
+          'Please enter your age to calculate Praxiom Age',
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel',
+              onPress: () => {
+                setIsCalculating(false);
+              }
+            },
+            {
+              text: 'Enter Age',
+              onPress: () => {
+                // For now, use a default - in production, navigate to profile
+                chronologicalAge = 45;
+                console.log(`Using default age: ${chronologicalAge}`);
+                continueCalculation(values, oralHealthScore, systemicHealthScore, chronologicalAge);
+              }
+            }
+          ]
+        );
+        return;
+      }
+
+      continueCalculation(values, oralHealthScore, systemicHealthScore, chronologicalAge);
+
+    } catch (error) {
+      console.error('❌ Calculation error:', error);
+      console.error('Error stack:', error.stack);
+      Alert.alert(
+        'Calculation Error',
+        `Failed to calculate Praxiom Age.\n\nError: ${error.message}\n\nPlease check the console for details.`
+      );
+      setIsCalculating(false);
+    }
+  };
+
+  const continueCalculation = async (values, oralHealthScore, systemicHealthScore, chronologicalAge) => {
+    try {
+      console.log(`🎂 Chronological Age: ${chronologicalAge}`);
 
       // Get age-stratified coefficients
-      const age = state.chronologicalAge || 45; // Use stored age or default
-      const coefficients = getAgeStratifiedCoefficients(age);
+      const coefficients = getAgeStratifiedCoefficients(chronologicalAge);
+      console.log(`📐 Age coefficients: α=${coefficients.alpha}, β=${coefficients.beta}`);
 
       // Calculate Biological Age deviation
       const oralDeviation = (100 - oralHealthScore) * coefficients.alpha;
       const systemicDeviation = (100 - systemicHealthScore) * coefficients.beta;
       const totalDeviation = oralDeviation + systemicDeviation;
       
-      const biologicalAge = age + totalDeviation;
+      console.log(`📊 Deviations:`);
+      console.log(`  Oral: ${oralDeviation.toFixed(2)} years`);
+      console.log(`  Systemic: ${systemicDeviation.toFixed(2)} years`);
+      console.log(`  Total: ${totalDeviation.toFixed(2)} years`);
+      
+      const biologicalAge = chronologicalAge + totalDeviation;
       const praxiomAge = Math.round(biologicalAge);
 
-      console.log('=== CALCULATION RESULTS ===');
-      console.log('Oral Health Score:', oralHealthScore.toFixed(1));
-      console.log('Systemic Health Score:', systemicHealthScore.toFixed(1));
-      console.log('Biological Age:', praxiomAge);
+      console.log('=== FINAL RESULTS ===');
+      console.log(`Chronological Age: ${chronologicalAge}`);
+      console.log(`Oral Health Score: ${oralHealthScore.toFixed(1)}%`);
+      console.log(`Systemic Health Score: ${systemicHealthScore.toFixed(1)}%`);
+      console.log(`Biological Age: ${biologicalAge.toFixed(1)}`);
+      console.log(`Praxiom Age (rounded): ${praxiomAge}`);
+      console.log('=====================');
 
       // Save to history with timestamp
+      console.log('💾 Saving to history...');
       const historyEntry = {
         date: new Date().toISOString(),
         tier: 'Tier 1',
@@ -134,11 +215,14 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
         oralHealthScore,
         systemicHealthScore,
         biologicalAge: praxiomAge,
+        chronologicalAge: chronologicalAge,
       };
       
       await StorageService.saveBiomarkerEntry(historyEntry);
+      console.log('✅ Saved to history');
 
       // Update AppContext
+      console.log('📱 Updating app context...');
       dispatch({
         type: 'UPDATE_HEALTH_DATA',
         payload: {
@@ -148,39 +232,50 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
           lastBiomarkerUpdate: new Date().toISOString(),
         },
       });
+      console.log('✅ App context updated');
 
-      // 🆕 AUTOMATICALLY SEND TO WATCH
-      console.log('📤 Attempting to send Praxiom Age to watch...');
+      // Send to watch
+      console.log('⌚ Attempting to send to watch...');
       if (WearableService.isConnected()) {
+        console.log('✅ Watch is connected, sending data...');
         const success = await WearableService.sendPraxiomAgeToWatch(praxiomAge);
         
         if (success) {
+          console.log('✅ Successfully sent to watch!');
           Alert.alert(
             '✅ Success!',
             `Praxiom Age: ${praxiomAge}\n\n` +
             `Oral Health: ${oralHealthScore.toFixed(1)}%\n` +
             `Systemic Health: ${systemicHealthScore.toFixed(1)}%\n\n` +
-            `✅ Sent to your watch!`,
+            `✅ Sent to your watch!\n\n` +
+            `👀 Check your watch - it should display: ${praxiomAge}`,
             [{ text: 'OK', onPress: () => navigation.goBack() }]
           );
         } else {
+          console.log('⚠️ Failed to send to watch');
           Alert.alert(
             '⚠️ Partial Success',
             `Praxiom Age: ${praxiomAge}\n\n` +
             `Oral Health: ${oralHealthScore.toFixed(1)}%\n` +
             `Systemic Health: ${systemicHealthScore.toFixed(1)}%\n\n` +
-            `⚠️ Could not send to watch (not connected)`,
+            `⚠️ Could not send to watch\n` +
+            `Data saved successfully but watch communication failed.`,
             [
               { text: 'OK', onPress: () => navigation.goBack() },
               { 
-                text: 'Connect Watch', 
-                onPress: () => navigation.navigate('Watch')
+                text: 'Retry Watch Sync', 
+                onPress: async () => {
+                  const retry = await WearableService.sendPraxiomAgeToWatch(praxiomAge);
+                  if (retry) {
+                    Alert.alert('✅ Success!', 'Data sent to watch!');
+                  }
+                }
               }
             ]
           );
         }
       } else {
-        // Watch not connected - still save data but inform user
+        console.log('⚠️ Watch not connected');
         Alert.alert(
           '✅ Calculated!',
           `Praxiom Age: ${praxiomAge}\n\n` +
@@ -198,8 +293,12 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
       }
 
     } catch (error) {
-      console.error('Calculation error:', error);
-      Alert.alert('Error', 'Failed to calculate Praxiom Age. Please try again.');
+      console.error('❌ Error in continueCalculation:', error);
+      console.error('Error stack:', error.stack);
+      Alert.alert(
+        'Error',
+        `Failed in final calculation steps.\n\nError: ${error.message}`
+      );
     } finally {
       setIsCalculating(false);
     }
@@ -385,6 +484,10 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
             <Text style={styles.calculateButtonText}>Calculate Praxiom Age</Text>
           )}
         </TouchableOpacity>
+
+        <Text style={styles.debugNote}>
+          💡 Check the console (developer tools) for detailed calculation logs
+        </Text>
       </ScrollView>
     </LinearGradient>
   );
@@ -439,7 +542,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 20,
-    marginBottom: 40,
+    marginBottom: 20,
   },
   calculateButtonDisabled: {
     backgroundColor: '#ccc',
@@ -448,5 +551,12 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  debugNote: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginBottom: 40,
   },
 });
