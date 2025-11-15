@@ -180,7 +180,7 @@ export default function DashboardScreen({ navigation }) {
         <View style={styles.quickActions}>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => navigation.navigate('BiomarkerInput')}
+            onPress={() => navigation.navigate('Tier1BiomarkerInput')}
           >
             <Text style={styles.actionButtonText}>📝 Enter</Text>
             <Text style={styles.actionButtonText}>Biomarkers</Text>

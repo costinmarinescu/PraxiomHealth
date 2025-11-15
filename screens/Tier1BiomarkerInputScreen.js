@@ -48,13 +48,23 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [calculatedResult, setCalculatedResult] = useState(null); // Store result for push
 
-  // FIX: Proper date change handler
+  // ✅ FIXED: Proper date change handler that prevents jumping
   const onDateChange = (event, date) => {
-    if (Platform.OS === 'android') {
+    const currentPlatform = Platform.OS;
+    
+    // On Android, modal auto-closes, so we close our state
+    if (currentPlatform === 'android') {
       setShowDatePicker(false);
     }
-    if (date) {
+    
+    // Only update date if user didn't cancel (event.type !== 'dismissed')
+    if (date && event.type !== 'dismissed') {
       setSelectedDate(date);
+    } else if (event.type === 'dismissed') {
+      // User cancelled - on iOS close the picker
+      if (currentPlatform === 'ios') {
+        setShowDatePicker(false);
+      }
     }
   };
 
@@ -207,13 +217,23 @@ const Tier1BiomarkerInputScreen = ({ navigation }) => {
             </Text>
           </TouchableOpacity>
           {showDatePicker && (
-            <DateTimePicker
-              value={selectedDate}
-              mode="date"
-              display="default"
-              onChange={onDateChange}
-              maximumDate={new Date()}
-            />
+            <View>
+              <DateTimePicker
+                value={selectedDate}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onDateChange}
+                maximumDate={new Date()}
+              />
+              {Platform.OS === 'ios' && (
+                <TouchableOpacity
+                  style={styles.doneDateButton}
+                  onPress={() => setShowDatePicker(false)}
+                >
+                  <Text style={styles.doneDateButtonText}>Done</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           )}
         </View>
 
@@ -465,6 +485,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#ffffff',
     marginLeft: 10,
+  },
+  doneDateButton: {
+    backgroundColor: '#4ade80',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  doneDateButtonText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   inputGroup: {
     marginBottom: 20,
