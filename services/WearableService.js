@@ -1,13 +1,13 @@
 /**
- * WearableService.js - CORRECTED VERSION (No Buffer dependency)
+ * WearableService.js - CLEAN VERSION
  * 
- * Unified BLE service compatible with React Native
- * Uses Uint8Array instead of Node.js Buffer
+ * Fixed version with proper imports - ready for production
  */
 
 import { Platform, PermissionsAndroid } from 'react-native';
 import { BleManager } from 'react-native-ble-plx';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Buffer } from 'buffer'; // ✅ Required for BLE data encoding/decoding
 
 // Standard BLE Services
 const HEART_RATE_SERVICE = '0000180D-0000-1000-8000-00805F9B34FB';
@@ -20,25 +20,6 @@ const BATTERY_LEVEL = '00002A19-0000-1000-8000-00805F9B34FB';
 // Custom Praxiom Health Service
 const PRAXIOM_SERVICE = '00001900-78fc-48fe-8e23-433b3a1942d0';
 const BIO_AGE_CHAR = '00001901-78fc-48fe-8e23-433b3a1942d0';
-
-// Helper function to convert Uint8Array to base64
-function uint8ArrayToBase64(bytes) {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-// Helper function to convert base64 to Uint8Array
-function base64ToUint8Array(base64) {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
 
 class WearableService {
   constructor() {
@@ -263,15 +244,15 @@ class WearableService {
 
   handleHeartRateData(base64Value) {
     try {
-      const bytes = base64ToUint8Array(base64Value);
-      const flags = bytes[0];
+      const buffer = Buffer.from(base64Value, 'base64');
+      const flags = buffer[0];
       const isUint16 = (flags & 0x01) !== 0;
 
       let heartRate;
       if (isUint16) {
-        heartRate = bytes[1] | (bytes[2] << 8);
+        heartRate = buffer[1] | (buffer[2] << 8);
       } else {
-        heartRate = bytes[1];
+        heartRate = buffer[1];
       }
 
       this.latestData.heartRate = heartRate;
@@ -283,8 +264,8 @@ class WearableService {
 
   handleStepData(base64Value) {
     try {
-      const bytes = base64ToUint8Array(base64Value);
-      const steps = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24);
+      const buffer = Buffer.from(base64Value, 'base64');
+      const steps = buffer[0] | (buffer[1] << 8) | (buffer[2] << 16) | (buffer[3] << 24);
 
       console.log('📊 Steps:', steps);
       this.latestData.steps = steps;
@@ -296,8 +277,8 @@ class WearableService {
 
   handleBatteryData(base64Value) {
     try {
-      const bytes = base64ToUint8Array(base64Value);
-      const battery = bytes[0];
+      const buffer = Buffer.from(base64Value, 'base64');
+      const battery = buffer[0];
 
       console.log('🔋 Battery:', battery + '%');
       this.latestData.battery = battery;
@@ -308,8 +289,10 @@ class WearableService {
   }
 
   /**
-   * ✅ FIXED: Send Praxiom Age to Watch
-   * Uses Uint8Array instead of Buffer for React Native compatibility
+   * Send Praxiom Age to Watch
+   * 
+   * This is the main function called by Tier1BiomarkerInputScreen
+   * to send the calculated biological age to the PineTime watch.
    */
   async sendPraxiomAgeToWatch(age) {
     if (!this.connectedDevice) {
@@ -327,20 +310,17 @@ class WearableService {
       const ageInt = Math.round(age);
       console.log('📤 Sending Praxiom Age to watch:', ageInt);
 
-      // Create 4-byte Uint8Array (little-endian uint32)
-      const bytes = new Uint8Array(4);
-      bytes[0] = ageInt & 0xFF;
-      bytes[1] = (ageInt >> 8) & 0xFF;
-      bytes[2] = (ageInt >> 16) & 0xFF;
-      bytes[3] = (ageInt >> 24) & 0xFF;
+      // Create 4-byte buffer (little-endian uint32)
+      const buffer = Buffer.alloc(4);
+      buffer.writeUInt32LE(ageInt, 0);
 
-      // Convert to base64
-      const base64Value = uint8ArrayToBase64(bytes);
+      // Convert to base64 for BLE transmission
+      const base64Value = buffer.toString('base64');
 
-      console.log(`   Raw bytes: [${Array.from(bytes).join(', ')}]`);
+      console.log(`   Raw bytes: [${Array.from(buffer).join(', ')}]`);
       console.log(`   Base64: ${base64Value}`);
 
-      // Write to watch
+      // Write to watch via BLE
       await this.connectedDevice.writeCharacteristicWithResponseForService(
         PRAXIOM_SERVICE,
         BIO_AGE_CHAR,
@@ -349,7 +329,7 @@ class WearableService {
 
       console.log(`✅ Praxiom Age ${ageInt} sent successfully!`);
       
-      // Store for auto-sync
+      // Store for auto-sync on reconnection
       await AsyncStorage.setItem('lastPraxiomAge', ageInt.toString());
 
       return true;
@@ -366,6 +346,7 @@ class WearableService {
 
   /**
    * Sync stored age on connection
+   * Automatically sends the last calculated age when watch reconnects
    */
   async syncStoredPraxiomAge() {
     try {
@@ -463,7 +444,7 @@ class WearableService {
   }
 
   notifyConnectionChange(isConnected) {
-    // Sync age when connected
+    // Auto-sync age when connected
     if (isConnected) {
       setTimeout(() => {
         this.syncStoredPraxiomAge();
