@@ -22,35 +22,66 @@ const WatchScreen = () => {
   const [batteryLevel, setBatteryLevel] = useState(null);
   const [heartRate, setHeartRate] = useState(null);
   const [steps, setSteps] = useState(null);
-  const [showAllDevices, setShowAllDevices] = useState(false); // ✅ Debug toggle
+  const [showAllDevices, setShowAllDevices] = useState(false);
 
   useEffect(() => {
+    // Initialize BLE manager
+    initializeBLE();
+    
+    // Check initial connection
     checkConnection();
+    
+    // Load debug preference
     loadDebugPreference();
     
-    // Subscribe to data updates
-    const unsubscribeData = WearableService.onDataUpdate((data) => {
-      if (data.heartRate) setHeartRate(data.heartRate);
-      if (data.steps !== undefined) setSteps(data.steps);
-      if (data.battery) setBatteryLevel(data.battery);
-    });
+    // Poll for data updates every 3 seconds
+    const dataInterval = setInterval(() => {
+      updateWearableData();
+    }, 3000);
 
-    // Subscribe to connection changes
-    const unsubscribeConnection = WearableService.onConnectionChange((isConnected) => {
-      setConnected(isConnected);
-      if (!isConnected) {
+    return () => {
+      clearInterval(dataInterval);
+    };
+  }, []);
+
+  const initializeBLE = async () => {
+    try {
+      await WearableService.init();
+      console.log('✅ BLE initialized');
+    } catch (error) {
+      console.error('❌ BLE init error:', error);
+    }
+  };
+
+  const updateWearableData = () => {
+    try {
+      const data = WearableService.getLatestData();
+      const status = WearableService.getConnectionStatus();
+      
+      // Update connection state
+      setConnected(status.isConnected);
+      
+      if (status.isConnected) {
+        // Update data
+        setHeartRate(data.heartRate || null);
+        setSteps(data.steps !== undefined ? data.steps : null);
+        setBatteryLevel(data.battery || null);
+        
+        // Update device name if available
+        if (status.deviceName) {
+          setConnectedDevice(status.deviceName);
+        }
+      } else {
+        // Clear data when disconnected
         setConnectedDevice(null);
         setHeartRate(null);
         setSteps(null);
         setBatteryLevel(null);
       }
-    });
-
-    return () => {
-      unsubscribeData();
-      unsubscribeConnection();
-    };
-  }, []);
+    } catch (error) {
+      console.error('Error updating wearable data:', error);
+    }
+  };
 
   const loadDebugPreference = async () => {
     try {
@@ -73,18 +104,16 @@ const WatchScreen = () => {
   };
 
   const checkConnection = async () => {
-    const isConnected = WearableService.isConnected();
-    setConnected(isConnected);
-    
-    if (isConnected) {
-      const lastDevice = await AsyncStorage.getItem('lastDeviceName');
-      setConnectedDevice(lastDevice);
+    try {
+      const status = WearableService.getConnectionStatus();
+      setConnected(status.isConnected);
       
-      // Get latest data
-      const data = WearableService.getLatestData();
-      setHeartRate(data.heartRate);
-      setSteps(data.steps);
-      setBatteryLevel(data.battery);
+      if (status.isConnected) {
+        setConnectedDevice(status.deviceName);
+        updateWearableData();
+      }
+    } catch (error) {
+      console.error('Error checking connection:', error);
     }
   };
 
@@ -93,10 +122,10 @@ const WatchScreen = () => {
       setScanning(true);
       setDevices([]);
       
-      const foundDevices = await WearableService.scanForDevices(10000);
+      const foundDevices = await WearableService.scanForDevices();
       
       // Filter devices based on debug toggle
-      let filteredDevices = foundDevices;
+      let filteredDevices = foundDevices || [];
       if (!showAllDevices) {
         filteredDevices = foundDevices.filter(device => {
           const name = device.name?.toLowerCase() || '';
@@ -116,7 +145,8 @@ const WatchScreen = () => {
         Alert.alert('No Devices Found', message);
       }
     } catch (error) {
-      Alert.alert('Scan Error', error.message);
+      console.error('Scan error:', error);
+      Alert.alert('Scan Error', error.message || 'Failed to scan for devices');
     } finally {
       setScanning(false);
     }
@@ -125,19 +155,28 @@ const WatchScreen = () => {
   const handleConnect = async (deviceId, deviceName) => {
     try {
       setScanning(true);
-      await WearableService.connectToDevice(deviceId);
       
-      await AsyncStorage.setItem('lastDeviceId', deviceId);
-      await AsyncStorage.setItem('lastDeviceName', deviceName);
-      await AsyncStorage.setItem('watchConnected', 'true');
+      const success = await WearableService.connectToDevice(deviceId);
       
-      setConnected(true);
-      setConnectedDevice(deviceName);
-      setDevices([]);
-      
-      Alert.alert('Connected!', `Successfully connected to ${deviceName}`);
+      if (success) {
+        await AsyncStorage.setItem('lastDeviceId', deviceId);
+        await AsyncStorage.setItem('lastDeviceName', deviceName);
+        await AsyncStorage.setItem('watchConnected', 'true');
+        
+        setConnected(true);
+        setConnectedDevice(deviceName);
+        setDevices([]);
+        
+        Alert.alert('Connected!', `Successfully connected to ${deviceName}`);
+        
+        // Start polling for data immediately
+        updateWearableData();
+      } else {
+        Alert.alert('Connection Failed', 'Could not connect to device');
+      }
     } catch (error) {
-      Alert.alert('Connection Failed', error.message);
+      console.error('Connection error:', error);
+      Alert.alert('Connection Failed', error.message || 'Failed to connect');
     } finally {
       setScanning(false);
     }
@@ -156,7 +195,8 @@ const WatchScreen = () => {
       
       Alert.alert('Disconnected', 'Watch disconnected successfully');
     } catch (error) {
-      Alert.alert('Disconnect Error', error.message);
+      console.error('Disconnect error:', error);
+      Alert.alert('Disconnect Error', error.message || 'Failed to disconnect');
     }
   };
 
@@ -164,6 +204,7 @@ const WatchScreen = () => {
     <TouchableOpacity
       style={styles.deviceCard}
       onPress={() => handleConnect(item.id, item.name)}
+      disabled={scanning}
     >
       <Ionicons name="watch" size={32} color="#00d4ff" />
       <View style={styles.deviceInfo}>
