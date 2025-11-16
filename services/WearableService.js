@@ -27,8 +27,9 @@ class WearableService {
     // Custom Praxiom Service
     // ✅ FIXED: Updated to match actual firmware UUIDs
     // Firmware advertises: 00190000-78fc-48fe-8e23-433b3a1942d0
+    // Firmware characteristic: 00190100-78fc-48fe-8e23-433b3a1942d0
     this.PRAXIOM_SERVICE = '00190000-78FC-48FE-8E23-433B3A1942D0';
-    this.BIO_AGE_CHAR = '00190001-78FC-48FE-8E23-433B3A1942D0';
+    this.BIO_AGE_CHAR = '00190100-78FC-48FE-8E23-433B3A1942D0';
   }
 
   /**
