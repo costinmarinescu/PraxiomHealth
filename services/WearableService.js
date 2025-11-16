@@ -2,6 +2,10 @@ import { BleManager } from 'react-native-ble-plx';
 import { Platform, PermissionsAndroid } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Praxiom Custom Service UUIDs (matching watch firmware)
+const PRAXIOM_SERVICE_UUID = '00001900-78fc-48fe-8e23-433b3a1942d0';
+const BIO_AGE_CHAR_UUID = '00001901-78fc-48fe-8e23-433b3a1942d0';
+
 // Standard BLE Service UUIDs (InfiniTime compatible)
 const HEART_RATE_SERVICE_UUID = '0000180d-0000-1000-8000-00805f9b34fb';
 const HEART_RATE_MEASUREMENT_UUID = '00002a37-0000-1000-8000-00805f9b34fb';
@@ -11,11 +15,6 @@ const BATTERY_LEVEL_UUID = '00002a19-0000-1000-8000-00805f9b34fb';
 // InfiniTime Motion Service (for steps)
 const MOTION_SERVICE_UUID = '00030000-78fc-48fe-8e23-433b3a1942d0';
 const STEP_COUNT_UUID = '00030001-78fc-48fe-8e23-433b3a1942d0';
-
-// Custom characteristic for Bio-Age (we'll use Device Information Service)
-// This is a workaround - we'll write to a standard characteristic
-const DEVICE_INFO_SERVICE_UUID = '0000180a-0000-1000-8000-00805f9b34fb';
-const SOFTWARE_REVISION_UUID = '00002a28-0000-1000-8000-00805f9b34fb';
 
 class WearableService {
   constructor() {
@@ -246,8 +245,6 @@ class WearableService {
   }
 
   // Send biological age to watch
-  // Note: This is a workaround - InfiniTime doesn't have a built-in bio-age characteristic
-  // We encode it as a string and write to software revision for display purposes
   async sendBioAge(bioAge) {
     if (!this.device || !this.isConnected) {
       console.warn('⚠️  Cannot send bio-age: not connected');
@@ -255,14 +252,14 @@ class WearableService {
     }
 
     try {
-      // Format bio-age as string "BIO:35.7" 
-      const bioAgeString = `BIO:${bioAge.toFixed(1)}`;
-      const buffer = Buffer.from(bioAgeString, 'utf-8');
+      // Convert float to 4-byte buffer (IEEE 754 little-endian)
+      const buffer = Buffer.alloc(4);
+      buffer.writeFloatLE(bioAge, 0);
       const base64Value = buffer.toString('base64');
       
       await this.device.writeCharacteristicWithResponseForService(
-        DEVICE_INFO_SERVICE_UUID,
-        SOFTWARE_REVISION_UUID,
+        PRAXIOM_SERVICE_UUID,
+        BIO_AGE_CHAR_UUID,
         base64Value
       );
       
@@ -277,7 +274,6 @@ class WearableService {
       return true;
     } catch (error) {
       console.error('❌ Error sending bio-age:', error);
-      console.log('Note: InfiniTime may not support bio-age display yet');
       return false;
     }
   }
@@ -317,7 +313,6 @@ class WearableService {
     
     try {
       await this.readBattery();
-      // Heart rate and steps come via notifications
     } catch (error) {
       console.error('Error polling data:', error);
     }
