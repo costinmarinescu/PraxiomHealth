@@ -25,9 +25,10 @@ class WearableService {
     this.STEP_COUNT_CHAR = '00030001-78fc-48fe-8e23-433b3a1942d0';
     
     // Custom Praxiom Service
-    // ✅ FIXED: Updated to match actual firmware UUIDs (was 00001900, firmware has 00019000)
-    this.PRAXIOM_SERVICE = '00019000-78FC-48FE-8E23-433B3A1942D0';
-    this.BIO_AGE_CHAR = '00019001-78FC-48FE-8E23-433B3A1942D0';
+    // ✅ FIXED: Updated to match actual firmware UUIDs
+    // Firmware advertises: 00190000-78fc-48fe-8e23-433b3a1942d0
+    this.PRAXIOM_SERVICE = '00190000-78FC-48FE-8E23-433B3A1942D0';
+    this.BIO_AGE_CHAR = '00190001-78FC-48FE-8E23-433B3A1942D0';
   }
 
   /**
@@ -325,14 +326,15 @@ class WearableService {
 
       this.log('✅ Praxiom service found');
 
-      // Format data: 4 bytes for bio age (uint32, age * 10 for decimal precision)
+      // Format data: 4 bytes for bio age (uint32, firmware expects raw age value)
+      // Firmware validates: 18 <= age <= 120
       const buffer = Buffer.alloc(4);
-      const ageValue = Math.round(bioAge * 10); // 59.3 → 593
+      const ageValue = Math.round(bioAge); // 59.3 → 59
       buffer.writeUInt32LE(ageValue, 0);
       
       const base64Data = buffer.toString('base64');
       
-      this.log(`📝 Formatted data: ${ageValue} (${bioAge} years) → ${base64Data}`);
+      this.log(`📝 Formatted data: ${ageValue} (rounded from ${bioAge}) → ${base64Data}`);
 
       // Write to characteristic
       await this.device.writeCharacteristicWithResponseForService(
