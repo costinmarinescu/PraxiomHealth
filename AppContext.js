@@ -72,7 +72,7 @@ export const AppContextProvider = ({ children }) => {
       if (state.watchConnected && state.biologicalAge) {
         try {
           // ✅ FIXED: Use correct method name
-          await WearableService.sendPraxiomAgeToWatch(state.biologicalAge);
+          await WearableService.sendBioAge(state.biologicalAge);
           
           const now = new Date().toISOString();
           await AsyncStorage.setItem('lastBioAgeSync', now);
