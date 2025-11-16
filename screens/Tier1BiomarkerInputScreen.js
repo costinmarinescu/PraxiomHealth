@@ -1,10 +1,10 @@
 /**
  * Tier1BiomarkerInputScreen.js
  * 
- * FIXED VERSION with detailed error logging and validation
+ * FIXED VERSION - Added missing useEffect import
  */
 
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react'; // ✅ FIXED: Added useEffect
 import {
   View,
   Text,
@@ -249,123 +249,95 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
       });
       console.log('✅ App context updated');
 
-      // Send to watch
-      console.log('⌚ Attempting to send to watch...');
-      if (WearableService.isConnected()) {
-        console.log('✅ Watch is connected, sending data...');
-        const success = await WearableService.sendPraxiomAgeToWatch(praxiomAge);
-        
-        if (success) {
-          console.log('✅ Successfully sent to watch!');
-          Alert.alert(
-            '✅ Success!',
-            `Praxiom Age: ${praxiomAge}\n\n` +
-            `Oral Health: ${oralHealthScore.toFixed(1)}%\n` +
-            `Systemic Health: ${systemicHealthScore.toFixed(1)}%\n\n` +
-            `✅ Sent to your watch!\n\n` +
-            `👀 Check your watch - it should display: ${praxiomAge}`,
-            [{ text: 'OK', onPress: () => navigation.goBack() }]
-          );
-        } else {
-          console.log('⚠️ Failed to send to watch');
-          Alert.alert(
-            '⚠️ Partial Success',
-            `Praxiom Age: ${praxiomAge}\n\n` +
-            `Oral Health: ${oralHealthScore.toFixed(1)}%\n` +
-            `Systemic Health: ${systemicHealthScore.toFixed(1)}%\n\n` +
-            `⚠️ Could not send to watch\n` +
-            `Data saved successfully but watch communication failed.`,
-            [
-              { text: 'OK', onPress: () => navigation.goBack() },
-              { 
-                text: 'Retry Watch Sync', 
-                onPress: async () => {
-                  const retry = await WearableService.sendPraxiomAgeToWatch(praxiomAge);
-                  if (retry) {
-                    Alert.alert('✅ Success!', 'Data sent to watch!');
-                  }
-                }
-              }
-            ]
-          );
+      // Send Bio-Age to watch if connected
+      console.log('⌚ Checking watch connection...');
+      const watchStatus = WearableService.getConnectionStatus();
+      if (watchStatus.isConnected) {
+        try {
+          console.log('📤 Sending Bio-Age to watch...');
+          await WearableService.sendPraxiomAgeToWatch(biologicalAge);
+          console.log('✅ Bio-Age sent to watch');
+        } catch (error) {
+          console.error('❌ Failed to send to watch:', error);
+          // Don't block on watch failure
         }
       } else {
-        console.log('⚠️ Watch not connected');
-        Alert.alert(
-          '✅ Calculated!',
-          `Praxiom Age: ${praxiomAge}\n\n` +
-          `Oral Health: ${oralHealthScore.toFixed(1)}%\n` +
-          `Systemic Health: ${systemicHealthScore.toFixed(1)}%\n\n` +
-          `💡 Connect your watch to sync this value`,
-          [
-            { text: 'OK', onPress: () => navigation.goBack() },
-            { 
-              text: 'Connect Watch', 
-              onPress: () => navigation.navigate('Watch')
-            }
-          ]
-        );
+        console.log('⚠️ Watch not connected, skipping transmission');
       }
 
-    } catch (error) {
-      console.error('❌ Error in continueCalculation:', error);
-      console.error('Error stack:', error.stack);
+      setIsCalculating(false);
+
+      // Show success message
       Alert.alert(
-        'Error',
-        `Failed in final calculation steps.\n\nError: ${error.message}`
+        '✅ Calculation Complete!',
+        `Your Praxiom Age is ${praxiomAge} years\n\nOral Health Score: ${oralHealthScore.toFixed(1)}%\nSystemic Health Score: ${systemicHealthScore.toFixed(1)}%`,
+        [
+          {
+            text: 'View History',
+            onPress: () => navigation.navigate('BiomarkerHistory')
+          },
+          {
+            text: 'OK',
+            style: 'cancel'
+          }
+        ]
       );
-    } finally {
+
+    } catch (error) {
+      console.error('❌ Continuation error:', error);
+      Alert.alert('Calculation Error', error.message);
       setIsCalculating(false);
     }
   };
 
-  // Scoring functions (0-100 scale)
+  // Scoring functions
   const calculatePHScore = (ph) => {
-    const optimal = 7.0;
-    const deviation = Math.abs(ph - optimal);
-    return Math.max(0, 100 - (deviation * 20));
+    if (ph >= 6.5 && ph <= 7.2) return 100;
+    if (ph < 6.0 || ph > 7.5) return 0;
+    if (ph < 6.5) return 50 + (ph - 6.0) * 100;
+    return 100 - (ph - 7.2) * 166.67;
   };
 
   const calculateMMP8Score = (mmp8) => {
-    if (mmp8 < 60) return 100;
-    if (mmp8 > 100) return 0;
-    return 100 - ((mmp8 - 60) / 40) * 100;
+    if (mmp8 <= 60) return 100;
+    if (mmp8 >= 200) return 0;
+    return 100 - ((mmp8 - 60) / 140) * 100;
   };
 
-  const calculateFlowRateScore = (flow) => {
-    if (flow > 1.5) return 100;
-    if (flow < 0.5) return 0;
-    return ((flow - 0.5) / 1.0) * 100;
+  const calculateFlowRateScore = (flowRate) => {
+    if (flowRate >= 1.5) return 100;
+    if (flowRate <= 0.5) return 0;
+    return ((flowRate - 0.5) / 1.0) * 100;
   };
 
   const calculateCRPScore = (crp) => {
-    if (crp < 1.0) return 100;
-    if (crp > 10.0) return 0;
+    if (crp <= 1.0) return 100;
+    if (crp >= 10) return 0;
     return 100 - ((crp - 1.0) / 9.0) * 100;
   };
 
   const calculateOmega3Score = (omega3) => {
-    if (omega3 > 8.0) return 100;
-    if (omega3 < 4.0) return 0;
+    if (omega3 >= 8.0) return 100;
+    if (omega3 <= 4.0) return 0;
     return ((omega3 - 4.0) / 4.0) * 100;
   };
 
   const calculateHbA1cScore = (hba1c) => {
-    if (hba1c < 5.7) return 100;
-    if (hba1c > 7.0) return 0;
-    return 100 - ((hba1c - 5.7) / 1.3) * 100;
+    if (hba1c <= 5.7) return 100;
+    if (hba1c >= 6.5) return 0;
+    return 100 - ((hba1c - 5.7) / 0.8) * 100;
   };
 
   const calculateGDF15Score = (gdf15) => {
-    if (gdf15 < 1200) return 100;
-    if (gdf15 > 1800) return 0;
-    return 100 - ((gdf15 - 1200) / 600) * 100;
+    if (gdf15 <= 1200) return 100;
+    if (gdf15 >= 2500) return 0;
+    return 100 - ((gdf15 - 1200) / 1300) * 100;
   };
 
-  const calculateVitaminDScore = (vitD) => {
-    if (vitD > 30) return 100;
-    if (vitD < 20) return 0;
-    return ((vitD - 20) / 10) * 100;
+  const calculateVitaminDScore = (vitaminD) => {
+    if (vitaminD >= 30) return 100;
+    if (vitaminD <= 10) return 0;
+    return ((vitaminD - 10) / 20) * 100;
   };
 
   const getAgeStratifiedCoefficients = (age) => {
@@ -497,7 +469,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
             <View style={[styles.input, styles.readOnlyInput]}>
               {hrvValue ? (
                 <Text style={styles.readOnlyText}>
-                  {hrvValue.toFixed(1)} ms {hrvValue >= 70 ? '✅' : hrvValue >= 50 ? '⚠️' : '⚠️'}
+                  {hrvValue.toFixed(1)} ms {hrvValue >= 70 ? '✅' : hrvValue >= 50 ? '⚠️' : '❌'}
                 </Text>
               ) : (
                 <Text style={styles.placeholderText}>
