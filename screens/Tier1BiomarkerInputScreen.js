@@ -32,10 +32,11 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
     hba1c: '',
     gdf15: '',
     vitaminD: '',
+    hrvManual: '', // ✅ NEW: Manual HRV input field
   });
 
-  // ✅ FIX #1: Add HRV from wearable data
-  const [hrvValue, setHrvValue] = useState(null);
+  // ✅ FIX #1: Add HRV from wearable data (auto-populated)
+  const [hrvWearable, setHrvWearable] = useState(null);
 
   const [isCalculating, setIsCalculating] = useState(false);
 
@@ -44,7 +45,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
     const interval = setInterval(() => {
       const data = WearableService.getLatestData();
       if (data.hrv && data.hrv > 0) {
-        setHrvValue(data.hrv);
+        setHrvWearable(data.hrv);
       }
     }, 2000); // Update every 2 seconds
 
@@ -460,16 +461,17 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
           </View>
         </View>
 
-        {/* ✅ FIX #1: HRV Display from Wearable */}
+        {/* ✅ UPDATED: Dual HRV Fields - Wearable + Manual Input */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Wearable Data (Optional)</Text>
+          <Text style={styles.sectionTitle}>HRV - Heart Rate Variability</Text>
           
+          {/* HRV from Wearable (Auto-populated, Read-only) */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>HRV - Heart Rate Variability (ms)</Text>
+            <Text style={styles.label}>HRV from Connected Watch (ms)</Text>
             <View style={[styles.input, styles.readOnlyInput]}>
-              {hrvValue ? (
+              {hrvWearable ? (
                 <Text style={styles.readOnlyText}>
-                  {hrvValue.toFixed(1)} ms {hrvValue >= 70 ? '✅' : hrvValue >= 50 ? '⚠️' : '❌'}
+                  {hrvWearable.toFixed(1)} ms {hrvWearable >= 70 ? '✅' : hrvWearable >= 50 ? '⚠️' : '❌'}
                 </Text>
               ) : (
                 <Text style={styles.placeholderText}>
@@ -478,7 +480,24 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
               )}
             </View>
             <Text style={styles.helpText}>
-              Optimal: ≥70 ms | Good: ≥50 ms
+              Automatically populated from wearable | Optimal: ≥70 ms | Good: ≥50 ms
+            </Text>
+          </View>
+
+          {/* Manual HRV Input (For doctor-provided values) */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Manual HRV Input (ms) - Optional</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter HRV if measured separately (e.g., 65.3)"
+              placeholderTextColor="#999"
+              keyboardType="decimal-pad"
+              value={biomarkers.hrvManual}
+              onChangeText={(value) => handleInputChange('hrvManual', value)}
+            />
+            <Text style={styles.helpText}>
+              Use this field if HRV was measured by a doctor or external device.
+              {hrvWearable && biomarkers.hrvManual && '\n⚠️ Both values present - manual value will be used.'}
             </Text>
           </View>
         </View>

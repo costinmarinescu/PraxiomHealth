@@ -280,22 +280,24 @@ const WatchScreen = ({ navigation }) => {
               </View>
             </View>
 
-            {/* ✅ ADDED: Test Connection Button */}
-            <TouchableOpacity
-              style={styles.testButton}
-              onPress={() => navigation.navigate('Test')}
-            >
-              <Ionicons name="flask" size={24} color="#fff" />
-              <Text style={styles.buttonText}>Test Connection & Display</Text>
-            </TouchableOpacity>
+            {/* ✅ FIXED: Test & Disconnect Buttons Side-by-Side */}
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={styles.testButton}
+                onPress={() => navigation.navigate('Test')}
+              >
+                <Ionicons name="flask" size={20} color="#fff" />
+                <Text style={styles.buttonTextSmall}>Test</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.disconnectButton}
-              onPress={handleDisconnect}
-            >
-              <Ionicons name="close-circle-outline" size={24} color="#fff" />
-              <Text style={styles.buttonText}>Disconnect</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.disconnectButton}
+                onPress={handleDisconnect}
+              >
+                <Ionicons name="close-circle-outline" size={20} color="#fff" />
+                <Text style={styles.buttonTextSmall}>Disconnect</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : (
           <View style={styles.disconnectedContainer}>
@@ -486,29 +488,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // ✅ NEW: Button row for side-by-side layout
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 'auto',
+    gap: 10,
+  },
   testButton: {
     backgroundColor: '#fbbf24',
     borderRadius: 16,
-    padding: 18,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    flex: 1,
   },
   disconnectButton: {
     backgroundColor: '#ef4444',
     borderRadius: 16,
-    padding: 18,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 'auto',
+    flex: 1,
   },
   buttonText: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#ffffff',
     marginLeft: 10,
+  },
+  buttonTextSmall: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginLeft: 8,
   },
 });
 
