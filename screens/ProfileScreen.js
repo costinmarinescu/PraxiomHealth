@@ -1,8 +1,7 @@
 /**
  * ProfileScreen.js - FIXED VERSION
  * 
- * Simple, reliable date of birth input using text fields
- * Avoids calendar picker issues entirely
+ * ✅ FIX #3: Using updateState() instead of dispatch()
  */
 
 import React, { useState, useEffect, useContext } from 'react';
@@ -20,7 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppContext } from '../AppContext';
 
 export default function ProfileScreen({ navigation }) {
-  const { dispatch } = useContext(AppContext);
+  const { updateState } = useContext(AppContext); // ✅ FIXED: Use updateState instead of dispatch
   
   // Form state
   const [name, setName] = useState('');
@@ -155,12 +154,10 @@ export default function ProfileScreen({ navigation }) {
 
       await AsyncStorage.setItem('userProfile', JSON.stringify(profile));
       
-      // Update AppContext with chronological age
-      dispatch({
-        type: 'UPDATE_HEALTH_DATA',
-        payload: {
-          chronologicalAge: age,
-        },
+      // ✅ FIXED: Update AppContext using updateState() instead of dispatch()
+      updateState({
+        chronologicalAge: age,
+        userName: name,
       });
 
       console.log('✅ Profile saved');

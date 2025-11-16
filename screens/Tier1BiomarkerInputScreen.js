@@ -34,7 +34,22 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
     vitaminD: '',
   });
 
+  // ✅ FIX #1: Add HRV from wearable data
+  const [hrvValue, setHrvValue] = useState(null);
+
   const [isCalculating, setIsCalculating] = useState(false);
+
+  // ✅ FIX #1: Load HRV from wearable service
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const data = WearableService.getLatestData();
+      if (data.hrv && data.hrv > 0) {
+        setHrvValue(data.hrv);
+      }
+    }, 2000); // Update every 2 seconds
+
+    return () => clearInterval(interval);
+  }, []);
 
   const handleInputChange = (field, value) => {
     setBiomarkers(prev => ({ ...prev, [field]: value }));
@@ -473,6 +488,29 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
           </View>
         </View>
 
+        {/* ✅ FIX #1: HRV Display from Wearable */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Wearable Data (Optional)</Text>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>HRV - Heart Rate Variability (ms)</Text>
+            <View style={[styles.input, styles.readOnlyInput]}>
+              {hrvValue ? (
+                <Text style={styles.readOnlyText}>
+                  {hrvValue.toFixed(1)} ms {hrvValue >= 70 ? '✅' : hrvValue >= 50 ? '⚠️' : '⚠️'}
+                </Text>
+              ) : (
+                <Text style={styles.placeholderText}>
+                  Connect watch to see HRV data
+                </Text>
+              )}
+            </View>
+            <Text style={styles.helpText}>
+              Optimal: ≥70 ms | Good: ≥50 ms
+            </Text>
+          </View>
+        </View>
+
         <TouchableOpacity 
           style={[styles.calculateButton, isCalculating && styles.calculateButtonDisabled]}
           onPress={calculatePraxiomAge}
@@ -535,6 +573,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#ddd',
+  },
+  readOnlyInput: {
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+  },
+  readOnlyText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '600',
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: '#999',
+    fontStyle: 'italic',
+  },
+  helpText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 5,
+    fontStyle: 'italic',
   },
   calculateButton: {
     backgroundColor: '#00CFC1',
