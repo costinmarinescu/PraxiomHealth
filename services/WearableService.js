@@ -176,6 +176,8 @@ class WearableService {
       this.isConnected = true;
       this.log(`✅ Connected to ${this.device.name}`);
       
+      // Force rediscovery of services and characteristics
+      this.log('🔍 Discovering services and characteristics...');
       await this.device.discoverAllServicesAndCharacteristics();
       this.log('✅ Services discovered');
       
@@ -325,6 +327,23 @@ class WearableService {
       }
 
       this.log('✅ Praxiom service found');
+
+      // Discover characteristics in the Praxiom service
+      const characteristics = await praxiomService.characteristics();
+      this.log(`📋 Praxiom service has ${characteristics.length} characteristics:`);
+      characteristics.forEach(c => this.log(`  - ${c.uuid} (${c.isWritableWithResponse ? 'writable' : 'read-only'})`));
+      
+      // Find the Bio-Age characteristic
+      const bioAgeChar = characteristics.find(c => 
+        c.uuid.toUpperCase() === this.BIO_AGE_CHAR.toUpperCase()
+      );
+      
+      if (!bioAgeChar) {
+        this.log(`⚠️ Bio-Age characteristic ${this.BIO_AGE_CHAR} not found`);
+        throw new Error('Bio-Age characteristic not available. Watch firmware may need update.');
+      }
+      
+      this.log('✅ Bio-Age characteristic found');
 
       // Format data: 4 bytes for bio age (uint32, firmware expects raw age value)
       // Firmware validates: 18 <= age <= 120
