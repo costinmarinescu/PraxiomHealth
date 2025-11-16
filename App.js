@@ -18,6 +18,7 @@ import HistoricalDataScreen from './screens/HistoricalDataScreen';
 import BiomarkerHistoryScreen from './screens/BiomarkerHistoryScreen';
 import ComparisonScreen from './screens/ComparisonScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import TestScreen from './screens/TestScreen'; // ✅ ADDED: Test screen for watch communication
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -43,6 +44,16 @@ function DashboardStack() {
       <Stack.Screen name="BiomarkerHistory" component={BiomarkerHistoryScreen} />
       <Stack.Screen name="Comparison" component={ComparisonScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
+    </Stack.Navigator>
+  );
+}
+
+// ✅ ADDED: Watch Stack with TestScreen
+function WatchStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="WatchHome" component={WatchScreen} />
+      <Stack.Screen name="Test" component={TestScreen} />
     </Stack.Navigator>
   );
 }
@@ -92,7 +103,7 @@ export default function App() {
               })}
             >
               <Tab.Screen name="Dashboard" component={DashboardStack} />
-              <Tab.Screen name="Watch" component={WatchScreen} />
+              <Tab.Screen name="Watch" component={WatchStack} />
               <Tab.Screen name="Settings" component={SettingsStack} />
             </Tab.Navigator>
           </NavigationContainer>
