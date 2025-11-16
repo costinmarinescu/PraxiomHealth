@@ -139,31 +139,36 @@ class WearableService {
 
       const foundDevices = new Map();
 
-      this.manager.startDeviceScan(null, null, (error, device) => {
-        if (error) {
-          this.log(`❌ Scan error: ${error.message}`);
-          this.stopScan();
-          return;
-        }
+      // ✅ FIX: Use proper scan options object instead of null
+      this.manager.startDeviceScan(
+        null, // UUIDs to scan for (null = all)
+        { allowDuplicates: false }, // ✅ Options object (NOT null!)
+        (error, device) => {
+          if (error) {
+            this.log(`❌ Scan error: ${error.message}`);
+            this.stopScan();
+            return;
+          }
 
-        if (device && device.name) {
-          // Look for InfiniTime or Praxiom devices
-          if (device.name.includes(DEVICE_NAME) || device.name.includes('Praxiom')) {
-            if (!foundDevices.has(device.id)) {
-              foundDevices.set(device.id, device);
-              this.log(`📱 Found device: ${device.name} (${device.id})`);
-              
-              if (onDeviceFound) {
-                onDeviceFound({
-                  id: device.id,
-                  name: device.name,
-                  rssi: device.rssi
-                });
+          if (device && device.name) {
+            // Look for InfiniTime or Praxiom devices
+            if (device.name.includes(DEVICE_NAME) || device.name.includes('Praxiom')) {
+              if (!foundDevices.has(device.id)) {
+                foundDevices.set(device.id, device);
+                this.log(`📱 Found device: ${device.name} (${device.id})`);
+                
+                if (onDeviceFound) {
+                  onDeviceFound({
+                    id: device.id,
+                    name: device.name,
+                    rssi: device.rssi
+                  });
+                }
               }
             }
           }
         }
-      });
+      );
 
       // Auto-stop scan after timeout
       setTimeout(() => {
