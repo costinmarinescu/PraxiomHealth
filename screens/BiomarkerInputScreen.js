@@ -228,13 +228,7 @@ export default function BiomarkerInputScreen({ navigation }) {
       setLoading(true);
       console.log('📡 Pushing to watch:', calculatedResult);
       
-      await WearableService.sendBioAge({
-        praxiomAge: calculatedResult.bioAge,
-        chronologicalAge: parseFloat(age),
-        oralScore: calculatedResult.oralScore,
-        systemicScore: calculatedResult.systemicScore,
-        fitnessScore: calculatedResult.fitnessScore || 0,
-      });
+      await WearableService.sendBioAge(calculatedResult.bioAge);
 
       Alert.alert(
         'Synced! ✅',

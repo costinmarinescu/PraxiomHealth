@@ -256,7 +256,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
       if (watchStatus.isConnected) {
         try {
           console.log('📤 Sending Bio-Age to watch...');
-          await WearableService.sendPraxiomAgeToWatch(biologicalAge);
+          await WearableService.sendBioAge(biologicalAge);
           console.log('✅ Bio-Age sent to watch');
         } catch (error) {
           console.error('❌ Failed to send to watch:', error);
