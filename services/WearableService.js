@@ -1,5 +1,6 @@
 import { BleManager } from 'react-native-ble-plx';
 import { Buffer } from 'buffer';
+import { PermissionsAndroid, Platform, Alert } from 'react-native';
 
 class WearableService {
   constructor() {
@@ -28,8 +29,74 @@ class WearableService {
     this.BIO_AGE_CHAR = '00001901-78fc-48fe-8e23-433b3a1942d0';
   }
 
+  /**
+   * ✅ FIX #2: Request Bluetooth permissions before using BLE
+   */
+  async requestPermissions() {
+    if (Platform.OS === 'android') {
+      try {
+        const apiLevel = Platform.Version;
+        
+        if (apiLevel >= 31) {
+          // Android 12+ requires BLUETOOTH_SCAN and BLUETOOTH_CONNECT
+          const granted = await PermissionsAndroid.requestMultiple([
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          ]);
+          
+          const allGranted = 
+            granted['android.permission.BLUETOOTH_SCAN'] === PermissionsAndroid.RESULTS.GRANTED &&
+            granted['android.permission.BLUETOOTH_CONNECT'] === PermissionsAndroid.RESULTS.GRANTED &&
+            granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED;
+          
+          if (allGranted) {
+            this.log('✅ All Bluetooth permissions granted (Android 12+)');
+            return true;
+          } else {
+            this.log('❌ Bluetooth permissions denied');
+            Alert.alert(
+              'Permissions Required',
+              'Bluetooth permissions are required to connect to your watch. Please enable them in Settings.'
+            );
+            return false;
+          }
+        } else {
+          // Android 11 and below only need ACCESS_FINE_LOCATION
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+          );
+          
+          if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+            this.log('✅ Location permission granted (Android < 12)');
+            return true;
+          } else {
+            this.log('❌ Location permission denied');
+            Alert.alert(
+              'Permission Required',
+              'Location permission is required for Bluetooth scanning. Please enable it in Settings.'
+            );
+            return false;
+          }
+        }
+      } catch (error) {
+        this.log(`❌ Permission request error: ${error.message}`);
+        return false;
+      }
+    }
+    
+    // iOS permissions are handled via Info.plist
+    return true;
+  }
+
   async init() {
     try {
+      // Request permissions first
+      const hasPermission = await this.requestPermissions();
+      if (!hasPermission) {
+        throw new Error('Bluetooth permissions not granted');
+      }
+      
       if (!this.manager) {
         this.manager = new BleManager();
         this.log('✅ BLE Manager initialized');
@@ -58,6 +125,12 @@ class WearableService {
   }
 
   async scanForDevices() {
+    // Check permissions before scanning
+    const hasPermission = await this.requestPermissions();
+    if (!hasPermission) {
+      throw new Error('Bluetooth permissions not granted');
+    }
+    
     return new Promise((resolve, reject) => {
       const devices = [];
       this.log('🔍 Starting device scan...');
