@@ -1,39 +1,30 @@
 /**
- * Praxiom Health - Wearable Service
- * Handles BLE communication with PineTime watch running Praxiom firmware
- * 
- * FIXED: Added missing methods for WatchScreen compatibility
+ * Praxiom Health - DIAGNOSTIC WearableService
+ * Enhanced logging to debug watch display issue
  */
 
 import { BleManager } from 'react-native-ble-plx';
 import { Platform, PermissionsAndroid } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// ===================================
 // BLE SERVICE & CHARACTERISTIC UUIDs
-// ===================================
-
-// Standard BLE Services
 const HEART_RATE_SERVICE = '0000180D-0000-1000-8000-00805F9B34FB';
 const HEART_RATE_MEASUREMENT = '00002A37-0000-1000-8000-00805F9B34FB';
 
 const BATTERY_SERVICE = '0000180F-0000-1000-8000-00805F9B34FB';
 const BATTERY_LEVEL = '00002A19-0000-1000-8000-00805F9B34FB';
 
-// Current Time Service (for time sync)
 const CTS_SERVICE_UUID = '00001805-0000-1000-8000-00805F9B34FB';
 const CURRENT_TIME_CHAR_UUID = '00002A2B-0000-1000-8000-00805F9B34FB';
 
-// InfiniTime Custom Services
 const MOTION_SERVICE = '00030000-78fc-48fe-8e23-433b3a1942d0';
 const STEP_COUNT_CHAR = '00030001-78fc-48fe-8e23-433b3a1942d0';
 
-// Praxiom Custom Service (MUST MATCH FIRMWARE EXACTLY!)
-const PRAXIOM_SERVICE = '00190000-78fc-48fe-8e23-433b3a1942d0';  // ✅ FIXED: Was 00001900
-const BIO_AGE_CHAR = '00190100-78fc-48fe-8e23-433b3a1942d0';     // ✅ FIXED: Was 00001901
+// Praxiom Custom Service - VERIFIED CORRECT
+const PRAXIOM_SERVICE = '00190000-78fc-48fe-8e23-433b3a1942d0';
+const BIO_AGE_CHAR = '00190100-78fc-48fe-8e23-433b3a1942d0';
 
-// Device name to scan for
-const DEVICE_NAME = 'InfiniTime'; // or 'Praxiom' if you renamed it
+const DEVICE_NAME = 'InfiniTime';
 
 class WearableService {
   constructor() {
@@ -42,7 +33,6 @@ class WearableService {
     this.isConnected = false;
     this.isScanning = false;
     
-    // Cached wearable data
     this.cachedData = {
       heartRate: 0,
       steps: 0,
@@ -52,15 +42,11 @@ class WearableService {
       lastUpdate: null
     };
     
-    // Monitoring subscriptions
     this.subscriptions = [];
     this.pollingInterval = null;
     this.timeSyncInterval = null;
-    
-    // Transmission log for TestScreen
     this.transmissionLog = [];
     
-    // Service availability detection
     this.availableServices = {
       praxiom: false,
       heartRate: false,
@@ -71,12 +57,11 @@ class WearableService {
   }
 
   // ===================================
-  // INITIALIZATION & PERMISSIONS
+  // INITIALIZATION
   // ===================================
 
   async initialize() {
     try {
-      // Request BLE permissions on Android
       if (Platform.OS === 'android') {
         const granted = await this.requestAndroidPermissions();
         if (!granted) {
@@ -85,7 +70,6 @@ class WearableService {
         }
       }
 
-      // Check if Bluetooth is enabled
       const state = await this.manager.state();
       if (state !== 'PoweredOn') {
         this.log('⚠️ Bluetooth is not enabled');
@@ -100,7 +84,6 @@ class WearableService {
     }
   }
 
-  // ✅ FIX: Add alias for WatchScreen compatibility
   async init() {
     return this.initialize();
   }
@@ -109,7 +92,6 @@ class WearableService {
     try {
       if (Platform.OS === 'android') {
         if (Platform.Version >= 31) {
-          // Android 12+ (API 31+)
           const granted = await PermissionsAndroid.requestMultiple([
             PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
             PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
@@ -122,7 +104,6 @@ class WearableService {
             granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
           );
         } else {
-          // Android 11 and below
           const granted = await PermissionsAndroid.requestMultiple([
             PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
             PermissionsAndroid.PERMISSIONS.BLUETOOTH,
@@ -147,7 +128,6 @@ class WearableService {
   // DEVICE SCANNING
   // ===================================
 
-  // ✅ FIX: Make scanForDevices return a Promise that resolves with array
   async scanForDevices(timeoutSeconds = 10) {
     try {
       if (this.isScanning) {
@@ -162,18 +142,17 @@ class WearableService {
 
       return new Promise((resolve) => {
         this.manager.startDeviceScan(
-          null, // UUIDs to scan for (null = all)
-          { allowDuplicates: false }, // Options object
+          null,
+          { allowDuplicates: false },
           (error, device) => {
             if (error) {
               this.log(`❌ Scan error: ${error.message}`);
               this.stopScan();
-              resolve([]); // Return empty array on error
+              resolve([]);
               return;
             }
 
             if (device && device.name) {
-              // Look for InfiniTime, Praxiom, or PineTime devices
               const name = device.name.toLowerCase();
               if (name.includes('infinit') || 
                   name.includes('pinetime') || 
@@ -192,7 +171,6 @@ class WearableService {
           }
         );
 
-        // Auto-stop scan after timeout and return results
         setTimeout(() => {
           if (this.isScanning) {
             this.stopScan();
@@ -225,41 +203,28 @@ class WearableService {
   async connectToDevice(deviceId) {
     try {
       this.log(`Connecting to device: ${deviceId}`);
-
-      // Stop scanning if active
       this.stopScan();
 
-      // Connect to device
       this.device = await this.manager.connectToDevice(deviceId);
       this.log(`✅ Connected to ${this.device.name}`);
 
-      // Discover services and characteristics
       await this.device.discoverAllServicesAndCharacteristics();
       this.log('✅ Services discovered');
 
-      // Detect available services
       await this.detectAvailableServices();
 
-      // Sync time immediately after connection (if available)
       if (this.availableServices.timeSync) {
         await this.syncTimeToWatch();
       }
 
-      // Monitor disconnection
       this.device.onDisconnected((error, device) => {
         this.log(`Disconnected from ${device.name}`);
         this.handleDisconnection();
       });
 
       this.isConnected = true;
-
-      // Save device ID for auto-reconnect
       await AsyncStorage.setItem('lastConnectedDevice', deviceId);
-
-      // Start monitoring wearable data
       await this.startMonitoring();
-
-      // Start periodic time sync (every hour)
       this.startPeriodicTimeSync();
 
       return true;
@@ -274,11 +239,8 @@ class WearableService {
   async disconnect() {
     try {
       if (this.device) {
-        // Stop all monitoring
         this.stopMonitoring();
         this.stopPeriodicTimeSync();
-
-        // Disconnect device
         await this.device.cancelConnection();
         this.device = null;
         this.isConnected = false;
@@ -294,7 +256,6 @@ class WearableService {
     this.isConnected = false;
     this.stopMonitoring();
     this.stopPeriodicTimeSync();
-    // App can trigger auto-reconnect here if needed
   }
 
   // ===================================
@@ -312,16 +273,12 @@ class WearableService {
       const services = await this.device.services();
       const serviceUUIDs = services.map(s => s.uuid.toUpperCase());
 
-      // Check for Praxiom custom service
       this.availableServices.praxiom = serviceUUIDs.includes(PRAXIOM_SERVICE.toUpperCase());
-      
-      // Check for standard services
       this.availableServices.heartRate = serviceUUIDs.includes(HEART_RATE_SERVICE.toUpperCase());
       this.availableServices.battery = serviceUUIDs.includes(BATTERY_SERVICE.toUpperCase());
       this.availableServices.motion = serviceUUIDs.includes(MOTION_SERVICE.toUpperCase());
       this.availableServices.timeSync = serviceUUIDs.includes(CTS_SERVICE_UUID.toUpperCase());
 
-      // Log results
       this.log(`📊 Service Detection Results:`);
       this.log(`   Praxiom Bio-Age: ${this.availableServices.praxiom ? '✅' : '❌'}`);
       this.log(`   Heart Rate: ${this.availableServices.heartRate ? '✅' : '❌'}`);
@@ -329,12 +286,14 @@ class WearableService {
       this.log(`   Motion/Steps: ${this.availableServices.motion ? '✅' : '❌'}`);
       this.log(`   Time Sync: ${this.availableServices.timeSync ? '✅' : '❌'}`);
 
-      // Add to transmission log
-      if (!this.availableServices.praxiom) {
+      if (this.availableServices.praxiom) {
+        const timestamp = new Date().toLocaleTimeString();
+        this.addTransmissionLog(`[${timestamp}] ✅ Praxiom service detected and ready`);
+      } else {
         const timestamp = new Date().toLocaleTimeString();
         this.addTransmissionLog(
-          `[${timestamp}] ⚠️ Warning: Watch is running standard InfiniTime firmware. ` +
-          `Praxiom bio-age service not available. Flash custom Praxiom firmware to enable bio-age display.`
+          `[${timestamp}] ⚠️ Warning: Praxiom bio-age service not available. ` +
+          `Flash custom Praxiom firmware to enable bio-age display.`
         );
       }
 
@@ -365,43 +324,24 @@ class WearableService {
       }
 
       const now = new Date();
-      
-      // Create 10-byte time data buffer according to CTS protocol
       const timeData = new Uint8Array(10);
       
-      // Year (little-endian uint16)
       const year = now.getFullYear();
       timeData[0] = year & 0xFF;
       timeData[1] = (year >> 8) & 0xFF;
-      
-      // Month (1-12)
       timeData[2] = now.getMonth() + 1;
-      
-      // Day (1-31)
       timeData[3] = now.getDate();
-      
-      // Hours (0-23)
       timeData[4] = now.getHours();
-      
-      // Minutes (0-59)
       timeData[5] = now.getMinutes();
-      
-      // Seconds (0-59)
       timeData[6] = now.getSeconds();
       
-      // Day of week (1=Monday, 7=Sunday)
       const dayOfWeek = now.getDay();
       timeData[7] = dayOfWeek === 0 ? 7 : dayOfWeek;
-      
-      // Fractions256 (1/256 of a second)
       timeData[8] = 0;
-      
-      // Adjust reason (manual time update = 1)
       timeData[9] = 1;
 
       const base64Data = this.bufferToBase64(timeData);
 
-      // Write to Current Time characteristic
       await this.device.writeCharacteristicWithResponseForService(
         CTS_SERVICE_UUID,
         CURRENT_TIME_CHAR_UUID,
@@ -418,12 +358,11 @@ class WearableService {
   }
 
   startPeriodicTimeSync() {
-    // Sync time every hour
     this.timeSyncInterval = setInterval(async () => {
       if (this.isConnected) {
         await this.syncTimeToWatch();
       }
-    }, 3600000); // 1 hour
+    }, 3600000);
   }
 
   stopPeriodicTimeSync() {
@@ -434,7 +373,7 @@ class WearableService {
   }
 
   // ===================================
-  // BIO-AGE TRANSMISSION
+  // BIO-AGE TRANSMISSION (DIAGNOSTIC VERSION)
   // ===================================
 
   async sendBioAge(bioAge) {
@@ -443,20 +382,16 @@ class WearableService {
         throw new Error('No device connected');
       }
 
-      // Check if Praxiom service is available
       if (!this.availableServices.praxiom) {
         throw new Error(
-          'Praxiom service not available. Your watch is running standard InfiniTime firmware. ' +
-          'Please flash custom Praxiom firmware to enable bio-age display.'
+          'Praxiom service not available. Flash custom Praxiom firmware.'
         );
       }
 
-      // Validate bio-age (18-120)
       if (bioAge < 18 || bioAge > 120) {
         throw new Error('Bio-age must be between 18 and 120');
       }
 
-      // Convert bio-age to 4-byte uint32 (little-endian)
       const buffer = new Uint8Array(4);
       buffer[0] = bioAge & 0xFF;
       buffer[1] = (bioAge >> 8) & 0xFF;
@@ -465,7 +400,6 @@ class WearableService {
 
       const base64Data = this.bufferToBase64(buffer);
 
-      // Write to Praxiom Bio-Age characteristic
       await this.device.writeCharacteristicWithResponseForService(
         PRAXIOM_SERVICE,
         BIO_AGE_CHAR,
@@ -474,7 +408,6 @@ class WearableService {
 
       this.cachedData.bioAge = bioAge;
       
-      // Add to transmission log
       const timestamp = new Date().toLocaleTimeString();
       this.addTransmissionLog(`[${timestamp}] ✅ Bio-Age ${bioAge} sent successfully`);
       
@@ -490,78 +423,98 @@ class WearableService {
   }
 
   // ===================================
-  // TEST MODE METHODS (for TestScreen)
+  // TEST MODE (DIAGNOSTIC VERSION)
   // ===================================
 
   async sendTestAge(age) {
     try {
+      this.log('═══════════════════════════════════════');
+      this.log('🔬 DIAGNOSTIC MODE - DETAILED LOGGING');
+      this.log('═══════════════════════════════════════');
+      
       if (!this.device) {
         throw new Error('No device connected');
       }
+      this.log('✅ Step 1: Device connected');
 
-      // Check if Praxiom service is available
       if (!this.availableServices.praxiom) {
         throw new Error(
           'Praxiom Bio-Age Service Not Found\n\n' +
-          'Your watch is running standard InfiniTime firmware, which doesn\'t include the ' +
-          'Praxiom bio-age display feature.\n\n' +
-          'To enable bio-age on your watch:\n' +
-          '1. Flash custom Praxiom firmware to your PineTime\n' +
-          '2. The custom firmware adds the bio-age watchface\n' +
-          '3. Then you can send bio-age values from this app\n\n' +
-          'Current firmware: Standard InfiniTime (no Praxiom service)'
+          'Your watch is running standard InfiniTime firmware. ' +
+          'Flash custom Praxiom firmware to enable bio-age display.'
         );
       }
+      this.log('✅ Step 2: Praxiom service available');
 
-      // Validate age
       const bioAge = Math.round(age);
       if (bioAge < 18 || bioAge > 120) {
         throw new Error('Age must be between 18 and 120');
       }
+      this.log(`✅ Step 3: Age validated: ${bioAge}`);
 
-      // Convert to uint32 little-endian
+      // Create buffer with detailed logging
       const buffer = new Uint8Array(4);
       buffer[0] = bioAge & 0xFF;
       buffer[1] = (bioAge >> 8) & 0xFF;
       buffer[2] = (bioAge >> 16) & 0xFF;
       buffer[3] = (bioAge >> 24) & 0xFF;
 
-      const base64Data = this.bufferToBase64(buffer);
+      this.log('📦 Step 4: Buffer created');
+      this.log(`   Byte 0: ${buffer[0].toString(16).padStart(2, '0')} (${buffer[0]})`);
+      this.log(`   Byte 1: ${buffer[1].toString(16).padStart(2, '0')} (${buffer[1]})`);
+      this.log(`   Byte 2: ${buffer[2].toString(16).padStart(2, '0')} (${buffer[2]})`);
+      this.log(`   Byte 3: ${buffer[3].toString(16).padStart(2, '0')} (${buffer[3]})`);
+      this.log(`   Hex: ${Array.from(buffer).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
 
-      // Write to watch
+      const base64Data = this.bufferToBase64(buffer);
+      this.log(`📝 Step 5: Base64 encoded: ${base64Data}`);
+
+      this.log('📤 Step 6: Writing to characteristic...');
+      this.log(`   Service: ${PRAXIOM_SERVICE}`);
+      this.log(`   Characteristic: ${BIO_AGE_CHAR}`);
+      this.log(`   Data length: ${buffer.length} bytes`);
+
       await this.device.writeCharacteristicWithResponseForService(
         PRAXIOM_SERVICE,
         BIO_AGE_CHAR,
         base64Data
       );
 
+      this.log('✅ Step 7: Write completed successfully!');
+      this.log('═══════════════════════════════════════');
+
       this.cachedData.bioAge = bioAge;
       
-      // Add to transmission log
       const timestamp = new Date().toLocaleTimeString();
-      this.addTransmissionLog(`[${timestamp}] 📤 Test Age ${bioAge} sent to ${this.device.name}`);
-      
-      this.log(`✅ Test Age sent: ${bioAge}`);
+      this.addTransmissionLog(`[${timestamp}] 📤 DIAGNOSTIC: Sent ${bioAge} as bytes [${Array.from(buffer).join(', ')}]`);
+      this.addTransmissionLog(`[${timestamp}] ✅ Write confirmed by watch`);
       
       return {
         success: true,
         bioAge: bioAge,
         deviceName: this.device.name,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        diagnostics: {
+          bytes: Array.from(buffer),
+          hex: Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0')).join(', '),
+          base64: base64Data
+        }
       };
 
     } catch (error) {
+      this.log('❌ ERROR occurred:');
+      this.log(`   Message: ${error.message}`);
+      this.log(`   Stack: ${error.stack}`);
+      this.log('═══════════════════════════════════════');
+      
       const timestamp = new Date().toLocaleTimeString();
       this.addTransmissionLog(`[${timestamp}] ❌ Test failed: ${error.message}`);
-      this.log(`❌ Failed to send test age: ${error.message}`);
       throw error;
     }
   }
 
   addTransmissionLog(message) {
     this.transmissionLog.push(message);
-    
-    // Keep only last 50 entries
     if (this.transmissionLog.length > 50) {
       this.transmissionLog.shift();
     }
@@ -582,16 +535,9 @@ class WearableService {
   async startMonitoring() {
     try {
       this.log('📊 Starting wearable data monitoring...');
-
-      // Monitor heart rate
       await this.monitorHeartRate();
-
-      // Monitor battery level
       await this.monitorBattery();
-
-      // Monitor steps (polling-based, as InfiniTime only sends when screen is on)
       this.startStepPolling();
-
       this.log('✅ Monitoring started');
     } catch (error) {
       this.log(`⚠️ Monitoring setup failed: ${error.message}`);
@@ -599,11 +545,9 @@ class WearableService {
   }
 
   stopMonitoring() {
-    // Unsubscribe from all notifications
     this.subscriptions.forEach(sub => sub.remove());
     this.subscriptions = [];
 
-    // Stop polling
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
       this.pollingInterval = null;
@@ -671,13 +615,11 @@ class WearableService {
   }
 
   startStepPolling() {
-    // Poll steps every 10 seconds
-    // Note: InfiniTime only broadcasts steps when screen is ON
     this.pollingInterval = setInterval(async () => {
       if (this.isConnected) {
         await this.readSteps();
       }
-    }, 10000); // 10 seconds
+    }, 10000);
   }
 
   async readSteps() {
@@ -692,7 +634,6 @@ class WearableService {
         const steps = this.parseSteps(stepData);
         
         if (steps >= 0) {
-          // Only update if changed
           if (steps !== this.cachedData.steps) {
             this.cachedData.steps = steps;
             this.cachedData.lastUpdate = new Date();
@@ -701,7 +642,7 @@ class WearableService {
         }
       }
     } catch (error) {
-      // Silently fail - steps may not be available if screen is off
+      // Silently fail
     }
   }
 
@@ -710,9 +651,6 @@ class WearableService {
   // ===================================
 
   parseHeartRate(data) {
-    // Heart Rate Measurement format:
-    // Byte 0: Flags
-    // Byte 1-2: Heart Rate Value (uint8 or uint16)
     const flags = data[0];
     const isUint16 = (flags & 0x01) !== 0;
 
@@ -724,24 +662,21 @@ class WearableService {
   }
 
   parseSteps(data) {
-    // Step count is 4-byte uint32 (little-endian)
     return data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
   }
 
   // ===================================
-  // DATA ACCESS (WatchScreen compatibility)
+  // DATA ACCESS
   // ===================================
 
   getCachedData() {
     return { ...this.cachedData };
   }
 
-  // ✅ FIX: Add getLatestData() for WatchScreen
   getLatestData() {
     return this.getCachedData();
   }
 
-  // ✅ FIX: Add getConnectionStatus() for WatchScreen
   getConnectionStatus() {
     return {
       isConnected: this.isConnected,
@@ -834,7 +769,6 @@ class WearableService {
   }
 }
 
-// Create singleton instance
 const wearableService = new WearableService();
 
 export default wearableService;
