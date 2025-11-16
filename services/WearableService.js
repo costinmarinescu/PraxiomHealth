@@ -56,6 +56,9 @@ class WearableService {
     this.subscriptions = [];
     this.pollingInterval = null;
     this.timeSyncInterval = null;
+    
+    // Transmission log for TestScreen
+    this.transmissionLog = [];
   }
 
   // ===================================
@@ -394,13 +397,92 @@ class WearableService {
       );
 
       this.cachedData.bioAge = bioAge;
+      
+      // Add to transmission log
+      const timestamp = new Date().toLocaleTimeString();
+      this.addTransmissionLog(`[${timestamp}] ✅ Bio-Age ${bioAge} sent successfully`);
+      
       this.log(`✅ Bio-Age sent to watch: ${bioAge}`);
-      return true;
+      return { success: true, bioAge };
 
     } catch (error) {
+      const timestamp = new Date().toLocaleTimeString();
+      this.addTransmissionLog(`[${timestamp}] ❌ Failed: ${error.message}`);
       this.log(`❌ Failed to send bio-age: ${error.message}`);
-      return false;
+      throw error;
     }
+  }
+
+  // ===================================
+  // TEST MODE METHODS (for TestScreen)
+  // ===================================
+
+  async sendTestAge(age) {
+    try {
+      if (!this.device) {
+        throw new Error('No device connected');
+      }
+
+      // Validate age
+      const bioAge = Math.round(age);
+      if (bioAge < 18 || bioAge > 120) {
+        throw new Error('Age must be between 18 and 120');
+      }
+
+      // Convert to uint32 little-endian
+      const buffer = new Uint8Array(4);
+      buffer[0] = bioAge & 0xFF;
+      buffer[1] = (bioAge >> 8) & 0xFF;
+      buffer[2] = (bioAge >> 16) & 0xFF;
+      buffer[3] = (bioAge >> 24) & 0xFF;
+
+      const base64Data = this.bufferToBase64(buffer);
+
+      // Write to watch
+      await this.device.writeCharacteristicWithResponseForService(
+        PRAXIOM_SERVICE,
+        BIO_AGE_CHAR,
+        base64Data
+      );
+
+      this.cachedData.bioAge = bioAge;
+      
+      // Add to transmission log
+      const timestamp = new Date().toLocaleTimeString();
+      this.addTransmissionLog(`[${timestamp}] 📤 Test Age ${bioAge} sent to ${this.device.name}`);
+      
+      this.log(`✅ Test Age sent: ${bioAge}`);
+      
+      return {
+        success: true,
+        bioAge: bioAge,
+        deviceName: this.device.name,
+        timestamp: new Date().toISOString()
+      };
+
+    } catch (error) {
+      const timestamp = new Date().toLocaleTimeString();
+      this.addTransmissionLog(`[${timestamp}] ❌ Test failed: ${error.message}`);
+      this.log(`❌ Failed to send test age: ${error.message}`);
+      throw error;
+    }
+  }
+
+  addTransmissionLog(message) {
+    this.transmissionLog.push(message);
+    
+    // Keep only last 50 entries
+    if (this.transmissionLog.length > 50) {
+      this.transmissionLog.shift();
+    }
+  }
+
+  getTransmissionLog() {
+    return [...this.transmissionLog];
+  }
+
+  clearTransmissionLog() {
+    this.transmissionLog = [];
   }
 
   // ===================================
