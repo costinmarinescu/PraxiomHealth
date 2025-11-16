@@ -150,7 +150,7 @@ class WearableService {
                   if (i + 1 < data.length) {
                     const rr = data.readUInt16LE(i);
                     const rrMs = (rr / 1024) * 1000;
-                    rrIntervals.append(rrMs);
+                    rrIntervals.push(rrMs);
                   }
                 }
                 if (rrIntervals.length > 1) {
