@@ -28,9 +28,9 @@ const CURRENT_TIME_CHAR_UUID = '00002A2B-0000-1000-8000-00805F9B34FB';
 const MOTION_SERVICE = '00030000-78fc-48fe-8e23-433b3a1942d0';
 const STEP_COUNT_CHAR = '00030001-78fc-48fe-8e23-433b3a1942d0';
 
-// Praxiom Custom Service
-const PRAXIOM_SERVICE = '00001900-78fc-48fe-8e23-433b3a1942d0';
-const BIO_AGE_CHAR = '00001901-78fc-48fe-8e23-433b3a1942d0';
+// Praxiom Custom Service (MUST MATCH FIRMWARE EXACTLY!)
+const PRAXIOM_SERVICE = '00190000-78fc-48fe-8e23-433b3a1942d0';  // ✅ FIXED: Was 00001900
+const BIO_AGE_CHAR = '00190100-78fc-48fe-8e23-433b3a1942d0';     // ✅ FIXED: Was 00001901
 
 // Device name to scan for
 const DEVICE_NAME = 'InfiniTime'; // or 'Praxiom' if you renamed it
@@ -59,6 +59,15 @@ class WearableService {
     
     // Transmission log for TestScreen
     this.transmissionLog = [];
+    
+    // Service availability detection
+    this.availableServices = {
+      praxiom: false,
+      heartRate: false,
+      battery: false,
+      motion: false,
+      timeSync: false
+    };
   }
 
   // ===================================
@@ -228,8 +237,13 @@ class WearableService {
       await this.device.discoverAllServicesAndCharacteristics();
       this.log('✅ Services discovered');
 
-      // Sync time immediately after connection
-      await this.syncTimeToWatch();
+      // Detect available services
+      await this.detectAvailableServices();
+
+      // Sync time immediately after connection (if available)
+      if (this.availableServices.timeSync) {
+        await this.syncTimeToWatch();
+      }
 
       // Monitor disconnection
       this.device.onDisconnected((error, device) => {
@@ -281,6 +295,62 @@ class WearableService {
     this.stopMonitoring();
     this.stopPeriodicTimeSync();
     // App can trigger auto-reconnect here if needed
+  }
+
+  // ===================================
+  // SERVICE DETECTION
+  // ===================================
+
+  async detectAvailableServices() {
+    try {
+      if (!this.device) {
+        return;
+      }
+
+      this.log('🔍 Detecting available services...');
+
+      const services = await this.device.services();
+      const serviceUUIDs = services.map(s => s.uuid.toUpperCase());
+
+      // Check for Praxiom custom service
+      this.availableServices.praxiom = serviceUUIDs.includes(PRAXIOM_SERVICE.toUpperCase());
+      
+      // Check for standard services
+      this.availableServices.heartRate = serviceUUIDs.includes(HEART_RATE_SERVICE.toUpperCase());
+      this.availableServices.battery = serviceUUIDs.includes(BATTERY_SERVICE.toUpperCase());
+      this.availableServices.motion = serviceUUIDs.includes(MOTION_SERVICE.toUpperCase());
+      this.availableServices.timeSync = serviceUUIDs.includes(CTS_SERVICE_UUID.toUpperCase());
+
+      // Log results
+      this.log(`📊 Service Detection Results:`);
+      this.log(`   Praxiom Bio-Age: ${this.availableServices.praxiom ? '✅' : '❌'}`);
+      this.log(`   Heart Rate: ${this.availableServices.heartRate ? '✅' : '❌'}`);
+      this.log(`   Battery: ${this.availableServices.battery ? '✅' : '❌'}`);
+      this.log(`   Motion/Steps: ${this.availableServices.motion ? '✅' : '❌'}`);
+      this.log(`   Time Sync: ${this.availableServices.timeSync ? '✅' : '❌'}`);
+
+      // Add to transmission log
+      if (!this.availableServices.praxiom) {
+        const timestamp = new Date().toLocaleTimeString();
+        this.addTransmissionLog(
+          `[${timestamp}] ⚠️ Warning: Watch is running standard InfiniTime firmware. ` +
+          `Praxiom bio-age service not available. Flash custom Praxiom firmware to enable bio-age display.`
+        );
+      }
+
+      return this.availableServices;
+    } catch (error) {
+      this.log(`⚠️ Service detection failed: ${error.message}`);
+      return this.availableServices;
+    }
+  }
+
+  isPraxiomServiceAvailable() {
+    return this.availableServices.praxiom;
+  }
+
+  getAvailableServices() {
+    return { ...this.availableServices };
   }
 
   // ===================================
@@ -370,14 +440,20 @@ class WearableService {
   async sendBioAge(bioAge) {
     try {
       if (!this.device) {
-        this.log('⚠️ No device connected');
-        return false;
+        throw new Error('No device connected');
+      }
+
+      // Check if Praxiom service is available
+      if (!this.availableServices.praxiom) {
+        throw new Error(
+          'Praxiom service not available. Your watch is running standard InfiniTime firmware. ' +
+          'Please flash custom Praxiom firmware to enable bio-age display.'
+        );
       }
 
       // Validate bio-age (18-120)
       if (bioAge < 18 || bioAge > 120) {
-        this.log(`⚠️ Invalid bio-age: ${bioAge}`);
-        return false;
+        throw new Error('Bio-age must be between 18 and 120');
       }
 
       // Convert bio-age to 4-byte uint32 (little-endian)
@@ -421,6 +497,20 @@ class WearableService {
     try {
       if (!this.device) {
         throw new Error('No device connected');
+      }
+
+      // Check if Praxiom service is available
+      if (!this.availableServices.praxiom) {
+        throw new Error(
+          'Praxiom Bio-Age Service Not Found\n\n' +
+          'Your watch is running standard InfiniTime firmware, which doesn\'t include the ' +
+          'Praxiom bio-age display feature.\n\n' +
+          'To enable bio-age on your watch:\n' +
+          '1. Flash custom Praxiom firmware to your PineTime\n' +
+          '2. The custom firmware adds the bio-age watchface\n' +
+          '3. Then you can send bio-age values from this app\n\n' +
+          'Current firmware: Standard InfiniTime (no Praxiom service)'
+        );
       }
 
       // Validate age
