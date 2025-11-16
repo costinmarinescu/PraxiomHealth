@@ -66,14 +66,13 @@ export const AppContextProvider = ({ children }) => {
     saveData();
   }, [state.biologicalAge, state.oralHealthScore, state.systemicHealthScore]);
 
-  // ✨ NEW: Auto-push Bio-Age to watch when it changes and watch is connected
+  // ✅ FIXED: Auto-push Bio-Age to watch when it changes and watch is connected
   useEffect(() => {
     const pushBioAgeToWatch = async () => {
       if (state.watchConnected && state.biologicalAge) {
         try {
-          await WearableService.sendBioAge({
-            praxiomAge: state.biologicalAge
-          });
+          // ✅ FIXED: Use correct method name
+          await WearableService.sendPraxiomAgeToWatch(state.biologicalAge);
           
           const now = new Date().toISOString();
           await AsyncStorage.setItem('lastBioAgeSync', now);
@@ -90,32 +89,50 @@ export const AppContextProvider = ({ children }) => {
     pushBioAgeToWatch();
   }, [state.biologicalAge, state.watchConnected]); // Trigger when either changes
 
-  // Subscribe to wearable data updates
+  // ✅ FIXED: Subscribe to wearable data updates using correct methods
   useEffect(() => {
-    const interval = setInterval(async () => {
-      if (WearableService.isConnected()) {
+    const interval = setInterval(() => {
+      // ✅ FIXED: Use getConnectionStatus() instead of isConnected()
+      const connectionStatus = WearableService.getConnectionStatus();
+      
+      if (connectionStatus.isConnected) {
         try {
-          // Get latest wearable data
-          const heartRate = await WearableService.getHeartRate();
-          const steps = await WearableService.getStepCount();
+          // ✅ FIXED: Use getLatestData() to get all wearable data at once
+          const wearableData = WearableService.getLatestData();
           
           // Update state with new data
           updateState({
-            heartRate: heartRate || null,
-            steps: steps || 0,
+            heartRate: wearableData.heartRate || null,
+            steps: wearableData.steps !== undefined ? wearableData.steps : 0,
+            hrv: wearableData.hrv || null,
             watchConnected: true,
+          });
+          
+          console.log('📊 Wearable data updated:', {
+            hr: wearableData.heartRate,
+            steps: wearableData.steps,
+            hrv: wearableData.hrv
           });
         } catch (error) {
           console.error('Error fetching wearable data:', error);
         }
+      } else {
+        // Clear data when disconnected
+        updateState({
+          watchConnected: false,
+          heartRate: null,
+          steps: 0,
+          hrv: null,
+        });
       }
     }, 10000); // Poll every 10 seconds
 
-    // Also check connection status
+    // Also check connection status more frequently
     const connectionInterval = setInterval(async () => {
       try {
         const watchStatus = await AsyncStorage.getItem('watchConnected');
-        const isConnected = watchStatus === 'true' && WearableService.isConnected();
+        const connectionStatus = WearableService.getConnectionStatus();
+        const isConnected = watchStatus === 'true' && connectionStatus.isConnected;
         
         updateState({ watchConnected: isConnected });
       } catch (error) {
