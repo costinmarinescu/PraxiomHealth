@@ -14,7 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import PraxiomBackground from '../components/PraxiomBackground';
 import WearableService from '../services/WearableService';
 
-const WatchScreen = () => {
+const WatchScreen = ({ navigation }) => {
   const [scanning, setScanning] = useState(false);
   const [connected, setConnected] = useState(false);
   const [devices, setDevices] = useState([]);
@@ -280,6 +280,15 @@ const WatchScreen = () => {
               </View>
             </View>
 
+            {/* ✅ ADDED: Test Connection Button */}
+            <TouchableOpacity
+              style={styles.testButton}
+              onPress={() => navigation.navigate('Test')}
+            >
+              <Ionicons name="flask" size={24} color="#fff" />
+              <Text style={styles.buttonText}>Test Connection & Display</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.disconnectButton}
               onPress={handleDisconnect}
@@ -476,6 +485,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  testButton: {
+    backgroundColor: '#fbbf24',
+    borderRadius: 16,
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
   },
   disconnectButton: {
     backgroundColor: '#ef4444',
