@@ -56,7 +56,7 @@ export const AppContextProvider = ({ children }) => {
     initializeWearables(); // ✅ NEW: Initialize both PineTime and Oura
   }, []);
 
-  // ✅ NEW: Initialize wearables (PineTime + Oura)
+  // ✅ FIXED: Initialize wearables (PineTime + Oura) with better error handling
   const initializeWearables = async () => {
     try {
       // Initialize Oura Ring
@@ -74,15 +74,23 @@ export const AppContextProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Error initializing wearables:', error);
+      // Don't crash the app if Oura initialization fails
     }
   };
 
-  // ✅ NEW: Sync Oura Ring data
+  // ✅ FIXED: Sync Oura Ring data with proper error handling
   const syncOuraData = async () => {
     try {
       const result = await OuraRingService.autoSync();
       
-      if (result && result.success) {
+      // ✅ FIX: Handle both boolean and object return values
+      if (!result) {
+        console.log('⏭️ Oura Ring: Sync not needed or not connected');
+        return;
+      }
+      
+      // ✅ FIX: Check if result is an object with success property
+      if (typeof result === 'object' && result.success) {
         const metrics = OuraRingService.getLatestMetrics();
         
         if (metrics) {
@@ -101,6 +109,7 @@ export const AppContextProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Error syncing Oura data:', error);
+      // Don't crash the app if sync fails
     }
   };
 
