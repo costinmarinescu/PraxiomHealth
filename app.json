@@ -9,29 +9,31 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FF6B00"
+      "backgroundColor": "#ffffff"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.praxiom.health",
+      "bundleIdentifier": "com.praxiomhealth.app",
       "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "Connect to Praxiom watch",
-        "NSBluetoothPeripheralUsageDescription": "Communicate with Praxiom watch"
+        "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to your PineTime watch for health monitoring.",
+        "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to connect to your PineTime watch for health monitoring."
       }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FF6B00"
+        "backgroundColor": "#ffffff"
       },
-      "package": "com.praxiom.health",
+      "package": "com.praxiomhealth.app",
       "permissions": [
         "BLUETOOTH",
         "BLUETOOTH_ADMIN",
-        "BLUETOOTH_SCAN",
         "BLUETOOTH_CONNECT",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "BLUETOOTH_SCAN",
+        "ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
@@ -44,8 +46,9 @@
           "android": {
             "compileSdkVersion": 34,
             "targetSdkVersion": 34,
-            "minSdkVersion": 23,
-            "kotlinVersion": "1.9.20"
+            "minSdkVersion": 21,
+            "buildToolsVersion": "34.0.0",
+            "kotlinVersion": "1.9.0"
           }
         }
       ],
@@ -53,14 +56,17 @@
         "react-native-ble-plx",
         {
           "isBackgroundEnabled": true,
-          "modes": ["peripheral", "central"],
-          "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to your Praxiom watch"
+          "modes": [
+            "peripheral",
+            "central"
+          ],
+          "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to your PineTime watch"
         }
       ]
     ],
     "extra": {
       "eas": {
-        "projectId": "0b25cc14-e855-4c8b-8272-95523bb9c592"
+        "projectId": "b82d43eb-5ebe-4e3a-b57d-e1ad9e999fca"
       }
     }
   }
