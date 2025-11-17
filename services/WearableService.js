@@ -22,7 +22,7 @@ const STEP_COUNT_CHAR = '00030001-78fc-48fe-8e23-433b3a1942d0';
 
 // Praxiom Custom Service - CORRECTED to match firmware broadcast
 const PRAXIOM_SERVICE = '00190000-78fc-48fe-8e23-433b3a1942d0';
-const BIO_AGE_CHAR = '01190000-78fc-48fe-8e23-433b3a1942d0';
+const BIO_AGE_CHAR = '00190100-78fc-48fe-8e23-433b3a1942d0';
 
 const DEVICE_NAME = 'InfiniTime';
 
