@@ -1,20 +1,23 @@
 import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import WearableService from './services/WearableService';
+import OuraRingService from './services/OuraRingService'; // ✅ NEW: Oura integration
 
 export const AppContext = createContext();
 
 export const AppContextProvider = ({ children }) => {
   const [state, setState] = useState({
-    chronologicalAge: 0, // ✅ FIXED: Changed from 53 to 0 - will be loaded from Profile
-    userName: '', // ✅ ADDED: User's name from Profile
+    chronologicalAge: 0,
+    userName: '',
     biologicalAge: 70.1,
     oralHealthScore: 50,
     systemicHealthScore: 45,
     vitalityIndex: 47.5,
     fitnessScore: 65,
     watchConnected: false,
+    ouraConnected: false, // ✅ NEW: Oura connection status
     lastSync: null,
+    lastOuraSync: null, // ✅ NEW: Oura last sync time
     
     // Tier 1 Biomarkers
     salivaryPH: null,
@@ -26,19 +29,93 @@ export const AppContextProvider = ({ children }) => {
     gdf15: null,
     vitaminD: null,
     
-    // Wearable Data
+    // ✅ NEW: Fitness Assessment Data (4 domains)
+    aerobicScore: null,
+    flexibilityScore: null,
+    balanceScore: null,
+    mindBodyScore: null,
+    fitnessAssessmentDate: null,
+    
+    // Wearable Data (PineTime)
     heartRate: null,
     steps: 0,
     hrv: null,
+    
+    // ✅ NEW: Oura Ring Data
+    ouraHeartRate: null,
+    ouraHRV: null,
+    ouraSteps: null,
+    ouraSleepEfficiency: null,
+    ouraReadinessScore: null,
   });
 
   // Load saved data on mount
   useEffect(() => {
     loadSavedData();
-    loadUserProfile(); // ✅ ADDED: Load age and name from Profile
+    loadUserProfile();
+    initializeWearables(); // ✅ NEW: Initialize both PineTime and Oura
   }, []);
 
-  // ✅ ADDED: Load chronological age and user name from Profile screen
+  // ✅ NEW: Initialize wearables (PineTime + Oura)
+  const initializeWearables = async () => {
+    try {
+      // Initialize Oura Ring
+      await OuraRingService.initialize();
+      const ouraStatus = OuraRingService.getConnectionStatus();
+      
+      if (ouraStatus.isConnected) {
+        updateState({
+          ouraConnected: true,
+          lastOuraSync: ouraStatus.lastSyncTime,
+        });
+        
+        // Auto-sync Oura data
+        await syncOuraData();
+      }
+    } catch (error) {
+      console.error('Error initializing wearables:', error);
+    }
+  };
+
+  // ✅ NEW: Sync Oura Ring data
+  const syncOuraData = async () => {
+    try {
+      const result = await OuraRingService.autoSync();
+      
+      if (result && result.success) {
+        const metrics = OuraRingService.getLatestMetrics();
+        
+        if (metrics) {
+          updateState({
+            ouraHeartRate: metrics.heartRate,
+            ouraHRV: metrics.hrv,
+            ouraSteps: metrics.steps,
+            ouraSleepEfficiency: metrics.sleepEfficiency,
+            ouraReadinessScore: metrics.readinessScore,
+            lastOuraSync: metrics.syncTime,
+            ouraConnected: true,
+          });
+          
+          console.log('✅ Oura data synced:', metrics);
+        }
+      }
+    } catch (error) {
+      console.error('Error syncing Oura data:', error);
+    }
+  };
+
+  // ✅ NEW: Periodic Oura sync (every hour)
+  useEffect(() => {
+    const ouraInterval = setInterval(() => {
+      syncOuraData();
+    }, 60 * 60 * 1000); // 1 hour
+
+    // Initial sync
+    syncOuraData();
+
+    return () => clearInterval(ouraInterval);
+  }, []);
+
   const loadUserProfile = async () => {
     try {
       const savedAge = await AsyncStorage.getItem('chronologicalAge');
@@ -46,7 +123,7 @@ export const AppContextProvider = ({ children }) => {
       
       if (savedAge) {
         const age = parseInt(savedAge);
-        if (age >= 18 && age <= 120) { // Validate age range
+        if (age >= 18 && age <= 120) {
           updateState({ chronologicalAge: age });
           console.log('✅ Loaded user age from profile:', age);
         }
@@ -64,14 +141,13 @@ export const AppContextProvider = ({ children }) => {
   // Save critical data when it changes
   useEffect(() => {
     saveData();
-  }, [state.biologicalAge, state.oralHealthScore, state.systemicHealthScore]);
+  }, [state.biologicalAge, state.oralHealthScore, state.systemicHealthScore, state.fitnessScore]);
 
-  // ✅ FIXED: Auto-push Bio-Age to watch when it changes and watch is connected
+  // Auto-push Bio-Age to watch when it changes and watch is connected
   useEffect(() => {
     const pushBioAgeToWatch = async () => {
       if (state.watchConnected && state.biologicalAge) {
         try {
-          // ✅ FIXED: Use correct method name
           await WearableService.sendBioAge(state.biologicalAge);
           
           const now = new Date().toISOString();
@@ -81,26 +157,22 @@ export const AppContextProvider = ({ children }) => {
           console.log('✅ Bio-Age automatically pushed to watch:', state.biologicalAge);
         } catch (error) {
           console.error('❌ Auto-push Bio-Age failed:', error);
-          // Don't throw - this is a background operation
         }
       }
     };
     
     pushBioAgeToWatch();
-  }, [state.biologicalAge, state.watchConnected]); // Trigger when either changes
+  }, [state.biologicalAge, state.watchConnected]);
 
-  // ✅ FIXED: Subscribe to wearable data updates using correct methods
+  // Subscribe to PineTime wearable data updates
   useEffect(() => {
     const interval = setInterval(() => {
-      // ✅ FIXED: Use getConnectionStatus() instead of isConnected()
       const connectionStatus = WearableService.getConnectionStatus();
       
       if (connectionStatus.isConnected) {
         try {
-          // ✅ FIXED: Use getLatestData() to get all wearable data at once
           const wearableData = WearableService.getLatestData();
           
-          // Update state with new data
           updateState({
             heartRate: wearableData.heartRate || null,
             steps: wearableData.steps !== undefined ? wearableData.steps : 0,
@@ -108,7 +180,7 @@ export const AppContextProvider = ({ children }) => {
             watchConnected: true,
           });
           
-          console.log('📊 Wearable data updated:', {
+          console.log('📊 PineTime data updated:', {
             hr: wearableData.heartRate,
             steps: wearableData.steps,
             hrv: wearableData.hrv
@@ -117,7 +189,6 @@ export const AppContextProvider = ({ children }) => {
           console.error('Error fetching wearable data:', error);
         }
       } else {
-        // Clear data when disconnected
         updateState({
           watchConnected: false,
           heartRate: null,
@@ -127,7 +198,6 @@ export const AppContextProvider = ({ children }) => {
       }
     }, 10000); // Poll every 10 seconds
 
-    // Also check connection status more frequently
     const connectionInterval = setInterval(async () => {
       try {
         const watchStatus = await AsyncStorage.getItem('watchConnected');
@@ -144,7 +214,7 @@ export const AppContextProvider = ({ children }) => {
       clearInterval(interval);
       clearInterval(connectionInterval);
     };
-  }, []); // Empty deps - only run once on mount
+  }, []);
 
   const loadSavedData = async () => {
     try {
@@ -175,6 +245,13 @@ export const AppContextProvider = ({ children }) => {
         systemicHealthScore: state.systemicHealthScore,
         vitalityIndex: state.vitalityIndex,
         fitnessScore: state.fitnessScore,
+        // ✅ NEW: Save fitness assessment data
+        aerobicScore: state.aerobicScore,
+        flexibilityScore: state.flexibilityScore,
+        balanceScore: state.balanceScore,
+        mindBodyScore: state.mindBodyScore,
+        fitnessAssessmentDate: state.fitnessAssessmentDate,
+        // Biomarkers
         salivaryPH: state.salivaryPH,
         mmp8: state.mmp8,
         flowRate: state.flowRate,
@@ -182,7 +259,14 @@ export const AppContextProvider = ({ children }) => {
         omega3Index: state.omega3Index,
         hba1c: state.hba1c,
         gdf15: state.gdf15,
-        vitaminD: state.vitaminD
+        vitaminD: state.vitaminD,
+        // ✅ NEW: Save Oura data
+        ouraHeartRate: state.ouraHeartRate,
+        ouraHRV: state.ouraHRV,
+        ouraSteps: state.ouraSteps,
+        ouraSleepEfficiency: state.ouraSleepEfficiency,
+        ouraReadinessScore: state.ouraReadinessScore,
+        lastOuraSync: state.lastOuraSync,
       };
       await AsyncStorage.setItem('praxiomHealthData', JSON.stringify(dataToSave));
     } catch (error) {
@@ -197,84 +281,70 @@ export const AppContextProvider = ({ children }) => {
     }));
   };
 
+  // ✅ UPDATED: Use PraxiomAlgorithm for accurate calculations
+  // This is a simplified version - full calculations use PraxiomAlgorithm.js
   const calculateBiologicalAge = () => {
-    // Implementation of the Praxiom Bio-Age algorithm
     let bioAge = state.chronologicalAge;
     
-    // Oral Health Component (0-100 score affects -5 to +10 years)
+    // Simplified calculation (full version in PraxiomAlgorithm.js)
     const oralHealthImpact = ((100 - state.oralHealthScore) / 100) * 15 - 5;
-    
-    // Systemic Health Component (0-100 score affects -5 to +10 years)
     const systemicHealthImpact = ((100 - state.systemicHealthScore) / 100) * 15 - 5;
-    
-    // Fitness Component (optional, -2 to +3 years)
     const fitnessImpact = state.fitnessScore ? ((100 - state.fitnessScore) / 100) * 5 - 2 : 0;
     
-    // Calculate final biological age
     bioAge = state.chronologicalAge + oralHealthImpact + systemicHealthImpact + fitnessImpact;
-    
-    // Round to 1 decimal place
     bioAge = Math.round(bioAge * 10) / 10;
     
-    // Update state with new biological age
     updateState({ biologicalAge: bioAge });
-    
     return bioAge;
   };
 
+  // ✅ UPDATED: Enhanced wearable score with Oura data
   const calculateWearableScore = () => {
-    let score = 50; // Default
+    let score = 50;
     let count = 0;
 
+    // ✅ Prefer Oura data if available (more accurate), fallback to PineTime
+    const heartRate = state.ouraHeartRate || state.heartRate;
+    const hrv = state.ouraHRV || state.hrv;
+    const steps = state.ouraSteps || state.steps;
+
     // HRV scoring (optimal ≥70 ms)
-    if (state.hrv !== null && state.hrv > 0) {
-      const hrv = parseFloat(state.hrv);
-      if (hrv >= 70) {
-        score += 100;
-      } else if (hrv >= 50) {
-        score += 75;
-      } else if (hrv >= 30) {
-        score += 50;
-      } else {
-        score += 25;
-      }
+    if (hrv !== null && hrv > 0) {
+      if (hrv >= 70) score += 100;
+      else if (hrv >= 50) score += 75;
+      else if (hrv >= 30) score += 50;
+      else score += 25;
       count++;
     }
 
     // Steps scoring (optimal ≥8000)
-    if (state.steps > 0) {
-      const steps = parseInt(state.steps);
-      if (steps >= 8000) {
-        score += 100;
-      } else if (steps >= 5000) {
-        score += 75;
-      } else if (steps >= 3000) {
-        score += 50;
-      } else {
-        score += 25;
-      }
+    if (steps > 0) {
+      if (steps >= 8000) score += 100;
+      else if (steps >= 5000) score += 75;
+      else if (steps >= 3000) score += 50;
+      else score += 25;
       count++;
     }
 
     // Heart rate scoring (optimal: 50-70 bpm at rest)
-    if (state.heartRate !== null && state.heartRate > 0) {
-      const hr = parseInt(state.heartRate);
-      if (hr >= 50 && hr <= 70) {
-        score += 100;
-      } else if (hr >= 45 && hr <= 75) {
-        score += 75;
-      } else if (hr >= 40 && hr <= 80) {
-        score += 50;
-      } else {
-        score += 25;
-      }
+    if (heartRate !== null && heartRate > 0) {
+      if (heartRate >= 50 && heartRate <= 70) score += 100;
+      else if (heartRate >= 45 && heartRate <= 75) score += 75;
+      else if (heartRate >= 40 && heartRate <= 80) score += 50;
+      else score += 25;
+      count++;
+    }
+
+    // ✅ NEW: Include Oura-specific metrics
+    if (state.ouraReadinessScore !== null) {
+      score += state.ouraReadinessScore;
       count++;
     }
 
     if (count > 0) {
       score = (score - 50) / count;
     } else {
-      score = 50; // Default if no data
+      score = 50;
     }
 
     updateState({ fitnessScore: Math.round(score) });
@@ -287,50 +357,34 @@ export const AppContextProvider = ({ children }) => {
     let oralCount = 0;
     
     if (state.salivaryPH !== null) {
-      // pH scoring: optimal 6.5-7.2
       const ph = parseFloat(state.salivaryPH);
-      if (ph >= 6.5 && ph <= 7.2) {
-        oralScore += 100;
-      } else if (ph >= 6.0 && ph < 6.5) {
-        oralScore += 70;
-      } else if (ph > 7.2 && ph <= 7.5) {
-        oralScore += 70;
-      } else {
-        oralScore += 40;
-      }
+      if (ph >= 6.5 && ph <= 7.2) oralScore += 100;
+      else if (ph >= 6.0 && ph < 6.5) oralScore += 70;
+      else if (ph > 7.2 && ph <= 7.5) oralScore += 70;
+      else oralScore += 40;
       oralCount++;
     }
     
     if (state.mmp8 !== null) {
-      // MMP-8 scoring: optimal <60 ng/mL
       const mmp8 = parseFloat(state.mmp8);
-      if (mmp8 < 60) {
-        oralScore += 100;
-      } else if (mmp8 < 100) {
-        oralScore += 70;
-      } else {
-        oralScore += 40;
-      }
+      if (mmp8 < 60) oralScore += 100;
+      else if (mmp8 < 100) oralScore += 70;
+      else oralScore += 40;
       oralCount++;
     }
     
     if (state.flowRate !== null) {
-      // Flow rate scoring: optimal >1.5 mL/min
       const flow = parseFloat(state.flowRate);
-      if (flow > 1.5) {
-        oralScore += 100;
-      } else if (flow > 1.0) {
-        oralScore += 70;
-      } else {
-        oralScore += 40;
-      }
+      if (flow > 1.5) oralScore += 100;
+      else if (flow > 1.0) oralScore += 70;
+      else oralScore += 40;
       oralCount++;
     }
     
     if (oralCount > 0) {
       oralScore = (oralScore - 100) / oralCount;
     } else {
-      oralScore = 50; // Default if no data
+      oralScore = 50;
     }
     
     // Calculate Systemic Health Score
@@ -338,80 +392,55 @@ export const AppContextProvider = ({ children }) => {
     let systemicCount = 0;
     
     if (state.hsCRP !== null) {
-      // hs-CRP scoring: optimal <1.0 mg/L
       const hscrp = parseFloat(state.hsCRP);
-      if (hscrp < 1.0) {
-        systemicScore += 100;
-      } else if (hscrp < 3.0) {
-        systemicScore += 70;
-      } else {
-        systemicScore += 40;
-      }
+      if (hscrp < 1.0) systemicScore += 100;
+      else if (hscrp < 3.0) systemicScore += 70;
+      else systemicScore += 40;
       systemicCount++;
     }
     
     if (state.omega3Index !== null) {
-      // Omega-3 Index scoring: optimal >8%
       const omega3 = parseFloat(state.omega3Index);
-      if (omega3 > 8) {
-        systemicScore += 100;
-      } else if (omega3 > 6) {
-        systemicScore += 70;
-      } else {
-        systemicScore += 40;
-      }
+      if (omega3 > 8) systemicScore += 100;
+      else if (omega3 > 6) systemicScore += 70;
+      else systemicScore += 40;
       systemicCount++;
     }
     
     if (state.hba1c !== null) {
-      // HbA1c scoring: optimal <5.7%
       const hba1c = parseFloat(state.hba1c);
-      if (hba1c < 5.7) {
-        systemicScore += 100;
-      } else if (hba1c < 6.5) {
-        systemicScore += 70;
-      } else {
-        systemicScore += 40;
-      }
+      if (hba1c < 5.7) systemicScore += 100;
+      else if (hba1c < 6.5) systemicScore += 70;
+      else systemicScore += 40;
       systemicCount++;
     }
     
     if (state.gdf15 !== null) {
-      // GDF-15 scoring: optimal <1200 pg/mL
       const gdf15 = parseFloat(state.gdf15);
-      if (gdf15 < 1200) {
-        systemicScore += 100;
-      } else if (gdf15 < 2000) {
-        systemicScore += 70;
-      } else {
-        systemicScore += 40;
-      }
+      if (gdf15 < 1200) systemicScore += 100;
+      else if (gdf15 < 2000) systemicScore += 70;
+      else systemicScore += 40;
       systemicCount++;
     }
     
     if (state.vitaminD !== null) {
-      // Vitamin D scoring: optimal 30-100 ng/mL
       const vitD = parseFloat(state.vitaminD);
-      if (vitD >= 30 && vitD <= 100) {
-        systemicScore += 100;
-      } else if (vitD >= 20 && vitD < 30) {
-        systemicScore += 70;
-      } else {
-        systemicScore += 40;
-      }
+      if (vitD >= 30 && vitD <= 100) systemicScore += 100;
+      else if (vitD >= 20 && vitD < 30) systemicScore += 70;
+      else systemicScore += 40;
       systemicCount++;
     }
     
     if (systemicCount > 0) {
       systemicScore = (systemicScore - 100) / systemicCount;
     } else {
-      systemicScore = 45; // Default if no data
+      systemicScore = 45;
     }
     
     // Calculate wearable score
     calculateWearableScore();
     
-    // Calculate Vitality Index (average of both scores)
+    // Calculate Vitality Index
     const vitalityIndex = (oralScore + systemicScore) / 2;
     
     // Update all scores
@@ -421,8 +450,19 @@ export const AppContextProvider = ({ children }) => {
       vitalityIndex: Math.round(vitalityIndex)
     });
     
-    // Recalculate biological age with new scores and return it
     return calculateBiologicalAge();
+  };
+
+  // ✅ NEW: Update fitness assessment data
+  const updateFitnessAssessment = (fitnessData) => {
+    updateState({
+      aerobicScore: fitnessData.aerobicScore,
+      flexibilityScore: fitnessData.flexibilityScore,
+      balanceScore: fitnessData.balanceScore,
+      mindBodyScore: fitnessData.mindBodyScore,
+      fitnessScore: fitnessData.fitnessScore,
+      fitnessAssessmentDate: new Date().toISOString(),
+    });
   };
 
   return (
@@ -432,6 +472,8 @@ export const AppContextProvider = ({ children }) => {
       calculateBiologicalAge,
       calculateScores,
       calculateWearableScore,
+      updateFitnessAssessment, // ✅ NEW
+      syncOuraData, // ✅ NEW
       saveData,
       loadSavedData
     }}>
