@@ -419,46 +419,57 @@ class WearableService {
     }
   }
 
-  async testBioAgeTransmission(bioAge) {
+  // ✅ COMPATIBLE: sendTestAge() for TestScreen
+  async sendTestAge(age) {
     try {
+      this.log('═══════════════════════════════════════');
+      this.log('🔬 DIAGNOSTIC MODE - DETAILED LOGGING');
+      this.log('═══════════════════════════════════════');
+      
       if (!this.device) {
         throw new Error('No device connected');
       }
+      this.log('✅ Step 1: Device connected');
 
       if (!this.availableServices.praxiom) {
-        throw new Error('Praxiom Bio-Age service not detected on this device. Make sure you are using custom Praxiom firmware.');
+        throw new Error(
+          'Praxiom Bio-Age Service Not Found\n\n' +
+          'Your watch is running standard InfiniTime firmware. ' +
+          'Flash custom Praxiom firmware to enable bio-age display.'
+        );
       }
+      this.log('✅ Step 2: Praxiom service available');
 
-      this.log('═══════════════════════════════════════');
-      this.log(`🧪 TESTING BIO-AGE TRANSMISSION`);
-      this.log(`   Bio-Age to send: ${bioAge}`);
-      this.log(`   Device: ${this.device.name} (${this.device.id})`);
-      
-      const timestamp = new Date().toLocaleTimeString();
-      this.addTransmissionLog(`[${timestamp}] 🧪 Test started - Bio-Age: ${bioAge}`);
+      // ✅ FIXED: Multiply by 10 to preserve decimal (e.g., 59.3 → 593)
+      const bioAgeInt = Math.round(age * 10);
+      if (bioAgeInt < 180 || bioAgeInt > 1200) {
+        throw new Error('Age must be between 18 and 120');
+      }
+      this.log(`✅ Step 3: Age validated: ${age} (sending as ${bioAgeInt})`);
 
+      // Create buffer with detailed logging
       const buffer = new Uint8Array(4);
-      const bioAgeInt = Math.round(bioAge * 10);
-      
       buffer[0] = bioAgeInt & 0xFF;
       buffer[1] = (bioAgeInt >> 8) & 0xFF;
       buffer[2] = (bioAgeInt >> 16) & 0xFF;
       buffer[3] = (bioAgeInt >> 24) & 0xFF;
 
-      this.log(`   Processing:`);
-      this.log(`   - Multiply by 10: ${bioAge} × 10 = ${bioAgeInt}`);
-      this.log(`   - Convert to bytes (little-endian uint32):`);
-      this.log(`     Byte 0: ${buffer[0]} (0x${buffer[0].toString(16).padStart(2, '0')})`);
-      this.log(`     Byte 1: ${buffer[1]} (0x${buffer[1].toString(16).padStart(2, '0')})`);
-      this.log(`     Byte 2: ${buffer[2]} (0x${buffer[2].toString(16).padStart(2, '0')})`);
-      this.log(`     Byte 3: ${buffer[3]} (0x${buffer[3].toString(16).padStart(2, '0')})`);
+      this.log('📦 Step 4: Buffer created');
+      this.log(`   Original age: ${age}`);
+      this.log(`   Multiplied by 10: ${bioAgeInt}`);
+      this.log(`   Byte 0: 0x${buffer[0].toString(16).padStart(2, '0')} (${buffer[0]})`);
+      this.log(`   Byte 1: 0x${buffer[1].toString(16).padStart(2, '0')} (${buffer[1]})`);
+      this.log(`   Byte 2: 0x${buffer[2].toString(16).padStart(2, '0')} (${buffer[2]})`);
+      this.log(`   Byte 3: 0x${buffer[3].toString(16).padStart(2, '0')} (${buffer[3]})`);
+      this.log(`   Hex: ${Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ')}`);
 
       const base64Data = this.bufferToBase64(buffer);
-      this.log(`   - Encode to Base64: ${base64Data}`);
+      this.log(`📝 Step 5: Base64 encoded: ${base64Data}`);
 
-      this.log(`📡 Attempting to write to watch...`);
-      this.log(`   Service UUID: ${PRAXIOM_SERVICE}`);
-      this.log(`   Characteristic UUID: ${BIO_AGE_CHAR}`);
+      this.log('📤 Step 6: Writing to characteristic...');
+      this.log(`   Service: ${PRAXIOM_SERVICE}`);
+      this.log(`   Characteristic: ${BIO_AGE_CHAR}`);
+      this.log(`   Data length: ${buffer.length} bytes`);
 
       await this.device.writeCharacteristicWithResponseForService(
         PRAXIOM_SERVICE,
@@ -466,35 +477,37 @@ class WearableService {
         base64Data
       );
 
-      this.log('✅ TRANSMISSION SUCCESSFUL!');
-      this.log('   Watch should now display the bio-age.');
+      this.log('✅ Step 7: Write completed successfully!');
+      this.log('   Watch should display: ' + Math.round(age));
       this.log('═══════════════════════════════════════');
+
+      this.cachedData.bioAge = age;
       
-      this.cachedData.bioAge = bioAge;
-      this.addTransmissionLog(`[${timestamp}] ✅ Write confirmed by watch`);
+      const timestamp = new Date().toLocaleTimeString();
+      this.addTransmissionLog(`[${timestamp}] 📤 Sending Bio-Age: ${age}`);
+      this.addTransmissionLog(`[${timestamp}] ✅ Bio-Age sent successfully`);
       
       return {
         success: true,
-        bioAge: bioAge,
+        bioAge: age,
         deviceName: this.device.name,
-        timestamp: new Date().toISOString(),
-        diagnostics: {
-          bytes: Array.from(buffer),
-          hex: Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0')).join(', '),
-          base64: base64Data
-        }
+        timestamp: new Date().toISOString()
       };
 
     } catch (error) {
-      this.log('❌ ERROR occurred:');
+      this.log('❌ ERROR in sendTestAge:');
       this.log(`   Message: ${error.message}`);
-      this.log(`   Stack: ${error.stack}`);
       this.log('═══════════════════════════════════════');
       
       const timestamp = new Date().toLocaleTimeString();
-      this.addTransmissionLog(`[${timestamp}] ❌ Test failed: ${error.message}`);
+      this.addTransmissionLog(`[${timestamp}] ❌ Failed: ${error.message}`);
       throw error;
     }
+  }
+
+  // Alias for backward compatibility
+  async testBioAgeTransmission(bioAge) {
+    return this.sendTestAge(bioAge);
   }
 
   addTransmissionLog(message) {
