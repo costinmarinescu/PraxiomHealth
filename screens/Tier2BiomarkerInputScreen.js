@@ -352,8 +352,8 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   input: {
-    backgroundColor: '#1e1e2e',
-    color: '#ffffff',
+    backgroundColor: '#FFFFFF',
+    color: '#000000',
     padding: 15,
     borderRadius: 12,
     fontSize: 16,
