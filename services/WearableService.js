@@ -1,6 +1,6 @@
 /**
- * Praxiom Health - DIAGNOSTIC WearableService
- * Enhanced logging to debug watch display issue
+ * Praxiom Health - Enhanced WearableService
+ * With HRV calculation support from RR intervals
  */
 
 import { BleManager } from 'react-native-ble-plx';
@@ -37,10 +37,14 @@ class WearableService {
       heartRate: 0,
       steps: 0,
       battery: 0,
-      hrv: 0,
+      hrv: null, // Will be calculated from RR intervals
       bioAge: 0,
       lastUpdate: null
     };
+    
+    // Store RR intervals for HRV calculation
+    this.rrIntervals = [];
+    this.maxRRIntervals = 20; // Keep last 20 intervals for calculation
     
     this.subscriptions = [];
     this.pollingInterval = null;
@@ -256,6 +260,7 @@ class WearableService {
     this.isConnected = false;
     this.stopMonitoring();
     this.stopPeriodicTimeSync();
+    this.rrIntervals = []; // Clear RR intervals on disconnect
   }
 
   // ===================================
@@ -286,30 +291,9 @@ class WearableService {
       this.log(`   Motion/Steps: ${this.availableServices.motion ? '✅' : '❌'}`);
       this.log(`   Time Sync: ${this.availableServices.timeSync ? '✅' : '❌'}`);
 
-      if (this.availableServices.praxiom) {
-        const timestamp = new Date().toLocaleTimeString();
-        this.addTransmissionLog(`[${timestamp}] ✅ Praxiom service detected and ready`);
-      } else {
-        const timestamp = new Date().toLocaleTimeString();
-        this.addTransmissionLog(
-          `[${timestamp}] ⚠️ Warning: Praxiom bio-age service not available. ` +
-          `Flash custom Praxiom firmware to enable bio-age display.`
-        );
-      }
-
-      return this.availableServices;
     } catch (error) {
       this.log(`⚠️ Service detection failed: ${error.message}`);
-      return this.availableServices;
     }
-  }
-
-  isPraxiomServiceAvailable() {
-    return this.availableServices.praxiom;
-  }
-
-  getAvailableServices() {
-    return { ...this.availableServices };
   }
 
   // ===================================
@@ -318,14 +302,14 @@ class WearableService {
 
   async syncTimeToWatch() {
     try {
-      if (!this.device) {
-        this.log('⚠️ No device connected');
+      if (!this.availableServices.timeSync) {
+        this.log('⏰ Time sync service not available');
         return false;
       }
 
       const now = new Date();
-      const timeData = new Uint8Array(10);
       
+      const timeData = new Uint8Array(10);
       const year = now.getFullYear();
       timeData[0] = year & 0xFF;
       timeData[1] = (year >> 8) & 0xFF;
@@ -335,8 +319,10 @@ class WearableService {
       timeData[5] = now.getMinutes();
       timeData[6] = now.getSeconds();
       
-      const dayOfWeek = now.getDay();
-      timeData[7] = dayOfWeek === 0 ? 7 : dayOfWeek;
+      let dayOfWeek = now.getDay();
+      if (dayOfWeek === 0) dayOfWeek = 7;
+      timeData[7] = dayOfWeek;
+      
       timeData[8] = 0;
       timeData[9] = 1;
 
@@ -348,18 +334,18 @@ class WearableService {
         base64Data
       );
 
-      this.log(`✅ Time synced to watch: ${now.toLocaleString()}`);
+      this.log(`⏰ Time synced: ${now.toLocaleString()}`);
       return true;
 
     } catch (error) {
-      this.log(`❌ Failed to sync time: ${error.message}`);
+      this.log(`⚠️ Time sync failed: ${error.message}`);
       return false;
     }
   }
 
   startPeriodicTimeSync() {
     this.timeSyncInterval = setInterval(async () => {
-      if (this.isConnected) {
+      if (this.isConnected && this.availableServices.timeSync) {
         await this.syncTimeToWatch();
       }
     }, 3600000);
@@ -373,7 +359,7 @@ class WearableService {
   }
 
   // ===================================
-  // BIO-AGE TRANSMISSION (DIAGNOSTIC VERSION)
+  // BIO-AGE TRANSMISSION
   // ===================================
 
   async sendBioAge(bioAge) {
@@ -383,96 +369,96 @@ class WearableService {
       }
 
       if (!this.availableServices.praxiom) {
-        throw new Error(
-          'Praxiom service not available. Flash custom Praxiom firmware.'
-        );
+        throw new Error('Praxiom service not available on this device');
       }
 
-      if (bioAge < 18 || bioAge > 120) {
-        throw new Error('Bio-age must be between 18 and 120');
-      }
+      this.log('═══════════════════════════════════════');
+      this.log(`📤 SENDING BIO-AGE: ${bioAge}`);
+      
+      const timestamp = new Date().toLocaleTimeString();
+      this.addTransmissionLog(`[${timestamp}] Sending Bio-Age: ${bioAge}`);
 
       const buffer = new Uint8Array(4);
-      buffer[0] = bioAge & 0xFF;
-      buffer[1] = (bioAge >> 8) & 0xFF;
-      buffer[2] = (bioAge >> 16) & 0xFF;
-      buffer[3] = (bioAge >> 24) & 0xFF;
+      const bioAgeInt = Math.round(bioAge * 10);
+      
+      buffer[0] = bioAgeInt & 0xFF;
+      buffer[1] = (bioAgeInt >> 8) & 0xFF;
+      buffer[2] = (bioAgeInt >> 16) & 0xFF;
+      buffer[3] = (bioAgeInt >> 24) & 0xFF;
+
+      this.log(`   Integer value: ${bioAgeInt} (age * 10)`);
+      this.log(`   Bytes: [${Array.from(buffer).join(', ')}]`);
+      this.log(`   Hex: [${Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ')}]`);
 
       const base64Data = this.bufferToBase64(buffer);
+      this.log(`   Base64: ${base64Data}`);
 
+      this.log('📡 Writing to characteristic...');
       await this.device.writeCharacteristicWithResponseForService(
         PRAXIOM_SERVICE,
         BIO_AGE_CHAR,
         base64Data
       );
 
+      this.log('✅ Bio-Age sent successfully!');
+      this.log('═══════════════════════════════════════');
+      
       this.cachedData.bioAge = bioAge;
+      this.addTransmissionLog(`[${timestamp}] ✅ Bio-Age sent successfully`);
       
-      const timestamp = new Date().toLocaleTimeString();
-      this.addTransmissionLog(`[${timestamp}] ✅ Bio-Age ${bioAge} sent successfully`);
-      
-      this.log(`✅ Bio-Age sent to watch: ${bioAge}`);
-      return { success: true, bioAge };
+      return true;
 
     } catch (error) {
+      this.log('❌ ERROR sending Bio-Age:');
+      this.log(`   Message: ${error.message}`);
+      this.log('═══════════════════════════════════════');
+      
       const timestamp = new Date().toLocaleTimeString();
       this.addTransmissionLog(`[${timestamp}] ❌ Failed: ${error.message}`);
-      this.log(`❌ Failed to send bio-age: ${error.message}`);
       throw error;
     }
   }
 
-  // ===================================
-  // TEST MODE (DIAGNOSTIC VERSION)
-  // ===================================
-
-  async sendTestAge(age) {
+  async testBioAgeTransmission(bioAge) {
     try {
-      this.log('═══════════════════════════════════════');
-      this.log('🔬 DIAGNOSTIC MODE - DETAILED LOGGING');
-      this.log('═══════════════════════════════════════');
-      
       if (!this.device) {
         throw new Error('No device connected');
       }
-      this.log('✅ Step 1: Device connected');
 
       if (!this.availableServices.praxiom) {
-        throw new Error(
-          'Praxiom Bio-Age Service Not Found\n\n' +
-          'Your watch is running standard InfiniTime firmware. ' +
-          'Flash custom Praxiom firmware to enable bio-age display.'
-        );
+        throw new Error('Praxiom Bio-Age service not detected on this device. Make sure you are using custom Praxiom firmware.');
       }
-      this.log('✅ Step 2: Praxiom service available');
 
-      const bioAge = Math.round(age);
-      if (bioAge < 18 || bioAge > 120) {
-        throw new Error('Age must be between 18 and 120');
-      }
-      this.log(`✅ Step 3: Age validated: ${bioAge}`);
+      this.log('═══════════════════════════════════════');
+      this.log(`🧪 TESTING BIO-AGE TRANSMISSION`);
+      this.log(`   Bio-Age to send: ${bioAge}`);
+      this.log(`   Device: ${this.device.name} (${this.device.id})`);
+      
+      const timestamp = new Date().toLocaleTimeString();
+      this.addTransmissionLog(`[${timestamp}] 🧪 Test started - Bio-Age: ${bioAge}`);
 
-      // Create buffer with detailed logging
       const buffer = new Uint8Array(4);
-      buffer[0] = bioAge & 0xFF;
-      buffer[1] = (bioAge >> 8) & 0xFF;
-      buffer[2] = (bioAge >> 16) & 0xFF;
-      buffer[3] = (bioAge >> 24) & 0xFF;
+      const bioAgeInt = Math.round(bioAge * 10);
+      
+      buffer[0] = bioAgeInt & 0xFF;
+      buffer[1] = (bioAgeInt >> 8) & 0xFF;
+      buffer[2] = (bioAgeInt >> 16) & 0xFF;
+      buffer[3] = (bioAgeInt >> 24) & 0xFF;
 
-      this.log('📦 Step 4: Buffer created');
-      this.log(`   Byte 0: ${buffer[0].toString(16).padStart(2, '0')} (${buffer[0]})`);
-      this.log(`   Byte 1: ${buffer[1].toString(16).padStart(2, '0')} (${buffer[1]})`);
-      this.log(`   Byte 2: ${buffer[2].toString(16).padStart(2, '0')} (${buffer[2]})`);
-      this.log(`   Byte 3: ${buffer[3].toString(16).padStart(2, '0')} (${buffer[3]})`);
-      this.log(`   Hex: ${Array.from(buffer).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
+      this.log(`   Processing:`);
+      this.log(`   - Multiply by 10: ${bioAge} × 10 = ${bioAgeInt}`);
+      this.log(`   - Convert to bytes (little-endian uint32):`);
+      this.log(`     Byte 0: ${buffer[0]} (0x${buffer[0].toString(16).padStart(2, '0')})`);
+      this.log(`     Byte 1: ${buffer[1]} (0x${buffer[1].toString(16).padStart(2, '0')})`);
+      this.log(`     Byte 2: ${buffer[2]} (0x${buffer[2].toString(16).padStart(2, '0')})`);
+      this.log(`     Byte 3: ${buffer[3]} (0x${buffer[3].toString(16).padStart(2, '0')})`);
 
       const base64Data = this.bufferToBase64(buffer);
-      this.log(`📝 Step 5: Base64 encoded: ${base64Data}`);
+      this.log(`   - Encode to Base64: ${base64Data}`);
 
-      this.log('📤 Step 6: Writing to characteristic...');
-      this.log(`   Service: ${PRAXIOM_SERVICE}`);
-      this.log(`   Characteristic: ${BIO_AGE_CHAR}`);
-      this.log(`   Data length: ${buffer.length} bytes`);
+      this.log(`📡 Attempting to write to watch...`);
+      this.log(`   Service UUID: ${PRAXIOM_SERVICE}`);
+      this.log(`   Characteristic UUID: ${BIO_AGE_CHAR}`);
 
       await this.device.writeCharacteristicWithResponseForService(
         PRAXIOM_SERVICE,
@@ -480,13 +466,11 @@ class WearableService {
         base64Data
       );
 
-      this.log('✅ Step 7: Write completed successfully!');
+      this.log('✅ TRANSMISSION SUCCESSFUL!');
+      this.log('   Watch should now display the bio-age.');
       this.log('═══════════════════════════════════════');
-
-      this.cachedData.bioAge = bioAge;
       
-      const timestamp = new Date().toLocaleTimeString();
-      this.addTransmissionLog(`[${timestamp}] 📤 DIAGNOSTIC: Sent ${bioAge} as bytes [${Array.from(buffer).join(', ')}]`);
+      this.cachedData.bioAge = bioAge;
       this.addTransmissionLog(`[${timestamp}] ✅ Write confirmed by watch`);
       
       return {
@@ -569,12 +553,18 @@ class WearableService {
 
           if (characteristic && characteristic.value) {
             const hrData = this.base64ToBuffer(characteristic.value);
-            const hr = this.parseHeartRate(hrData);
+            const result = this.parseHeartRateWithRR(hrData);
             
-            if (hr > 0) {
-              this.cachedData.heartRate = hr;
+            if (result.heartRate > 0) {
+              this.cachedData.heartRate = result.heartRate;
               this.cachedData.lastUpdate = new Date();
-              this.log(`💓 Heart Rate: ${hr} BPM`);
+              this.log(`💓 Heart Rate: ${result.heartRate} BPM`);
+              
+              // Process RR intervals for HRV if available
+              if (result.rrIntervals && result.rrIntervals.length > 0) {
+                this.addRRIntervals(result.rrIntervals);
+                this.calculateHRV();
+              }
             }
           }
         }
@@ -661,8 +651,84 @@ class WearableService {
     }
   }
 
+  parseHeartRateWithRR(data) {
+    const flags = data[0];
+    const isUint16 = (flags & 0x01) !== 0;
+    const hasRRInterval = (flags & 0x10) !== 0;
+
+    let heartRate;
+    let offset;
+
+    if (isUint16) {
+      heartRate = data[1] | (data[2] << 8);
+      offset = 3;
+    } else {
+      heartRate = data[1];
+      offset = 2;
+    }
+
+    const rrIntervals = [];
+    
+    if (hasRRInterval && data.length > offset) {
+      // RR intervals are in 1/1024 second units
+      while (offset < data.length - 1) {
+        const rr = data[offset] | (data[offset + 1] << 8);
+        const rrMs = (rr / 1024.0) * 1000; // Convert to milliseconds
+        rrIntervals.push(rrMs);
+        offset += 2;
+      }
+      
+      if (rrIntervals.length > 0) {
+        this.log(`📊 RR Intervals: ${rrIntervals.map(r => r.toFixed(0)).join(', ')} ms`);
+      }
+    }
+
+    return {
+      heartRate,
+      rrIntervals
+    };
+  }
+
   parseSteps(data) {
     return data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
+  }
+
+  // ===================================
+  // HRV CALCULATION
+  // ===================================
+
+  addRRIntervals(intervals) {
+    // Add new RR intervals to the buffer
+    this.rrIntervals.push(...intervals);
+    
+    // Keep only the most recent intervals
+    if (this.rrIntervals.length > this.maxRRIntervals) {
+      this.rrIntervals = this.rrIntervals.slice(-this.maxRRIntervals);
+    }
+  }
+
+  calculateHRV() {
+    if (this.rrIntervals.length < 2) {
+      return null;
+    }
+
+    // Calculate RMSSD (Root Mean Square of Successive Differences)
+    // This is a common time-domain HRV metric
+    let sumSquaredDiff = 0;
+    
+    for (let i = 1; i < this.rrIntervals.length; i++) {
+      const diff = this.rrIntervals[i] - this.rrIntervals[i - 1];
+      sumSquaredDiff += diff * diff;
+    }
+    
+    const rmssd = Math.sqrt(sumSquaredDiff / (this.rrIntervals.length - 1));
+    
+    // Update cached HRV value
+    this.cachedData.hrv = Math.round(rmssd);
+    
+    this.log(`📈 HRV (RMSSD): ${this.cachedData.hrv} ms (from ${this.rrIntervals.length} intervals)`);
+    
+    return this.cachedData.hrv;
   }
 
   // ===================================
@@ -695,6 +761,10 @@ class WearableService {
 
   getBattery() {
     return this.cachedData.battery;
+  }
+
+  getHRV() {
+    return this.cachedData.hrv;
   }
 
   // ===================================
