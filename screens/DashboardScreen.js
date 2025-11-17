@@ -116,7 +116,7 @@ export default function DashboardScreen({ navigation }) {
           <Text style={styles.watchButtonIcon}>
             {state.watchConnected ? '⌚✓' : '⌚'}
           </Text>
-          <View style={{ flex: 1 }}>
+          <View style={{ alignItems: 'center', flex: 1 }}>
             <Text style={styles.watchButtonText}>
               {state.watchConnected ? 'Watch Connected' : 'Connect Watch'}
             </Text>
@@ -321,6 +321,7 @@ const styles = StyleSheet.create({
   watchButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 15,
     borderRadius: 10,
     marginBottom: 20,
