@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
   View,
   Text,
@@ -11,21 +11,18 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { AppContext } from '../AppContext'; // ✅ ADDED
+import WearableService from '../services/WearableService'; // ✅ ADDED
 
-export default function SettingsScreen({ navigation }) { // ✅ ADDED: navigation prop
+export default function SettingsScreen({ navigation }) {
+  const { state } = useContext(AppContext); // ✅ ADDED: Use AppContext
   const [notifications, setNotifications] = useState(true);
   const [autoSync, setAutoSync] = useState(true);
   const [deviceName, setDeviceName] = useState('Not Connected');
-  const [watchConnected, setWatchConnected] = useState(false);
 
   useEffect(() => {
     loadSettings();
     loadDeviceName();
-    checkWatchConnection();
-    
-    // Check watch connection periodically
-    const interval = setInterval(checkWatchConnection, 5000);
-    return () => clearInterval(interval);
   }, []);
 
   const loadSettings = async () => {
@@ -43,15 +40,6 @@ export default function SettingsScreen({ navigation }) { // ✅ ADDED: navigatio
   const loadDeviceName = async () => {
     const name = await AsyncStorage.getItem('lastDeviceName');
     if (name) setDeviceName(name);
-  };
-
-  const checkWatchConnection = async () => {
-    try {
-      const watchStatus = await AsyncStorage.getItem('watchConnected');
-      setWatchConnected(watchStatus === 'true');
-    } catch (error) {
-      console.error('Error checking watch connection:', error);
-    }
   };
 
   const saveSetting = async (key, value) => {
@@ -145,9 +133,9 @@ export default function SettingsScreen({ navigation }) { // ✅ ADDED: navigatio
             <Text style={styles.deviceName}>{deviceName}</Text>
             <Text style={[
               styles.deviceStatus,
-              watchConnected ? styles.deviceConnected : styles.deviceDisconnected
+              state.watchConnected ? styles.deviceConnected : styles.deviceDisconnected
             ]}>
-              {watchConnected ? 'Connected' : 'Disconnected'}
+              {state.watchConnected ? 'Connected' : 'Disconnected'}
             </Text>
           </View>
         </View>
