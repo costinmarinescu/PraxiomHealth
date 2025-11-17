@@ -12,13 +12,14 @@ import SettingsScreen from './screens/SettingsScreen';
 import BiomarkerInputScreen from './screens/BiomarkerInputScreen';
 import Tier1BiomarkerInputScreen from './screens/Tier1BiomarkerInputScreen';
 import Tier2BiomarkerInputScreen from './screens/Tier2BiomarkerInputScreen';
+import FitnessAssessmentScreen from './screens/FitnessAssessmentScreen'; // ✅ NEW: Fitness module
 import ReportScreen from './screens/ReportScreen';
 import DNATestScreen from './screens/DNATestScreen';
 import HistoricalDataScreen from './screens/HistoricalDataScreen';
 import BiomarkerHistoryScreen from './screens/BiomarkerHistoryScreen';
 import ComparisonScreen from './screens/ComparisonScreen';
 import ProfileScreen from './screens/ProfileScreen';
-import TestScreen from './screens/TestScreen'; // ✅ ADDED: Test screen for watch communication
+import TestScreen from './screens/TestScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -38,6 +39,7 @@ function DashboardStack() {
       <Stack.Screen name="BiomarkerInput" component={BiomarkerInputScreen} />
       <Stack.Screen name="Tier1BiomarkerInput" component={Tier1BiomarkerInputScreen} />
       <Stack.Screen name="Tier2BiomarkerInput" component={Tier2BiomarkerInputScreen} />
+      <Stack.Screen name="FitnessAssessment" component={FitnessAssessmentScreen} /> {/* ✅ NEW */}
       <Stack.Screen name="Report" component={ReportScreen} />
       <Stack.Screen name="DNATest" component={DNATestScreen} />
       <Stack.Screen name="HistoricalData" component={HistoricalDataScreen} />
@@ -48,7 +50,6 @@ function DashboardStack() {
   );
 }
 
-// ✅ ADDED: Watch Stack with TestScreen
 function WatchStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
