@@ -1,124 +1,169 @@
 import React from 'react';
-import { ImageBackground, StyleSheet } from 'react-native';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
-import { AppContextProvider } from './AppContext';
-import ErrorBoundary from './components/ErrorBoundary';
-import DashboardScreen from './screens/DashboardScreen';
-import WatchScreen from './screens/WatchScreen';
-import SettingsScreen from './screens/SettingsScreen';
-import BiomarkerInputScreen from './screens/BiomarkerInputScreen';
-import Tier1BiomarkerInputScreen from './screens/Tier1BiomarkerInputScreen';
-import Tier2BiomarkerInputScreen from './screens/Tier2BiomarkerInputScreen';
-import FitnessAssessmentScreen from './screens/FitnessAssessmentScreen'; // ✅ NEW: Fitness module
-import ReportScreen from './screens/ReportScreen';
-import DNATestScreen from './screens/DNATestScreen';
-import HistoricalDataScreen from './screens/HistoricalDataScreen';
-import BiomarkerHistoryScreen from './screens/BiomarkerHistoryScreen';
-import ComparisonScreen from './screens/ComparisonScreen';
-import ProfileScreen from './screens/ProfileScreen';
-import TestScreen from './screens/TestScreen';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
-const Tab = createBottomTabNavigator();
-const Stack = createNativeStackNavigator();
-
-const MyTheme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    background: 'transparent',
-  },
-};
-
-function DashboardStack() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="DashboardHome" component={DashboardScreen} />
-      <Stack.Screen name="BiomarkerInput" component={BiomarkerInputScreen} />
-      <Stack.Screen name="Tier1BiomarkerInput" component={Tier1BiomarkerInputScreen} />
-      <Stack.Screen name="Tier2BiomarkerInput" component={Tier2BiomarkerInputScreen} />
-      <Stack.Screen name="FitnessAssessment" component={FitnessAssessmentScreen} /> {/* ✅ NEW */}
-      <Stack.Screen name="Report" component={ReportScreen} />
-      <Stack.Screen name="DNATest" component={DNATestScreen} />
-      <Stack.Screen name="HistoricalData" component={HistoricalDataScreen} />
-      <Stack.Screen name="BiomarkerHistory" component={BiomarkerHistoryScreen} />
-      <Stack.Screen name="Comparison" component={ComparisonScreen} />
-      <Stack.Screen name="Profile" component={ProfileScreen} />
-    </Stack.Navigator>
-  );
-}
-
-function WatchStack() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="WatchHome" component={WatchScreen} />
-      <Stack.Screen name="Test" component={TestScreen} />
-    </Stack.Navigator>
-  );
-}
-
-function SettingsStack() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="SettingsHome" component={SettingsScreen} />
-      <Stack.Screen name="Profile" component={ProfileScreen} />
-    </Stack.Navigator>
-  );
-}
+/**
+ * ABSOLUTE MINIMAL APP - ZERO EXTERNAL DEPENDENCIES
+ * 
+ * This uses ONLY React Native core components.
+ * No navigation, no context, no BLE, no images, nothing.
+ * 
+ * If this crashes, your build system has fundamental issues.
+ * If this works, add features back one by one.
+ */
 
 export default function App() {
+  const [count, setCount] = React.useState(0);
+  
+  React.useEffect(() => {
+    console.log('🚀 MINIMAL APP STARTED SUCCESSFULLY!');
+    console.log('✅ React is working');
+    console.log('✅ React Native is working');
+    console.log('✅ Your build system is working');
+    console.log('');
+    console.log('⚠️ If you see this in the console, the problem is NOT');
+    console.log('   in your build system or core dependencies.');
+    console.log('   The problem is in one of your app components.');
+  }, []);
+  
   return (
-    <ErrorBoundary>
-      <AppContextProvider>
-        <ImageBackground
-          source={require('./assets/praxiom_background.png')}
-          style={styles.backgroundImage}
-          onError={() => console.log('Background image error, using fallback')}
+    <View style={styles.container}>
+      <View style={styles.card}>
+        <Text style={styles.title}>✅ SUCCESS!</Text>
+        <Text style={styles.message}>
+          Your app started successfully!
+        </Text>
+        <Text style={styles.details}>
+          This means your build system works.
+          The crash was in a component or library.
+        </Text>
+        
+        <View style={styles.divider} />
+        
+        <Text style={styles.sectionTitle}>Test Counter:</Text>
+        <Text style={styles.counter}>{count}</Text>
+        
+        <TouchableOpacity 
+          style={styles.button}
+          onPress={() => setCount(count + 1)}
         >
-          <NavigationContainer theme={MyTheme}>
-            <Tab.Navigator
-              screenOptions={({ route }) => ({
-                tabBarIcon: ({ focused, color, size }) => {
-                  let iconName;
-                  if (route.name === 'Dashboard') {
-                    iconName = focused ? 'home' : 'home-outline';
-                  } else if (route.name === 'Watch') {
-                    iconName = focused ? 'watch' : 'watch-outline';
-                  } else if (route.name === 'Settings') {
-                    iconName = focused ? 'settings' : 'settings-outline';
-                  } else {
-                    iconName = 'ellipsis-horizontal';
-                  }
-                  return <Ionicons name={iconName} size={size} color={color} />;
-                },
-                headerShown: false,
-                tabBarActiveTintColor: '#00CFC1',
-                tabBarInactiveTintColor: 'white',
-                tabBarStyle: {
-                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                  borderTopWidth: 0,
-                  elevation: 0,
-                },
-              })}
-            >
-              <Tab.Screen name="Dashboard" component={DashboardStack} />
-              <Tab.Screen name="Watch" component={WatchStack} />
-              <Tab.Screen name="Settings" component={SettingsStack} />
-            </Tab.Navigator>
-          </NavigationContainer>
-        </ImageBackground>
-      </AppContextProvider>
-    </ErrorBoundary>
+          <Text style={styles.buttonText}>Tap to Increment</Text>
+        </TouchableOpacity>
+        
+        <View style={styles.divider} />
+        
+        <Text style={styles.instructions}>
+          Next Steps:{'\n'}
+          {'\n'}
+          1. Your build works! ✅{'\n'}
+          2. Check Metro console logs{'\n'}
+          3. Add components back one by one{'\n'}
+          4. Find which component crashes
+        </Text>
+        
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>Praxiom Health</Text>
+          <Text style={styles.badgeSubtext}>Diagnostic Mode</Text>
+        </View>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  backgroundImage: {
+  container: {
     flex: 1,
+    backgroundColor: '#0a0a1e',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  card: {
+    backgroundColor: '#1e1e2e',
+    borderRadius: 20,
+    padding: 30,
+    maxWidth: 400,
     width: '100%',
-    height: '100%',
-    backgroundColor: '#1a1a2e',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  title: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#47C83E',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  message: {
+    fontSize: 20,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 10,
+    fontWeight: '600',
+  },
+  details: {
+    fontSize: 14,
+    color: '#8e8e93',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#333',
+    marginVertical: 20,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    color: '#00d4ff',
+    textAlign: 'center',
+    marginBottom: 10,
+    fontWeight: '600',
+  },
+  counter: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#FF6B00',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  button: {
+    backgroundColor: '#00d4ff',
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  buttonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  instructions: {
+    fontSize: 14,
+    color: '#8e8e93',
+    lineHeight: 22,
+  },
+  badge: {
+    marginTop: 20,
+    padding: 15,
+    backgroundColor: 'rgba(0, 212, 255, 0.1)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#00d4ff',
+  },
+  badgeText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#00d4ff',
+    textAlign: 'center',
+  },
+  badgeSubtext: {
+    fontSize: 12,
+    color: '#8e8e93',
+    textAlign: 'center',
+    marginTop: 5,
   },
 });
