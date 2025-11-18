@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppContext } from '../AppContext';
 
 export default function SettingsScreen({ navigation }) {
@@ -34,8 +35,22 @@ export default function SettingsScreen({ navigation }) {
     }
   }, [state.profile?.birthdate]);
 
-  // ✅ FIX: Simple date input handler
-  const handleSaveBirthdate = () => {
+  // ✅ NEW: Calculate age from birthdate
+  const calculateAge = (birthdate) => {
+    const today = new Date();
+    const birthDate = new Date(birthdate);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age;
+  };
+
+  // ✅ FIX: Calculate and save chronological age from birthdate
+  const handleSaveBirthdate = async () => {
     const year = parseInt(birthYear);
     const month = parseInt(birthMonth);
     const day = parseInt(birthDay);
@@ -64,15 +79,37 @@ export default function SettingsScreen({ navigation }) {
     // Create date
     const birthdate = new Date(year, month - 1, day);
     
-    // Save
-    updateState({
-      profile: {
-        ...state.profile,
-        birthdate: birthdate.toISOString()
-      }
-    });
+    // ✅ NEW: Calculate chronological age
+    const chronologicalAge = calculateAge(birthdate);
     
-    Alert.alert('Success', 'Date of birth updated successfully');
+    // Validate age is reasonable
+    if (chronologicalAge < 18 || chronologicalAge > 120) {
+      Alert.alert('Invalid Age', `Calculated age is ${chronologicalAge}. Please check your birthdate.`);
+      return;
+    }
+    
+    try {
+      // Save chronological age to AsyncStorage
+      await AsyncStorage.setItem('chronologicalAge', chronologicalAge.toString());
+      console.log('✅ Chronological age saved:', chronologicalAge);
+      
+      // Update state with both birthdate AND chronological age
+      updateState({
+        profile: {
+          ...state.profile,
+          birthdate: birthdate.toISOString()
+        },
+        chronologicalAge: chronologicalAge
+      });
+      
+      Alert.alert(
+        'Success',
+        `Date of birth updated successfully!\n\nYour chronological age: ${chronologicalAge} years`
+      );
+    } catch (error) {
+      console.error('Error saving birthdate:', error);
+      Alert.alert('Error', 'Failed to save date of birth');
+    }
   };
 
   const handleToggleNotifications = (value) => {
@@ -200,116 +237,121 @@ export default function SettingsScreen({ navigation }) {
                 <Text style={styles.deviceHint}>Tap to connect</Text>
               )}
             </View>
-            <Ionicons 
-              name="chevron-forward" 
-              size={24} 
-              color="rgba(255,255,255,0.7)" 
-            />
+            <Ionicons name="chevron-forward" size={24} color="rgba(255,255,255,0.5)" />
           </TouchableOpacity>
         </View>
 
-        {/* Personal Profile Section */}
+        {/* Profile Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personal Profile - Date of Birth</Text>
+          <Text style={styles.sectionTitle}>Profile Information</Text>
           
-          <View style={styles.dateInputContainer}>
-            <View style={styles.dateField}>
-              <Text style={styles.dateLabel}>Year</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={birthYear}
-                onChangeText={setBirthYear}
-                keyboardType="number-pad"
-                placeholder="1990"
-                placeholderTextColor="rgba(255,255,255,0.5)"
-                maxLength={4}
-              />
+          <View style={styles.settingCard}>
+            <Text style={styles.settingLabel}>Date of Birth</Text>
+            
+            <View style={styles.dateInputContainer}>
+              <View style={styles.dateInputWrapper}>
+                <Text style={styles.dateInputLabel}>Year</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  value={birthYear}
+                  onChangeText={setBirthYear}
+                  placeholder="1990"
+                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  keyboardType="number-pad"
+                  maxLength={4}
+                />
+              </View>
+              
+              <View style={styles.dateInputWrapper}>
+                <Text style={styles.dateInputLabel}>Month</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  value={birthMonth}
+                  onChangeText={setBirthMonth}
+                  placeholder="01"
+                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  keyboardType="number-pad"
+                  maxLength={2}
+                />
+              </View>
+              
+              <View style={styles.dateInputWrapper}>
+                <Text style={styles.dateInputLabel}>Day</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  value={birthDay}
+                  onChangeText={setBirthDay}
+                  placeholder="15"
+                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  keyboardType="number-pad"
+                  maxLength={2}
+                />
+              </View>
             </View>
-
-            <View style={styles.dateField}>
-              <Text style={styles.dateLabel}>Month</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={birthMonth}
-                onChangeText={setBirthMonth}
-                keyboardType="number-pad"
-                placeholder="12"
-                placeholderTextColor="rgba(255,255,255,0.5)"
-                maxLength={2}
-              />
-            </View>
-
-            <View style={styles.dateField}>
-              <Text style={styles.dateLabel}>Day</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={birthDay}
-                onChangeText={setBirthDay}
-                keyboardType="number-pad"
-                placeholder="25"
-                placeholderTextColor="rgba(255,255,255,0.5)"
-                maxLength={2}
-              />
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.saveDateButton}
-            onPress={handleSaveBirthdate}
-          >
-            <Text style={styles.saveDateButtonText}>Save Date of Birth</Text>
-          </TouchableOpacity>
-
-          {state.profile?.birthdate && (
-            <Text style={styles.currentDate}>
-              Current: {new Date(state.profile.birthdate).toLocaleDateString()}
-            </Text>
-          )}
-
-          {!state.profile?.birthdate && (
-            <View style={styles.warningBox}>
-              <Ionicons name="warning" size={20} color="#FFC107" />
-              <Text style={styles.warningText}>
-                Your age is required for accurate Bio-Age calculations
+            
+            {state.profile?.birthdate && (
+              <Text style={styles.currentValue}>
+                Current: {new Date(state.profile.birthdate).toLocaleDateString()}
               </Text>
-            </View>
-          )}
+            )}
+            {!state.profile?.birthdate && (
+              <Text style={styles.noValue}>
+                Not set - Required for Praxiom Age calculation
+              </Text>
+            )}
+            
+            {/* ✅ NEW: Show calculated chronological age */}
+            {state.chronologicalAge > 0 && (
+              <Text style={styles.ageDisplay}>
+                Your age: {state.chronologicalAge} years
+              </Text>
+            )}
+            
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleSaveBirthdate}
+            >
+              <Text style={styles.saveButtonText}>Save Date of Birth</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* App Settings Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>App Settings</Text>
           
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <Ionicons name="notifications" size={24} color="#fff" />
-              <View style={styles.settingText}>
-                <Text style={styles.settingLabel}>Notifications</Text>
-                <Text style={styles.settingDesc}>Get notified about health updates</Text>
+          <View style={styles.settingCard}>
+            <View style={styles.settingRow}>
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.settingTitle}>Notifications</Text>
+                <Text style={styles.settingDescription}>
+                  Receive alerts for Praxiom Age updates
+                </Text>
               </View>
+              <Switch
+                value={state.settings?.notificationsEnabled || false}
+                onValueChange={handleToggleNotifications}
+                trackColor={{ false: '#767577', true: '#00CED1' }}
+                thumbColor={state.settings?.notificationsEnabled ? '#fff' : '#f4f3f4'}
+              />
             </View>
-            <Switch
-              value={state.settings?.notificationsEnabled || false}
-              onValueChange={handleToggleNotifications}
-              trackColor={{ false: '#767577', true: '#fff' }}
-              thumbColor="#FF6B35"
-            />
           </View>
 
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <Ionicons name="sync" size={24} color="#fff" />
-              <View style={styles.settingText}>
-                <Text style={styles.settingLabel}>Auto Sync</Text>
-                <Text style={styles.settingDesc}>Automatically sync with watch</Text>
+          <View style={styles.settingCard}>
+            <View style={styles.settingRow}>
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.settingTitle}>Auto-Sync</Text>
+                <Text style={styles.settingDescription}>
+                  Automatically sync with connected devices
+                </Text>
               </View>
+              <Switch
+                value={state.settings?.autoSyncEnabled || true}
+                onValueChange={handleToggleAutoSync}
+                trackColor={{ false: '#767577', true: '#00CED1' }}
+                thumbColor={state.settings?.autoSyncEnabled ? '#fff' : '#f4f3f4'}
+              />
             </View>
-            <Switch
-              value={state.settings?.autoSyncEnabled || false}
-              onValueChange={handleToggleAutoSync}
-              trackColor={{ false: '#767577', true: '#fff' }}
-              thumbColor="#FF6B35"
-            />
           </View>
         </View>
 
@@ -317,23 +359,39 @@ export default function SettingsScreen({ navigation }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Data Management</Text>
           
-          <TouchableOpacity
-            style={styles.dataButton}
+          <TouchableOpacity 
+            style={styles.actionButton}
             onPress={handleExportData}
           >
-            <Ionicons name="download" size={24} color="#fff" />
-            <Text style={styles.dataButtonText}>Export Health Data</Text>
-            <Ionicons name="chevron-forward" size={24} color="rgba(255,255,255,0.7)" />
+            <Ionicons name="download-outline" size={24} color="#fff" />
+            <Text style={styles.actionButtonText}>Export Health Data</Text>
+            <Ionicons name="chevron-forward" size={24} color="rgba(255,255,255,0.5)" />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.dataButton, styles.dangerButton]}
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.dangerButton]}
             onPress={handleClearData}
           >
-            <Ionicons name="trash" size={24} color="#ff4444" />
-            <Text style={[styles.dataButtonText, { color: '#ff4444' }]}>Clear All Data</Text>
-            <Ionicons name="chevron-forward" size={24} color="#ff4444" />
+            <Ionicons name="trash-outline" size={24} color="#fff" />
+            <Text style={styles.actionButtonText}>Clear All Data</Text>
+            <Ionicons name="chevron-forward" size={24} color="rgba(255,255,255,0.5)" />
           </TouchableOpacity>
+        </View>
+
+        {/* About Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>About</Text>
+          
+          <View style={styles.aboutCard}>
+            <Text style={styles.aboutTitle}>Praxiom Health</Text>
+            <Text style={styles.aboutVersion}>Version 1.0.0</Text>
+            <Text style={styles.aboutDescription}>
+              Precision Longevity Medicine Platform
+            </Text>
+            <Text style={styles.aboutCopyright}>
+              © 2025 Praxiom Health. All rights reserved.
+            </Text>
+          </View>
         </View>
 
         <View style={{ height: 40 }} />
@@ -347,11 +405,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
-    paddingTop: 50,
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 5,
@@ -369,7 +428,7 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
     color: '#fff',
     marginBottom: 15,
@@ -381,8 +440,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 16,
     padding: 20,
-    borderRadius: 15,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
@@ -393,129 +452,163 @@ const styles = StyleSheet.create({
   deviceStatus: {
     fontSize: 18,
     fontWeight: '600',
+    marginBottom: 4,
   },
   deviceName: {
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 5,
   },
   deviceHint: {
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 5,
+    fontStyle: 'italic',
   },
-  dateInputContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  dateField: {
-    flex: 1,
-  },
-  dateLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#fff',
-    marginBottom: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  dateInput: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderRadius: 12,
-    padding: 15,
-    fontSize: 16,
-    color: '#fff',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  saveDateButton: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 15,
-  },
-  saveDateButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FF6B35',
-  },
-  currentDate: {
-    fontSize: 14,
-    color: '#fff',
-    textAlign: 'center',
-    marginTop: 10,
-    opacity: 0.8,
-  },
-  warningBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 193, 7, 0.2)',
-    padding: 15,
-    borderRadius: 10,
-    marginTop: 15,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 193, 7, 0.3)',
-  },
-  warningText: {
-    flex: 1,
-    marginLeft: 10,
-    fontSize: 14,
-    color: '#fff',
-  },
-  settingItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  settingCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 10,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  settingLeft: {
+  settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    justifyContent: 'space-between',
   },
-  settingText: {
-    marginLeft: 15,
+  settingTextContainer: {
     flex: 1,
+    marginRight: 15,
+  },
+  settingTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  settingDescription: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
   settingLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+    marginBottom: 15,
   },
-  settingDesc: {
+  dateInputContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 15,
+  },
+  dateInputWrapper: {
+    flex: 1,
+  },
+  dateInputLabel: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  dateInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 16,
+    color: '#fff',
+    textAlign: 'center',
+    fontWeight: '600',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  currentValue: {
+    fontSize: 14,
+    color: '#fff',
+    marginBottom: 12,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  noValue: {
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.7)',
-    marginTop: 2,
+    marginBottom: 12,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
-  dataButton: {
+  ageDisplay: {
+    fontSize: 16,
+    color: '#fff',
+    marginBottom: 12,
+    textAlign: 'center',
+    fontWeight: '700',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  saveButton: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF6B35',
+  },
+  actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 16,
     padding: 18,
-    borderRadius: 12,
-    marginBottom: 10,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  dataButtonText: {
+  dangerButton: {
+    backgroundColor: 'rgba(231, 76, 60, 0.3)',
+    borderColor: 'rgba(231, 76, 60, 0.5)',
+  },
+  actionButtonText: {
     flex: 1,
-    marginLeft: 15,
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+    marginLeft: 12,
   },
-  dangerButton: {
-    backgroundColor: 'rgba(255, 68, 68, 0.1)',
-    borderColor: 'rgba(255, 68, 68, 0.3)',
+  aboutCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  aboutTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  aboutVersion: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginBottom: 16,
+  },
+  aboutDescription: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  aboutCopyright: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
   },
 });

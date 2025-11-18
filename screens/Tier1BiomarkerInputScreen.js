@@ -162,6 +162,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
         hba1c: parseFloat(formData.hba1c),
         gdf15: parseFloat(formData.gdf15),
         vitaminD: parseFloat(formData.vitaminD),
+        hrvValue: formData.hrvValue ? parseFloat(formData.hrvValue) : null,
         timestamp: assessmentDate.toISOString(),
         dateEntered: assessmentDate.toLocaleDateString(),
         tier: 1,
@@ -188,6 +189,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
           hba1c: parseFloat(formData.hba1c),
           gdf15: parseFloat(formData.gdf15),
           vitaminD: parseFloat(formData.vitaminD),
+          hrv: formData.hrvValue ? parseFloat(formData.hrvValue) : null,
         });
       } catch (error) {
         console.error('Error updating state:', error);
@@ -270,31 +272,31 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
 
   const getRecommendation = (oralScore, systemicScore) => {
     if (oralScore < 75 || systemicScore < 75) {
-      return '⚠️ Recommended: Upgrade to Tier 2 for personalized interventions';
-    } else if (oralScore >= 85 && systemicScore >= 85) {
-      return '✅ Excellent health profile! Keep maintaining your current lifestyle.';
-    } else {
-      return '👍 Good health status. Continue monitoring with regular assessments.';
+      return '⚠️ Some scores are below target. Consider upgrading to Tier 2 for personalized interventions.';
     }
+    if (oralScore >= 85 && systemicScore >= 85) {
+      return '✅ Excellent scores! Continue current protocol and monitor regularly.';
+    }
+    return '📊 Good progress. Continue lifestyle optimizations to reach target scores.';
   };
 
   return (
-    <LinearGradient
-      colors={['#FF6B35', '#F7931E', '#FDC830', '#00CED1']}
-      style={styles.container}
-    >
+    <LinearGradient colors={['#FF6B00', '#00CFC1']} style={styles.container}>
       <ScrollView style={styles.scrollView}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={28} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.title}>Tier 1 Assessment</Text>
-          <Text style={styles.subtitle}>Foundation Biomarkers</Text>
+          
+          <Text style={styles.title}>Tier 1: Foundation</Text>
+          <Text style={styles.subtitle}>Core Biomarker Assessment</Text>
         </View>
 
-        {/* ✅ FIX: Simple Date Input */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Assessment Date</Text>
+          <Text style={styles.sectionTitle}>📅 Assessment Date</Text>
           <View style={styles.dateInputContainer}>
             <View style={styles.dateField}>
               <Text style={styles.dateLabel}>Year</Text>
@@ -308,7 +310,6 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
                 maxLength={4}
               />
             </View>
-
             <View style={styles.dateField}>
               <Text style={styles.dateLabel}>Month</Text>
               <TextInput
@@ -321,7 +322,6 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
                 maxLength={2}
               />
             </View>
-
             <View style={styles.dateField}>
               <Text style={styles.dateLabel}>Day</Text>
               <TextInput
@@ -441,6 +441,28 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
           </View>
         </View>
 
+        {/* ✅ NEW: HRV Input Field */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>❤️ Heart Rate Variability (Optional)</Text>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>HRV RMSSD (ms, age-adjusted)</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.hrvValue}
+              onChangeText={(value) => updateField('hrvValue', value)}
+              keyboardType="decimal-pad"
+              placeholder={state?.wearableData?.hrv ? state.wearableData.hrv.toString() : "Enter HRV"}
+              placeholderTextColor="rgba(255,255,255,0.5)"
+            />
+            <Text style={styles.helperText}>
+              {state?.wearableData?.hrv 
+                ? '✅ Auto-filled from watch' 
+                : 'Leave empty if not measured'}
+            </Text>
+          </View>
+        </View>
+
         <TouchableOpacity 
           style={[styles.calculateButton, isCalculating && styles.calculateButtonDisabled]}
           onPress={handleCalculate}
@@ -557,6 +579,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
     fontWeight: '600',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#fff',
+    opacity: 0.8,
+    marginTop: 5,
+    fontStyle: 'italic',
   },
   calculateButton: {
     backgroundColor: '#fff',
