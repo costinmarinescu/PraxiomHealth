@@ -16,7 +16,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { AppContext } from '../AppContext';
 
 export default function Tier1BiomarkerInputScreen({ navigation }) {
-  const { state, calculatePraxiomAge } = useContext(AppContext);
+  // ✅ FIX: Get correct functions from AppContext
+  const { state, updateState, calculateScores } = useContext(AppContext);
   const [isCalculating, setIsCalculating] = useState(false);
   
   // Date picker state
@@ -106,6 +107,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
     return true;
   };
 
+  // ✅ FIX: Corrected calculation flow
   const handleCalculate = async () => {
     try {
       setIsCalculating(true);
@@ -117,7 +119,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
           'Please set your birthdate in Settings before calculating Praxiom Age.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Go to Settings', onPress: () => navigation.navigate('Settings') }
+            { text: 'Go to Settings', onPress: () => navigation.navigate('Settings', { screen: 'SettingsHome' }) }
           ]
         );
         setIsCalculating(false);
@@ -130,44 +132,53 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
         return;
       }
       
-      // Prepare biomarker data - convert all to numbers
-      const biomarkerData = {
+      console.log('✅ Starting Tier 1 calculation...');
+      
+      // ✅ FIX STEP 1: Update biomarker values in state
+      await updateState({
         salivaryPH: parseFloat(formData.salivaryPH),
-        activeMMP8: parseFloat(formData.activeMMP8),
-        salivaryFlow: parseFloat(formData.salivaryFlow),
+        mmp8: parseFloat(formData.activeMMP8),
+        flowRate: parseFloat(formData.salivaryFlow),
         hsCRP: parseFloat(formData.hsCRP),
         omega3Index: parseFloat(formData.omega3Index),
         hba1c: parseFloat(formData.hba1c),
         gdf15: parseFloat(formData.gdf15),
         vitaminD: parseFloat(formData.vitaminD),
-        assessmentDate: selectedDate.toISOString(),
-        dateEntered: selectedDate.toLocaleDateString()
-      };
+      });
       
-      // Add HRV if available
-      const hrvValue = formData.hrvValue ? parseFloat(formData.hrvValue) : null;
+      console.log('✅ Biomarkers updated in state');
       
-      console.log('Calculating with data:', { biomarkerData, hrvValue });
+      // Small delay to ensure state is updated
+      await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Calculate Praxiom Age
-      const result = await calculatePraxiomAge(biomarkerData, null, hrvValue);
+      // ✅ FIX STEP 2: Calculate scores from biomarkers, which also calculates bio-age
+      const biologicalAge = calculateScores();
       
-      console.log('Calculation result:', result);
+      console.log('✅ Scores calculated, biological age:', biologicalAge);
+      
+      // Get the updated scores from state
+      const oralScore = state.oralHealthScore;
+      const systemicScore = state.systemicHealthScore;
+      const vitalityIndex = state.vitalityIndex;
+      const chronologicalAge = state.chronologicalAge;
+      
+      // Calculate deviation
+      const deviation = parseFloat((biologicalAge - chronologicalAge).toFixed(1));
       
       // Show success message
       Alert.alert(
         'Praxiom Age Calculated! ✅',
-        `Your Biological Age: ${result.biologicalAge} years\n` +
-        `Chronological Age: ${result.chronologicalAge} years\n` +
-        `Deviation: ${result.deviation > 0 ? '+' : ''}${result.deviation} years\n\n` +
-        `Oral Health Score: ${result.scores.oralHealth}%\n` +
-        `Systemic Health Score: ${result.scores.systemicHealth}%\n` +
-        `Vitality Index: ${result.scores.vitalityIndex}%\n\n` +
-        `Recommended Tier: ${result.tier}`,
+        `Your Biological Age: ${biologicalAge.toFixed(1)} years\n` +
+        `Chronological Age: ${chronologicalAge} years\n` +
+        `Deviation: ${deviation > 0 ? '+' : ''}${deviation} years\n\n` +
+        `Oral Health Score: ${oralScore}%\n` +
+        `Systemic Health Score: ${systemicScore}%\n` +
+        `Vitality Index: ${vitalityIndex}%\n\n` +
+        `${getRecommendation(oralScore, systemicScore)}`,
         [
           { 
             text: 'View Dashboard', 
-            onPress: () => navigation.navigate('Dashboard') 
+            onPress: () => navigation.navigate('DashboardHome') 
           },
           { 
             text: 'OK',
@@ -175,6 +186,8 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
           }
         ]
       );
+      
+      console.log('✅ Tier 1 calculation complete!');
       
       // Clear form after successful calculation
       setFormData({
@@ -190,7 +203,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
       });
       
     } catch (error) {
-      console.error('Calculation error:', error);
+      console.error('❌ Calculation error:', error);
       Alert.alert(
         'Calculation Error',
         `Failed to complete calculation.\n\nError: ${error.message}\n\nPlease check all values and try again.`
@@ -200,42 +213,48 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
     }
   };
 
+  const getRecommendation = (oralScore, systemicScore) => {
+    if (oralScore < 75 || systemicScore < 75) {
+      return '⚠️ Recommended: Upgrade to Tier 2 for personalized interventions';
+    } else if (oralScore >= 85 && systemicScore >= 85) {
+      return '✅ Excellent health profile! Keep maintaining your current lifestyle.';
+    } else {
+      return '👍 Good health status. Continue monitoring with regular assessments.';
+    }
+  };
+
   return (
     <LinearGradient
-      colors={['#FF6B35', '#00CFC1']}
+      colors={['#FF6B35', '#F7931E', '#FDC830', '#00CED1']}
       style={styles.container}
     >
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Back Button */}
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#FFF" />
-          <Text style={styles.backButtonText}>Back</Text>
-        </TouchableOpacity>
+      <ScrollView style={styles.scrollView}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Tier 1 Assessment</Text>
+          <Text style={styles.subtitle}>Foundation Biomarkers</Text>
+        </View>
 
-        {/* Title */}
-        <Text style={styles.title}>Tier 1: Foundation Biomarkers</Text>
-        
         {/* Date Selection */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Assessment Date</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.dateButton}
             onPress={() => setShowDatePicker(true)}
           >
-            <Ionicons name="calendar" size={24} color="#00CFC1" />
+            <Ionicons name="calendar-outline" size={20} color="#fff" />
             <Text style={styles.dateText}>
               {selectedDate.toLocaleDateString()}
             </Text>
           </TouchableOpacity>
-          
           {showDatePicker && (
             <DateTimePicker
               value={selectedDate}
               mode="date"
-              display="default"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={onDateChange}
               maximumDate={new Date()}
             />
@@ -244,160 +263,132 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
 
         {/* Oral Health Biomarkers */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Oral Health Biomarkers</Text>
+          <Text style={styles.sectionTitle}>🦷 Oral Health Biomarkers</Text>
           
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Salivary pH</Text>
+            <Text style={styles.label}>Salivary pH (6.5-7.2 optimal)</Text>
             <TextInput
               style={styles.input}
               value={formData.salivaryPH}
-              onChangeText={(val) => updateField('salivaryPH', val)}
+              onChangeText={(value) => updateField('salivaryPH', value)}
               keyboardType="decimal-pad"
-              placeholder="6.5-7.2 optimal"
-              placeholderTextColor="#999"
+              placeholder="7.0"
+              placeholderTextColor="rgba(255,255,255,0.5)"
             />
-            <Text style={styles.helpText}>Normal range: 6.0-7.5</Text>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Active MMP-8 (ng/mL)</Text>
+            <Text style={styles.label}>Active MMP-8 (ng/mL, {'<'}60 optimal)</Text>
             <TextInput
               style={styles.input}
               value={formData.activeMMP8}
-              onChangeText={(val) => updateField('activeMMP8', val)}
+              onChangeText={(value) => updateField('activeMMP8', value)}
               keyboardType="decimal-pad"
-              placeholder="<60 optimal"
-              placeholderTextColor="#999"
+              placeholder="50"
+              placeholderTextColor="rgba(255,255,255,0.5)"
             />
-            <Text style={styles.helpText}>Updated 2025: &lt;60 ng/mL optimal</Text>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Salivary Flow Rate (mL/min)</Text>
+            <Text style={styles.label}>Salivary Flow (mL/min, {'>'}1.5 optimal)</Text>
             <TextInput
               style={styles.input}
               value={formData.salivaryFlow}
-              onChangeText={(val) => updateField('salivaryFlow', val)}
+              onChangeText={(value) => updateField('salivaryFlow', value)}
               keyboardType="decimal-pad"
-              placeholder=">1.5 optimal"
-              placeholderTextColor="#999"
+              placeholder="1.8"
+              placeholderTextColor="rgba(255,255,255,0.5)"
             />
-            <Text style={styles.helpText}>Normal range: 1.0-1.5 mL/min</Text>
           </View>
         </View>
 
         {/* Systemic Health Biomarkers */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Systemic Health Biomarkers</Text>
+          <Text style={styles.sectionTitle}>💉 Systemic Health Biomarkers</Text>
           
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>hs-CRP (mg/L)</Text>
+            <Text style={styles.label}>hs-CRP (mg/L, {'<'}1.0 optimal)</Text>
             <TextInput
               style={styles.input}
               value={formData.hsCRP}
-              onChangeText={(val) => updateField('hsCRP', val)}
+              onChangeText={(value) => updateField('hsCRP', value)}
               keyboardType="decimal-pad"
-              placeholder="<1.0 optimal"
-              placeholderTextColor="#999"
+              placeholder="0.8"
+              placeholderTextColor="rgba(255,255,255,0.5)"
             />
-            <Text style={styles.helpText}>Low inflammation: &lt;1.0 mg/L</Text>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Omega-3 Index (%)</Text>
+            <Text style={styles.label}>Omega-3 Index (%, {'>'}8.0 optimal)</Text>
             <TextInput
               style={styles.input}
               value={formData.omega3Index}
-              onChangeText={(val) => updateField('omega3Index', val)}
+              onChangeText={(value) => updateField('omega3Index', value)}
               keyboardType="decimal-pad"
-              placeholder=">8.0 optimal"
-              placeholderTextColor="#999"
+              placeholder="8.5"
+              placeholderTextColor="rgba(255,255,255,0.5)"
             />
-            <Text style={styles.helpText}>Target: &gt;8.0%</Text>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>HbA1c (%)</Text>
+            <Text style={styles.label}>HbA1c (%, {'<'}5.7 optimal)</Text>
             <TextInput
               style={styles.input}
               value={formData.hba1c}
-              onChangeText={(val) => updateField('hba1c', val)}
+              onChangeText={(value) => updateField('hba1c', value)}
               keyboardType="decimal-pad"
-              placeholder="<5.7 optimal"
-              placeholderTextColor="#999"
+              placeholder="5.5"
+              placeholderTextColor="rgba(255,255,255,0.5)"
             />
-            <Text style={styles.helpText}>Prediabetic: 5.7-6.4%</Text>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>GDF-15 (pg/mL)</Text>
+            <Text style={styles.label}>GDF-15 (pg/mL, {'<'}1200 optimal)</Text>
             <TextInput
               style={styles.input}
               value={formData.gdf15}
-              onChangeText={(val) => updateField('gdf15', val)}
+              onChangeText={(value) => updateField('gdf15', value)}
               keyboardType="decimal-pad"
-              placeholder="<1200 optimal"
-              placeholderTextColor="#999"
+              placeholder="1100"
+              placeholderTextColor="rgba(255,255,255,0.5)"
             />
-            <Text style={styles.helpText}>Strongest aging predictor</Text>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Vitamin D (ng/mL)</Text>
+            <Text style={styles.label}>Vitamin D (ng/mL, 30-100 optimal)</Text>
             <TextInput
               style={styles.input}
               value={formData.vitaminD}
-              onChangeText={(val) => updateField('vitaminD', val)}
+              onChangeText={(value) => updateField('vitaminD', value)}
               keyboardType="decimal-pad"
-              placeholder="40-60 optimal"
-              placeholderTextColor="#999"
+              placeholder="35"
+              placeholderTextColor="rgba(255,255,255,0.5)"
             />
-            <Text style={styles.helpText}>Optimal range: 40-60 ng/mL</Text>
-          </View>
-        </View>
-
-        {/* Optional HRV */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>HRV - Heart Rate Variability (Optional)</Text>
-          
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>HRV RMSSD (ms)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.hrvValue}
-              onChangeText={(val) => updateField('hrvValue', val)}
-              keyboardType="decimal-pad"
-              placeholder="From wearable or doctor"
-              placeholderTextColor="#999"
-            />
-            <Text style={styles.helpText}>
-              {state.wearableData?.hrv 
-                ? `Wearable: ${state.wearableData.hrv} ms` 
-                : 'Use this field if HRV was measured by a doctor or external device.'}
-            </Text>
           </View>
         </View>
 
         {/* Calculate Button */}
-        <TouchableOpacity
+        <TouchableOpacity 
           style={[styles.calculateButton, isCalculating && styles.calculateButtonDisabled]}
           onPress={handleCalculate}
           disabled={isCalculating}
         >
           {isCalculating ? (
-            <ActivityIndicator color="white" />
+            <ActivityIndicator color="#FF6B35" />
           ) : (
             <Text style={styles.calculateButtonText}>Calculate Praxiom Age</Text>
           )}
         </TouchableOpacity>
 
-        {/* Warning Note */}
-        <View style={styles.warningBox}>
-          <Ionicons name="information-circle" size={20} color="#FF6B35" />
-          <Text style={styles.warningText}>
-            💡 Make sure your birthdate is set in Settings for accurate calculations
-          </Text>
-        </View>
+        {/* Upgrade Button */}
+        <TouchableOpacity 
+          style={styles.upgradeButton}
+          onPress={() => navigation.navigate('Tier2BiomarkerInput')}
+        >
+          <Text style={styles.upgradeButtonText}>Upgrade to Tier 2 →</Text>
+        </TouchableOpacity>
+
+        <View style={{ height: 40 }} />
       </ScrollView>
     </LinearGradient>
   );
@@ -410,52 +401,53 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 60,
+  header: {
+    paddingTop: 50,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 15,
-  },
-  backButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    marginLeft: 8,
-    fontWeight: '600',
   },
   title: {
-    fontSize: 26,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#FFF',
-    marginBottom: 20,
-    textAlign: 'center',
+    color: '#fff',
+    marginBottom: 5,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#fff',
+    opacity: 0.9,
   },
   section: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 15,
-    padding: 20,
-    marginBottom: 20,
+    marginHorizontal: 20,
+    marginBottom: 25,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#fff',
     marginBottom: 15,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   dateButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF',
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#00CFC1',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    padding: 15,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   dateText: {
+    color: '#fff',
     fontSize: 16,
-    color: '#333',
     marginLeft: 10,
     fontWeight: '600',
   },
@@ -463,59 +455,58 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   label: {
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 5,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#fff',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   input: {
-    backgroundColor: 'white',
-    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderRadius: 12,
     padding: 15,
     fontSize: 16,
+    color: '#fff',
     borderWidth: 1,
-    borderColor: '#ddd',
-    color: '#333',
-  },
-  helpText: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 5,
-    fontStyle: 'italic',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    fontWeight: '600',
   },
   calculateButton: {
-    backgroundColor: '#00CFC1',
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    borderRadius: 25,
     padding: 18,
-    borderRadius: 12,
     alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+    marginTop: 10,
   },
   calculateButtonDisabled: {
-    backgroundColor: '#ccc',
+    opacity: 0.6,
   },
   calculateButtonText: {
-    color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
+    color: '#FF6B35',
   },
-  warningBox: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 12,
-    padding: 15,
-    marginTop: 10,
+  upgradeButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    marginHorizontal: 20,
+    borderRadius: 25,
+    padding: 16,
     alignItems: 'center',
+    marginTop: 15,
+    borderWidth: 2,
+    borderColor: '#fff',
   },
-  warningText: {
-    fontSize: 14,
-    color: '#333',
-    marginLeft: 10,
-    flex: 1,
+  upgradeButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
