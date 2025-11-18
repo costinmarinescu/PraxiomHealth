@@ -20,6 +20,8 @@ import BiomarkerHistoryScreen from './screens/BiomarkerHistoryScreen';
 import ComparisonScreen from './screens/ComparisonScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import TestScreen from './screens/TestScreen';
+// ✅ FIX: Import OuraRingScreen
+import OuraRingScreen from './screens/OuraRingScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -59,6 +61,15 @@ function WatchStack() {
   );
 }
 
+// ✅ FIX: Add OuraRing Stack Navigator
+function OuraRingStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="OuraRingHome" component={OuraRingScreen} />
+    </Stack.Navigator>
+  );
+}
+
 function SettingsStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -81,15 +92,20 @@ export default function App() {
               screenOptions={({ route }) => ({
                 tabBarIcon: ({ focused, color, size }) => {
                   let iconName;
+
                   if (route.name === 'Dashboard') {
                     iconName = focused ? 'home' : 'home-outline';
                   } else if (route.name === 'Watch') {
                     iconName = focused ? 'watch' : 'watch-outline';
+                  // ✅ FIX: Add Oura Ring icon
+                  } else if (route.name === 'OuraRing') {
+                    iconName = focused ? 'fitness' : 'fitness-outline';
                   } else if (route.name === 'Settings') {
                     iconName = focused ? 'settings' : 'settings-outline';
                   } else {
                     iconName = 'ellipsis-horizontal';
                   }
+
                   return <Ionicons name={iconName} size={size} color={color} />;
                 },
                 headerShown: false,
@@ -102,9 +118,27 @@ export default function App() {
                 },
               })}
             >
-              <Tab.Screen name="Dashboard" component={DashboardStack} />
-              <Tab.Screen name="Watch" component={WatchStack} />
-              <Tab.Screen name="Settings" component={SettingsStack} />
+              <Tab.Screen 
+                name="Dashboard" 
+                component={DashboardStack}
+                options={{ tabBarLabel: 'Home' }}
+              />
+              <Tab.Screen 
+                name="Watch" 
+                component={WatchStack}
+                options={{ tabBarLabel: 'Watch' }}
+              />
+              {/* ✅ FIX: Add Oura Ring tab to navigation */}
+              <Tab.Screen 
+                name="OuraRing" 
+                component={OuraRingStack}
+                options={{ tabBarLabel: 'Oura' }}
+              />
+              <Tab.Screen 
+                name="Settings" 
+                component={SettingsStack}
+                options={{ tabBarLabel: 'Settings' }}
+              />
             </Tab.Navigator>
           </NavigationContainer>
         </View>
