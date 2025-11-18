@@ -1,136 +1,161 @@
 /**
- * OuraRingService.js
+ * Oura Ring Integration Service
  * 
- * Oura Ring Integration Service for Praxiom Health
- * Uses Oura Cloud API v2 for data synchronization
- * 
- * Features:
- * - OAuth 2.0 authentication
- * - Daily sleep, activity, and readiness data
- * - HRV, resting heart rate, and recovery metrics
- * - Automatic data sync with health profile
+ * Handles OAuth authentication and data retrieval from Oura Cloud API
+ * Documentation: https://cloud.ouraring.com/docs/
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Configure WebBrowser for OAuth
 WebBrowser.maybeCompleteAuthSession();
 
-const OURA_API_BASE = 'https://api.ouraring.com/v2/usercollection';
-const OURA_AUTH_BASE = 'https://cloud.ouraring.com/oauth/authorize';
-const OURA_TOKEN_URL = 'https://api.ouraring.com/oauth/token';
-
-// IMPORTANT: Replace with your Oura API credentials
-// Get these from: https://cloud.ouraring.com/oauth/applications
-const OURA_CLIENT_ID = 'YOUR_OURA_CLIENT_ID';
-const OURA_CLIENT_SECRET = 'YOUR_OURA_CLIENT_SECRET';
-
-const STORAGE_KEYS = {
-  OURA_ACCESS_TOKEN: '@praxiom_oura_access_token',
-  OURA_REFRESH_TOKEN: '@praxiom_oura_refresh_token',
-  OURA_LAST_SYNC: '@praxiom_oura_last_sync',
-  OURA_USER_DATA: '@praxiom_oura_user_data',
+// Oura API Configuration
+const OURA_CONFIG = {
+  clientId: 'YOUR_OURA_CLIENT_ID',  // Replace with your Oura API Client ID
+  clientSecret: 'YOUR_OURA_CLIENT_SECRET',  // Replace with your Oura API Client Secret
+  redirectUri: AuthSession.makeRedirectUri({
+    scheme: 'praxiomhealth',
+    path: 'oura-callback'
+  }),
+  scopes: ['daily', 'heartrate', 'workout', 'session', 'sleep'],
+  authorizationEndpoint: 'https://cloud.ouraring.com/oauth/authorize',
+  tokenEndpoint: 'https://api.ouraring.com/oauth/token',
+  apiBaseUrl: 'https://api.ouraring.com/v2/usercollection'
 };
 
 class OuraRingService {
   constructor() {
     this.accessToken = null;
     this.refreshToken = null;
-    this.lastSyncTime = null;
-    this.isConnected = false;
-    this.userData = null;
+    this.tokenExpiry = null;
   }
 
   /**
-   * Initialize Oura Ring connection
+   * Initialize service and restore saved tokens
    */
-  async initialize() {
+  async init() {
     try {
-      // Load saved tokens
-      const accessToken = await AsyncStorage.getItem(STORAGE_KEYS.OURA_ACCESS_TOKEN);
-      const refreshToken = await AsyncStorage.getItem(STORAGE_KEYS.OURA_REFRESH_TOKEN);
-      const lastSync = await AsyncStorage.getItem(STORAGE_KEYS.OURA_LAST_SYNC);
-      
-      if (accessToken) {
-        this.accessToken = accessToken;
-        this.refreshToken = refreshToken;
-        this.lastSyncTime = lastSync ? new Date(lastSync) : null;
-        this.isConnected = true;
-        
-        console.log('✅ Oura Ring: Initialized with saved credentials');
+      const savedToken = await AsyncStorage.getItem('oura_access_token');
+      const savedRefresh = await AsyncStorage.getItem('oura_refresh_token');
+      const savedExpiry = await AsyncStorage.getItem('oura_token_expiry');
+
+      if (savedToken && savedExpiry) {
+        this.accessToken = savedToken;
+        this.refreshToken = savedRefresh;
+        this.tokenExpiry = parseInt(savedExpiry);
+
+        // Check if token is expired
+        if (Date.now() > this.tokenExpiry) {
+          await this.refreshAccessToken();
+        }
+
         return true;
       }
-      
-      console.log('⚠️ Oura Ring: No saved credentials found');
       return false;
     } catch (error) {
-      console.error('❌ Oura Ring initialization error:', error);
+      console.error('Error initializing Oura service:', error);
       return false;
     }
   }
 
   /**
-   * Authenticate with Oura Cloud using OAuth 2.0
+   * Start OAuth authentication flow
    */
-  async authenticate(redirectUri) {
+  async authenticate() {
     try {
-      console.log('🔐 Starting Oura Ring authentication...');
-      
-      const authUrl = `${OURA_AUTH_BASE}?client_id=${OURA_CLIENT_ID}&redirect_uri=${redirectUri}&response_type=code&scope=daily`;
-      
-      const result = await AuthSession.startAsync({
-        authUrl: authUrl,
-        returnUrl: redirectUri,
+      // Create authorization request
+      const request = new AuthSession.AuthRequest({
+        clientId: OURA_CONFIG.clientId,
+        scopes: OURA_CONFIG.scopes,
+        redirectUri: OURA_CONFIG.redirectUri,
+        responseType: AuthSession.ResponseType.Code,
       });
 
-      if (result.type === 'success' && result.params.code) {
-        const code = result.params.code;
-        
-        // Exchange code for access token
-        const tokenResponse = await fetch(OURA_TOKEN_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: `grant_type=authorization_code&code=${code}&client_id=${OURA_CLIENT_ID}&client_secret=${OURA_CLIENT_SECRET}&redirect_uri=${redirectUri}`,
-        });
+      await request.makeAuthUrlAsync({
+        authorizationEndpoint: OURA_CONFIG.authorizationEndpoint,
+      });
 
-        const tokenData = await tokenResponse.json();
+      // Prompt user to authenticate
+      const result = await request.promptAsync({
+        authorizationEndpoint: OURA_CONFIG.authorizationEndpoint,
+      });
+
+      if (result.type === 'success') {
+        const { code } = result.params;
         
-        if (tokenData.access_token) {
-          this.accessToken = tokenData.access_token;
-          this.refreshToken = tokenData.refresh_token;
-          
-          // Save tokens
-          await AsyncStorage.setItem(STORAGE_KEYS.OURA_ACCESS_TOKEN, this.accessToken);
-          await AsyncStorage.setItem(STORAGE_KEYS.OURA_REFRESH_TOKEN, this.refreshToken);
-          
-          this.isConnected = true;
-          console.log('✅ Oura Ring: Authentication successful');
-          
-          return {
-            success: true,
-            message: 'Successfully connected to Oura Ring',
-          };
-        }
+        // Exchange authorization code for access token
+        await this.exchangeCodeForToken(code);
+        
+        return {
+          success: true,
+          message: 'Successfully connected to Oura Ring'
+        };
+      } else if (result.type === 'cancel') {
+        return {
+          success: false,
+          message: 'Authentication cancelled'
+        };
+      } else {
+        return {
+          success: false,
+          message: 'Authentication failed'
+        };
       }
-      
-      return {
-        success: false,
-        message: 'Authentication cancelled or failed',
-      };
     } catch (error) {
-      console.error('❌ Oura Ring authentication error:', error);
+      console.error('OAuth error:', error);
       return {
         success: false,
-        message: 'Authentication error: ' + error.message,
+        message: error.message
       };
     }
   }
 
   /**
-   * Refresh access token
+   * Exchange authorization code for access token
+   */
+  async exchangeCodeForToken(code) {
+    try {
+      const response = await fetch(OURA_CONFIG.tokenEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code: code,
+          redirect_uri: OURA_CONFIG.redirectUri,
+          client_id: OURA_CONFIG.clientId,
+          client_secret: OURA_CONFIG.clientSecret,
+        }).toString(),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to exchange code for token');
+      }
+
+      const data = await response.json();
+      
+      this.accessToken = data.access_token;
+      this.refreshToken = data.refresh_token;
+      this.tokenExpiry = Date.now() + (data.expires_in * 1000);
+
+      // Save tokens
+      await AsyncStorage.setItem('oura_access_token', this.accessToken);
+      await AsyncStorage.setItem('oura_refresh_token', this.refreshToken);
+      await AsyncStorage.setItem('oura_token_expiry', this.tokenExpiry.toString());
+
+      return true;
+    } catch (error) {
+      console.error('Token exchange error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Refresh expired access token
    */
   async refreshAccessToken() {
     try {
@@ -138,300 +163,284 @@ class OuraRingService {
         throw new Error('No refresh token available');
       }
 
-      const response = await fetch(OURA_TOKEN_URL, {
+      const response = await fetch(OURA_CONFIG.tokenEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: `grant_type=refresh_token&refresh_token=${this.refreshToken}&client_id=${OURA_CLIENT_ID}&client_secret=${OURA_CLIENT_SECRET}`,
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: this.refreshToken,
+          client_id: OURA_CONFIG.clientId,
+          client_secret: OURA_CONFIG.clientSecret,
+        }).toString(),
       });
 
-      const tokenData = await response.json();
-      
-      if (tokenData.access_token) {
-        this.accessToken = tokenData.access_token;
-        if (tokenData.refresh_token) {
-          this.refreshToken = tokenData.refresh_token;
-        }
-        
-        await AsyncStorage.setItem(STORAGE_KEYS.OURA_ACCESS_TOKEN, this.accessToken);
-        if (tokenData.refresh_token) {
-          await AsyncStorage.setItem(STORAGE_KEYS.OURA_REFRESH_TOKEN, tokenData.refresh_token);
-        }
-        
-        console.log('✅ Oura Ring: Token refreshed');
-        return true;
+      if (!response.ok) {
+        throw new Error('Failed to refresh token');
       }
+
+      const data = await response.json();
       
-      return false;
+      this.accessToken = data.access_token;
+      this.refreshToken = data.refresh_token || this.refreshToken;
+      this.tokenExpiry = Date.now() + (data.expires_in * 1000);
+
+      // Update saved tokens
+      await AsyncStorage.setItem('oura_access_token', this.accessToken);
+      if (data.refresh_token) {
+        await AsyncStorage.setItem('oura_refresh_token', data.refresh_token);
+      }
+      await AsyncStorage.setItem('oura_token_expiry', this.tokenExpiry.toString());
+
+      return true;
     } catch (error) {
-      console.error('❌ Oura Ring token refresh error:', error);
-      return false;
+      console.error('Token refresh error:', error);
+      // Clear tokens and require re-authentication
+      await this.disconnect();
+      throw error;
     }
   }
 
   /**
    * Make authenticated API request
    */
-  async makeRequest(endpoint, retryCount = 0) {
+  async makeRequest(endpoint, options = {}) {
     try {
-      if (!this.accessToken) {
-        throw new Error('Not authenticated');
+      // Check token validity
+      if (!this.accessToken || Date.now() > this.tokenExpiry) {
+        await this.refreshAccessToken();
       }
 
-      const response = await fetch(`${OURA_API_BASE}${endpoint}`, {
-        method: 'GET',
+      const response = await fetch(`${OURA_CONFIG.apiBaseUrl}${endpoint}`, {
+        ...options,
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json',
+          ...options.headers,
         },
       });
 
-      // Handle token expiration
-      if (response.status === 401 && retryCount === 0) {
-        console.log('🔄 Token expired, refreshing...');
-        const refreshed = await this.refreshAccessToken();
-        if (refreshed) {
-          return this.makeRequest(endpoint, retryCount + 1);
-        }
-      }
-
       if (!response.ok) {
+        if (response.status === 401) {
+          // Token expired, try refresh
+          await this.refreshAccessToken();
+          // Retry request
+          return this.makeRequest(endpoint, options);
+        }
         throw new Error(`API request failed: ${response.status}`);
       }
 
       return await response.json();
     } catch (error) {
-      console.error('❌ Oura API request error:', error);
+      console.error('API request error:', error);
       throw error;
     }
   }
 
   /**
-   * Sync daily data from Oura Ring
+   * Get personal info
    */
-  async syncDailyData(startDate = null, endDate = null) {
+  async getPersonalInfo() {
     try {
-      if (!this.isConnected) {
-        throw new Error('Not connected to Oura Ring');
-      }
-
-      // Default to last 7 days if no dates specified
-      if (!startDate) {
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() - 7);
-      }
-      if (!endDate) {
-        endDate = new Date();
-      }
-
-      const start = startDate.toISOString().split('T')[0];
-      const end = endDate.toISOString().split('T')[0];
-
-      console.log(`📥 Syncing Oura data: ${start} to ${end}`);
-
-      // Fetch all data types in parallel
-      const [sleepData, activityData, readinessData, hrvData] = await Promise.all([
-        this.makeRequest(`/daily_sleep?start_date=${start}&end_date=${end}`),
-        this.makeRequest(`/daily_activity?start_date=${start}&end_date=${end}`),
-        this.makeRequest(`/daily_readiness?start_date=${start}&end_date=${end}`),
-        this.makeRequest(`/heartrate?start_date=${start}&end_date=${end}`),
-      ]);
-
-      // Process and combine data
-      const processedData = this.processOuraData({
-        sleep: sleepData.data || [],
-        activity: activityData.data || [],
-        readiness: readinessData.data || [],
-        heartrate: hrvData.data || [],
-      });
-
-      // Save to storage
-      await AsyncStorage.setItem(STORAGE_KEYS.OURA_USER_DATA, JSON.stringify(processedData));
-      await AsyncStorage.setItem(STORAGE_KEYS.OURA_LAST_SYNC, new Date().toISOString());
-      
-      this.userData = processedData;
-      this.lastSyncTime = new Date();
-
-      console.log('✅ Oura data synced successfully');
-      console.log(`📊 Synced ${processedData.dailyData.length} days of data`);
-
-      return {
-        success: true,
-        data: processedData,
-        syncTime: this.lastSyncTime,
-      };
+      const data = await this.makeRequest('/personal_info');
+      return data;
     } catch (error) {
-      console.error('❌ Oura sync error:', error);
-      return {
-        success: false,
-        error: error.message,
-      };
-    }
-  }
-
-  /**
-   * Process Oura data into Praxiom format
-   */
-  processOuraData(rawData) {
-    const dailyData = {};
-
-    // Process sleep data
-    rawData.sleep.forEach(day => {
-      const date = day.day;
-      if (!dailyData[date]) dailyData[date] = {};
-      
-      dailyData[date].sleep = {
-        totalSleep: day.total_sleep_duration / 60, // Convert to minutes
-        deepSleep: day.deep_sleep_duration / 60,
-        remSleep: day.rem_sleep_duration / 60,
-        lightSleep: day.light_sleep_duration / 60,
-        sleepEfficiency: day.sleep_efficiency,
-        sleepScore: day.score,
-        restingHeartRate: day.lowest_heart_rate,
-        avgHRV: day.average_hrv,
-      };
-    });
-
-    // Process activity data
-    rawData.activity.forEach(day => {
-      const date = day.day;
-      if (!dailyData[date]) dailyData[date] = {};
-      
-      dailyData[date].activity = {
-        steps: day.steps,
-        calories: day.total_calories,
-        activeCalories: day.active_calories,
-        activityScore: day.score,
-        met: day.average_met_minutes,
-        inactivityAlerts: day.inactivity_alerts,
-      };
-    });
-
-    // Process readiness data
-    rawData.readiness.forEach(day => {
-      const date = day.day;
-      if (!dailyData[date]) dailyData[date] = {};
-      
-      dailyData[date].readiness = {
-        readinessScore: day.score,
-        temperatureDeviation: day.temperature_deviation,
-        recoveryIndex: day.recovery_index,
-      };
-    });
-
-    // Calculate average metrics for Praxiom integration
-    const allDays = Object.values(dailyData);
-    const averages = {
-      restingHeartRate: this.calculateAverage(allDays.map(d => d.sleep?.restingHeartRate).filter(Boolean)),
-      hrv: this.calculateAverage(allDays.map(d => d.sleep?.avgHRV).filter(Boolean)),
-      steps: this.calculateAverage(allDays.map(d => d.activity?.steps).filter(Boolean)),
-      sleepEfficiency: this.calculateAverage(allDays.map(d => d.sleep?.sleepEfficiency).filter(Boolean)),
-      readinessScore: this.calculateAverage(allDays.map(d => d.readiness?.readinessScore).filter(Boolean)),
-    };
-
-    return {
-      dailyData: Object.entries(dailyData).map(([date, data]) => ({ date, ...data })),
-      averages,
-      lastSync: new Date().toISOString(),
-    };
-  }
-
-  /**
-   * Get latest health metrics for Praxiom algorithm
-   */
-  getLatestMetrics() {
-    if (!this.userData || !this.userData.dailyData.length) {
+      console.error('Error fetching personal info:', error);
       return null;
     }
-
-    const latest = this.userData.dailyData[0];
-    const averages = this.userData.averages;
-
-    return {
-      // For fitness score calculation
-      heartRate: latest.sleep?.restingHeartRate || averages.restingHeartRate || null,
-      hrv: latest.sleep?.avgHRV || averages.hrv || null,
-      steps: latest.activity?.steps || averages.steps || null,
-      spO2: null, // Oura doesn't provide SpO2 yet
-      
-      // Additional metrics
-      sleepEfficiency: latest.sleep?.sleepEfficiency || averages.sleepEfficiency || null,
-      readinessScore: latest.readiness?.readinessScore || averages.readinessScore || null,
-      
-      // Metadata
-      source: 'Oura Ring',
-      syncTime: this.lastSyncTime,
-    };
   }
 
   /**
-   * Get connection status
+   * Get daily data (includes HRV, sleep, activity)
+   * @param {string} startDate - Format: YYYY-MM-DD
+   * @param {string} endDate - Format: YYYY-MM-DD
    */
-  getConnectionStatus() {
-    return {
-      isConnected: this.isConnected,
-      lastSyncTime: this.lastSyncTime,
-      hasData: this.userData !== null,
-      dataPoints: this.userData ? this.userData.dailyData.length : 0,
-    };
+  async getDailySummary(startDate, endDate) {
+    try {
+      const data = await this.makeRequest(
+        `/daily_sleep?start_date=${startDate}&end_date=${endDate}`
+      );
+      return data;
+    } catch (error) {
+      console.error('Error fetching daily summary:', error);
+      return null;
+    }
   }
 
   /**
-   * Disconnect Oura Ring
+   * Get today's HRV for Praxiom calculation
+   */
+  async getTodayHRV() {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      
+      const data = await this.makeRequest(
+        `/daily_sleep?start_date=${yesterday}&end_date=${today}`
+      );
+      
+      if (data && data.data && data.data.length > 0) {
+        // Get most recent sleep session
+        const latestSleep = data.data[data.data.length - 1];
+        
+        // Oura provides HRV in ms (same as RMSSD format Praxiom uses)
+        const hrvValue = latestSleep.hrv_avg || latestSleep.hr_average;
+        
+        return {
+          hrv: hrvValue,
+          date: latestSleep.day,
+          source: 'Oura Ring'
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error fetching HRV:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get readiness score
+   */
+  async getReadinessScore(startDate, endDate) {
+    try {
+      const data = await this.makeRequest(
+        `/daily_readiness?start_date=${startDate}&end_date=${endDate}`
+      );
+      return data;
+    } catch (error) {
+      console.error('Error fetching readiness:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get sleep data
+   */
+  async getSleepData(startDate, endDate) {
+    try {
+      const data = await this.makeRequest(
+        `/sleep?start_date=${startDate}&end_date=${endDate}`
+      );
+      return data;
+    } catch (error) {
+      console.error('Error fetching sleep data:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get activity data
+   */
+  async getActivityData(startDate, endDate) {
+    try {
+      const data = await this.makeRequest(
+        `/daily_activity?start_date=${startDate}&end_date=${endDate}`
+      );
+      return data;
+    } catch (error) {
+      console.error('Error fetching activity data:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get comprehensive health summary for dashboard
+   */
+  async getHealthSummary() {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      
+      // Fetch multiple endpoints in parallel
+      const [sleep, readiness, activity, hrv] = await Promise.all([
+        this.getDailySummary(yesterday, today),
+        this.getReadinessScore(yesterday, today),
+        this.getActivityData(yesterday, today),
+        this.getTodayHRV()
+      ]);
+
+      return {
+        sleep: sleep?.data?.[0] || null,
+        readiness: readiness?.data?.[0] || null,
+        activity: activity?.data?.[0] || null,
+        hrv: hrv || null,
+        lastUpdated: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Error fetching health summary:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if user is authenticated
+   */
+  isAuthenticated() {
+    return this.accessToken !== null && Date.now() < this.tokenExpiry;
+  }
+
+  /**
+   * Disconnect and clear tokens
    */
   async disconnect() {
     try {
-      await AsyncStorage.multiRemove([
-        STORAGE_KEYS.OURA_ACCESS_TOKEN,
-        STORAGE_KEYS.OURA_REFRESH_TOKEN,
-        STORAGE_KEYS.OURA_LAST_SYNC,
-        STORAGE_KEYS.OURA_USER_DATA,
-      ]);
-
       this.accessToken = null;
       this.refreshToken = null;
-      this.lastSyncTime = null;
-      this.isConnected = false;
-      this.userData = null;
+      this.tokenExpiry = null;
 
-      console.log('✅ Oura Ring disconnected');
+      await AsyncStorage.multiRemove([
+        'oura_access_token',
+        'oura_refresh_token',
+        'oura_token_expiry'
+      ]);
+
       return true;
     } catch (error) {
-      console.error('❌ Oura Ring disconnect error:', error);
+      console.error('Error disconnecting:', error);
       return false;
     }
   }
 
   /**
-   * Calculate average from array
-   */
-  calculateAverage(arr) {
-    if (!arr || arr.length === 0) return null;
-    const sum = arr.reduce((acc, val) => acc + val, 0);
-    return Math.round(sum / arr.length);
-  }
-
-  /**
-   * Auto-sync on app launch
+   * Auto-sync - fetch latest data and update app context
    */
   async autoSync() {
-    if (!this.isConnected) {
-      return false;
-    }
-
-    // Only sync if last sync was more than 1 hour ago
-    if (this.lastSyncTime) {
-      const hoursSinceSync = (new Date() - this.lastSyncTime) / (1000 * 60 * 60);
-      if (hoursSinceSync < 1) {
-        console.log('⏭️ Oura Ring: Skipping sync (recently synced)');
-        return false;
+    try {
+      if (!this.isAuthenticated()) {
+        console.log('Not authenticated with Oura');
+        return {
+          success: false,
+          message: 'Not connected to Oura Ring'
+        };
       }
-    }
 
-    console.log('🔄 Oura Ring: Auto-syncing...');
-    return await this.syncDailyData();
+      const summary = await this.getHealthSummary();
+      
+      if (!summary) {
+        return {
+          success: false,
+          message: 'Failed to fetch Oura data'
+        };
+      }
+
+      return {
+        success: true,
+        data: summary,
+        message: 'Successfully synced with Oura Ring'
+      };
+    } catch (error) {
+      console.error('Auto-sync error:', error);
+      return {
+        success: false,
+        message: error.message
+      };
+    }
   }
 }
 
-export default new OuraRingService();
+// Export singleton instance
+const ouraRingService = new OuraRingService();
+export default ouraRingService;
