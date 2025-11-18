@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, StatusBar } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -85,6 +85,13 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AppContextProvider>
+        {/* ✅ NEW: Transparent status bar for Android */}
+        <StatusBar 
+          barStyle="light-content" 
+          backgroundColor="transparent" 
+          translucent={true} 
+        />
+        
         {/* Simple colored background instead of ImageBackground for now */}
         <View style={styles.background}>
           <NavigationContainer theme={MyTheme}>
