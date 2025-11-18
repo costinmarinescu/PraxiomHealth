@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,55 +7,64 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  Platform,
   ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppContext } from '../AppContext';
 
 export default function Tier1BiomarkerInputScreen({ navigation }) {
-  // ✅ FIX: Get correct functions from AppContext
-  const { state, updateState, calculateScores } = useContext(AppContext);
+  const context = useContext(AppContext);
+  
+  if (!context) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#FF6B35" />
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
+
+  const { state, updateState, calculateScores } = context;
   const [isCalculating, setIsCalculating] = useState(false);
   
-  // Date picker state
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  // ✅ FIX: Simple date inputs
+  const [year, setYear] = useState('');
+  const [month, setMonth] = useState('');
+  const [day, setDay] = useState('');
   
-  // Form data state
   const [formData, setFormData] = useState({
-    // Oral Health Biomarkers
     salivaryPH: '',
     activeMMP8: '',
     salivaryFlow: '',
-    
-    // Systemic Health Biomarkers
     hsCRP: '',
     omega3Index: '',
     hba1c: '',
     gdf15: '',
     vitaminD: '',
-    
-    // Optional HRV (from wearable or manual entry)
-    hrvValue: state.wearableData?.hrv || ''
+    hrvValue: ''
   });
+
+  useEffect(() => {
+    // Set today's date as default
+    const today = new Date();
+    setYear(today.getFullYear().toString());
+    setMonth((today.getMonth() + 1).toString());
+    setDay(today.getDate().toString());
+    
+    if (state?.wearableData?.hrv) {
+      setFormData(prev => ({ ...prev, hrvValue: String(state.wearableData.hrv) }));
+    }
+  }, [state?.wearableData?.hrv]);
 
   const updateField = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const onDateChange = (event, selectedDate) => {
-    const currentDate = selectedDate || new Date();
-    setShowDatePicker(Platform.OS === 'ios');
-    setSelectedDate(currentDate);
-  };
-
   const validateInputs = () => {
     const errors = [];
     
-    // Check all required fields are filled
     const requiredFields = {
       salivaryPH: 'Salivary pH',
       activeMMP8: 'Active MMP-8',
@@ -78,7 +87,6 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
       return false;
     }
     
-    // Validate numeric ranges
     const validations = {
       salivaryPH: { min: 5.0, max: 9.0, name: 'Salivary pH' },
       activeMMP8: { min: 0, max: 500, name: 'Active MMP-8' },
@@ -107,26 +115,29 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
     return true;
   };
 
-  // ✅ FIX: Corrected calculation flow
   const handleCalculate = async () => {
     try {
       setIsCalculating(true);
       
-      // Check if birthdate is set
-      if (!state.profile?.birthdate) {
+      if (!state?.profile?.birthdate) {
         Alert.alert(
           'Profile Incomplete',
           'Please set your birthdate in Settings before calculating Praxiom Age.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Go to Settings', onPress: () => navigation.navigate('Settings', { screen: 'SettingsHome' }) }
+            { text: 'Go to Settings', onPress: () => {
+              try {
+                navigation.navigate('Settings', { screen: 'SettingsHome' });
+              } catch (e) {
+                navigation.navigate('Settings');
+              }
+            }}
           ]
         );
         setIsCalculating(false);
         return;
       }
       
-      // Validate all inputs
       if (!validateInputs()) {
         setIsCalculating(false);
         return;
@@ -134,38 +145,76 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
       
       console.log('✅ Starting Tier 1 calculation...');
       
-      // ✅ FIX STEP 1: Update biomarker values in state
-      await updateState({
+      // Create assessment date
+      const assessmentDate = new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day)
+      );
+      
+      // ✅ FIX: Save to history BEFORE calculation
+      const tier1Entry = {
         salivaryPH: parseFloat(formData.salivaryPH),
-        mmp8: parseFloat(formData.activeMMP8),
-        flowRate: parseFloat(formData.salivaryFlow),
+        activeMMP8: parseFloat(formData.activeMMP8),
+        salivaryFlow: parseFloat(formData.salivaryFlow),
         hsCRP: parseFloat(formData.hsCRP),
         omega3Index: parseFloat(formData.omega3Index),
         hba1c: parseFloat(formData.hba1c),
         gdf15: parseFloat(formData.gdf15),
         vitaminD: parseFloat(formData.vitaminD),
-      });
+        timestamp: assessmentDate.toISOString(),
+        dateEntered: assessmentDate.toLocaleDateString(),
+        tier: 1,
+      };
+
+      try {
+        const existingData = await AsyncStorage.getItem('tier1Biomarkers');
+        const tier1Array = existingData ? JSON.parse(existingData) : [];
+        tier1Array.push(tier1Entry);
+        await AsyncStorage.setItem('tier1Biomarkers', JSON.stringify(tier1Array));
+        console.log('✅ Tier 1 data saved to history');
+      } catch (error) {
+        console.error('Error saving to history:', error);
+      }
+      
+      // Update state
+      try {
+        await updateState({
+          salivaryPH: parseFloat(formData.salivaryPH),
+          mmp8: parseFloat(formData.activeMMP8),
+          flowRate: parseFloat(formData.salivaryFlow),
+          hsCRP: parseFloat(formData.hsCRP),
+          omega3Index: parseFloat(formData.omega3Index),
+          hba1c: parseFloat(formData.hba1c),
+          gdf15: parseFloat(formData.gdf15),
+          vitaminD: parseFloat(formData.vitaminD),
+        });
+      } catch (error) {
+        console.error('Error updating state:', error);
+        throw new Error('Failed to save biomarkers');
+      }
       
       console.log('✅ Biomarkers updated in state');
       
-      // Small delay to ensure state is updated
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 150));
       
-      // ✅ FIX STEP 2: Calculate scores from biomarkers, which also calculates bio-age
-      const biologicalAge = calculateScores();
+      let biologicalAge;
+      try {
+        biologicalAge = calculateScores();
+      } catch (error) {
+        console.error('Error calculating scores:', error);
+        throw new Error('Failed to calculate scores');
+      }
       
       console.log('✅ Scores calculated, biological age:', biologicalAge);
       
-      // Get the updated scores from state
-      const oralScore = state.oralHealthScore;
-      const systemicScore = state.systemicHealthScore;
-      const vitalityIndex = state.vitalityIndex;
-      const chronologicalAge = state.chronologicalAge;
+      const oralScore = state?.oralHealthScore || 50;
+      const systemicScore = state?.systemicHealthScore || 50;
+      const vitalityIndex = state?.vitalityIndex || 50;
+      const chronologicalAge = state?.chronologicalAge || 0;
       
-      // Calculate deviation
       const deviation = parseFloat((biologicalAge - chronologicalAge).toFixed(1));
       
-      // Show success message
       Alert.alert(
         'Praxiom Age Calculated! ✅',
         `Your Biological Age: ${biologicalAge.toFixed(1)} years\n` +
@@ -178,7 +227,13 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
         [
           { 
             text: 'View Dashboard', 
-            onPress: () => navigation.navigate('DashboardHome') 
+            onPress: () => {
+              try {
+                navigation.navigate('DashboardHome');
+              } catch (e) {
+                navigation.navigate('Dashboard');
+              }
+            }
           },
           { 
             text: 'OK',
@@ -189,7 +244,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
       
       console.log('✅ Tier 1 calculation complete!');
       
-      // Clear form after successful calculation
+      // Clear form
       setFormData({
         salivaryPH: '',
         activeMMP8: '',
@@ -199,7 +254,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
         hba1c: '',
         gdf15: '',
         vitaminD: '',
-        hrvValue: state.wearableData?.hrv || ''
+        hrvValue: state?.wearableData?.hrv ? String(state.wearableData.hrv) : ''
       });
       
     } catch (error) {
@@ -229,7 +284,6 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
       style={styles.container}
     >
       <ScrollView style={styles.scrollView}>
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -238,30 +292,51 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
           <Text style={styles.subtitle}>Foundation Biomarkers</Text>
         </View>
 
-        {/* Date Selection */}
+        {/* ✅ FIX: Simple Date Input */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Assessment Date</Text>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={20} color="#fff" />
-            <Text style={styles.dateText}>
-              {selectedDate.toLocaleDateString()}
-            </Text>
-          </TouchableOpacity>
-          {showDatePicker && (
-            <DateTimePicker
-              value={selectedDate}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={onDateChange}
-              maximumDate={new Date()}
-            />
-          )}
+          <View style={styles.dateInputContainer}>
+            <View style={styles.dateField}>
+              <Text style={styles.dateLabel}>Year</Text>
+              <TextInput
+                style={styles.dateInput}
+                value={year}
+                onChangeText={setYear}
+                keyboardType="number-pad"
+                placeholder="2025"
+                placeholderTextColor="rgba(255,255,255,0.5)"
+                maxLength={4}
+              />
+            </View>
+
+            <View style={styles.dateField}>
+              <Text style={styles.dateLabel}>Month</Text>
+              <TextInput
+                style={styles.dateInput}
+                value={month}
+                onChangeText={setMonth}
+                keyboardType="number-pad"
+                placeholder="11"
+                placeholderTextColor="rgba(255,255,255,0.5)"
+                maxLength={2}
+              />
+            </View>
+
+            <View style={styles.dateField}>
+              <Text style={styles.dateLabel}>Day</Text>
+              <TextInput
+                style={styles.dateInput}
+                value={day}
+                onChangeText={setDay}
+                keyboardType="number-pad"
+                placeholder="18"
+                placeholderTextColor="rgba(255,255,255,0.5)"
+                maxLength={2}
+              />
+            </View>
+          </View>
         </View>
 
-        {/* Oral Health Biomarkers */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🦷 Oral Health Biomarkers</Text>
           
@@ -302,7 +377,6 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Systemic Health Biomarkers */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>💉 Systemic Health Biomarkers</Text>
           
@@ -367,7 +441,6 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Calculate Button */}
         <TouchableOpacity 
           style={[styles.calculateButton, isCalculating && styles.calculateButtonDisabled]}
           onPress={handleCalculate}
@@ -380,7 +453,6 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
           )}
         </TouchableOpacity>
 
-        {/* Upgrade Button */}
         <TouchableOpacity 
           style={styles.upgradeButton}
           onPress={() => navigation.navigate('Tier2BiomarkerInput')}
@@ -436,20 +508,33 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  dateButton: {
+  dateInputContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    padding: 15,
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  dateField: {
+    flex: 1,
+  },
+  dateLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#fff',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  dateInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     borderRadius: 12,
+    padding: 15,
+    fontSize: 16,
+    color: '#fff',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  dateText: {
-    color: '#fff',
-    fontSize: 16,
-    marginLeft: 10,
     fontWeight: '600',
+    textAlign: 'center',
   },
   inputGroup: {
     marginBottom: 15,
