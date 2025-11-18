@@ -8,19 +8,21 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import PraxiomBackground from '../components/PraxiomBackground';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppContext } from '../AppContext';
 
 const Tier2BiomarkerInputScreen = ({ navigation }) => {
-  const { updateState } = useContext(AppContext);
+  // ✅ FIX: Get correct functions from AppContext
+  const { state, updateState, calculateScores, calculateBiologicalAge } = useContext(AppContext);
   
   // Date selection
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // Inflammatory Cytokines
   const [il6, setIL6] = useState('');
@@ -33,15 +35,9 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
 
   // Advanced Markers (optional)
   const [nadPlus, setNADPlus] = useState('');
-  
-  const [loading, setLoading] = useState(false);
 
   const onDateChange = (event, date) => {
-    // Android fires 'set' when user confirms, 'dismissed' when cancelled
-    // iOS fires onChange repeatedly while scrolling
-    
     if (Platform.OS === 'android') {
-      // On Android, only act on set or dismissed events
       if (event.type === 'set' && date) {
         setSelectedDate(date);
         setShowDatePicker(false);
@@ -49,7 +45,6 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
         setShowDatePicker(false);
       }
     } else {
-      // On iOS, update in real-time while scrolling
       if (date) {
         setSelectedDate(date);
       }
@@ -72,55 +67,207 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
       }
     }
 
+    // Check if Tier 1 was completed first
+    if (!state.salivaryPH || !state.hsCRP) {
+      Alert.alert(
+        'Tier 1 Required',
+        'Please complete Tier 1 biomarker assessment before proceeding to Tier 2.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Go to Tier 1', onPress: () => navigation.navigate('Tier1BiomarkerInput') }
+        ]
+      );
+      return false;
+    }
+
     return true;
   };
 
-  const handleSave = async () => {
+  // ✅ FIX: Add Tier 2 calculation logic based on protocol
+  const calculateTier2Adjustments = () => {
+    const il6Val = parseFloat(il6);
+    const il1bVal = parseFloat(il1b);
+    const tnfVal = parseFloat(tnfa);
+    const ohgd8Val = parseFloat(ohgd8);
+    const proteinCarbonylsVal = parseFloat(proteinCarbonyls);
+    const nadVal = nadPlus ? parseFloat(nadPlus) : null;
+
+    let systemicAdjustment = 0;
+    const adjustmentDetails = [];
+
+    // IL-6 adjustment (pro-inflammatory cytokine)
+    if (il6Val > 2.0) {
+      const adjustment = (il6Val - 2.0) * 5;
+      systemicAdjustment += adjustment;
+      adjustmentDetails.push(`IL-6: -${adjustment.toFixed(1)} points`);
+    }
+
+    // IL-1β adjustment
+    if (il1bVal > 0.5) {
+      const adjustment = (il1bVal - 0.5) * 8;
+      systemicAdjustment += adjustment;
+      adjustmentDetails.push(`IL-1β: -${adjustment.toFixed(1)} points`);
+    }
+
+    // TNF-α adjustment
+    if (tnfVal > 8.0) {
+      const adjustment = (tnfVal - 8.0) * 3;
+      systemicAdjustment += adjustment;
+      adjustmentDetails.push(`TNF-α: -${adjustment.toFixed(1)} points`);
+    }
+
+    // 8-OHdG adjustment (oxidative DNA damage)
+    if (ohgd8Val > 2.0) {
+      const adjustment = (ohgd8Val - 2.0) * 4;
+      systemicAdjustment += adjustment;
+      adjustmentDetails.push(`8-OHdG: -${adjustment.toFixed(1)} points`);
+    }
+
+    // Protein Carbonyls adjustment (oxidative protein damage)
+    if (proteinCarbonylsVal > 1.5) {
+      const adjustment = (proteinCarbonylsVal - 1.5) * 6;
+      systemicAdjustment += adjustment;
+      adjustmentDetails.push(`Protein Carbonyls: -${adjustment.toFixed(1)} points`);
+    }
+
+    // NAD+ adjustment (if provided)
+    if (nadVal !== null && nadVal < 40) {
+      const adjustment = (40 - nadVal) * 2;
+      systemicAdjustment += adjustment;
+      adjustmentDetails.push(`NAD+: -${adjustment.toFixed(1)} points`);
+    }
+
+    console.log('Tier 2 Adjustments:', adjustmentDetails.join(', '));
+    
+    return {
+      totalAdjustment: systemicAdjustment,
+      details: adjustmentDetails
+    };
+  };
+
+  // ✅ FIX: Proper calculation and state update
+  const handleCalculate = async () => {
     if (!validateInputs()) return;
 
     setLoading(true);
 
     try {
-      const tier2Data = {
-        il6: parseFloat(il6),
-        il1b: parseFloat(il1b),
-        tnfa: parseFloat(tnfa),
-        ohgd8: parseFloat(ohgd8),
-        proteinCarbonyls: parseFloat(proteinCarbonyls),
-        nadPlus: nadPlus ? parseFloat(nadPlus) : null,
-        timestamp: selectedDate.toISOString(),
-        dateEntered: selectedDate.toLocaleDateString(),
-        tier: 2,
-      };
+      console.log('✅ Starting Tier 2 calculation...');
 
-      // Save to storage
-      const existingData = await AsyncStorage.getItem('tier2Biomarkers');
-      const tier2Array = existingData ? JSON.parse(existingData) : [];
-      tier2Array.push(tier2Data);
-      await AsyncStorage.setItem('tier2Biomarkers', JSON.stringify(tier2Array));
+      // Calculate Tier 2 adjustments
+      const { totalAdjustment, details } = calculateTier2Adjustments();
+
+      // Get current systemic health score
+      const currentSystemicScore = state.systemicHealthScore || 50;
+      const currentOralScore = state.oralHealthScore || 50;
+      
+      // Apply Tier 2 adjustments to systemic score
+      const adjustedSystemicScore = Math.max(0, currentSystemicScore - totalAdjustment);
+
+      console.log(`Current Systemic Score: ${currentSystemicScore}%`);
+      console.log(`Tier 2 Adjustment: -${totalAdjustment.toFixed(1)} points`);
+      console.log(`Adjusted Systemic Score: ${adjustedSystemicScore.toFixed(1)}%`);
+
+      // Update state with adjusted scores
+      await updateState({
+        systemicHealthScore: Math.round(adjustedSystemicScore),
+        vitalityIndex: Math.round((currentOralScore + adjustedSystemicScore) / 2),
+        tier2Data: {
+          il6: parseFloat(il6),
+          il1b: parseFloat(il1b),
+          tnfa: parseFloat(tnfa),
+          ohgd8: parseFloat(ohgd8),
+          proteinCarbonyls: parseFloat(proteinCarbonyls),
+          nadPlus: nadPlus ? parseFloat(nadPlus) : null,
+          timestamp: selectedDate.toISOString(),
+          dateEntered: selectedDate.toLocaleDateString(),
+          adjustment: totalAdjustment,
+          tier: 2,
+        }
+      });
+
+      // Small delay to ensure state update
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Recalculate biological age with adjusted scores
+      const enhancedBioAge = calculateBiologicalAge();
+      
+      console.log(`Enhanced Biological Age: ${enhancedBioAge.toFixed(1)} years`);
+
+      // Calculate improvement vs Tier 1
+      const tier1BioAge = state.biologicalAge || state.chronologicalAge;
+      const improvement = tier1BioAge - enhancedBioAge;
+
+      const message = improvement > 0
+        ? `Tier 2 analysis shows your biological age is ${improvement.toFixed(1)} years younger than the Tier 1 estimate.`
+        : 'Tier 2 analysis provides a more detailed assessment of your biological age.';
 
       Alert.alert(
-        'Success!',
-        'Tier 2 biomarker data saved successfully!\n\nThis advanced assessment will be used for personalized health optimization.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
+        'Tier 2 Analysis Complete! 🔬',
+        `Enhanced Biological Age: ${enhancedBioAge.toFixed(1)} years\n` +
+        `Chronological Age: ${state.chronologicalAge} years\n\n` +
+        `Adjusted Systemic Score: ${adjustedSystemicScore.toFixed(1)}%\n` +
+        `Tier 2 Impact: -${totalAdjustment.toFixed(1)} points\n\n` +
+        message +
+        `\n\n${getTier2Recommendations(totalAdjustment, adjustedSystemicScore)}`,
+        [
+          {
+            text: 'View Dashboard',
+            onPress: () => navigation.navigate('DashboardHome')
+          },
+          {
+            text: 'OK',
+            style: 'cancel'
+          }
+        ]
       );
+
+      console.log('✅ Tier 2 calculation complete!');
+
     } catch (error) {
-      console.error('Error saving Tier 2 data:', error);
-      Alert.alert('Error', 'Failed to save Tier 2 biomarkers');
+      console.error('❌ Tier 2 calculation error:', error);
+      Alert.alert('Error', 'Failed to complete Tier 2 calculation. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  const getTier2Recommendations = (adjustment, adjustedScore) => {
+    if (adjustment > 15) {
+      return '⚠️ Significant inflammatory burden detected:\n' +
+             '• Consider anti-inflammatory interventions\n' +
+             '• NAD+ restoration therapy recommended\n' +
+             '• Metabolic optimization needed\n' +
+             '• Tier 3 senolytic therapy may be beneficial';
+    } else if (adjustment > 8) {
+      return '📊 Moderate optimization potential:\n' +
+             '• Targeted supplementation recommended\n' +
+             '• Lifestyle modifications beneficial\n' +
+             '• Regular monitoring advised';
+    } else if (adjustedScore >= 75) {
+      return '✅ Excellent metabolic and inflammatory profile!\n' +
+             '• Maintain current interventions\n' +
+             '• Continue regular assessments';
+    } else {
+      return '📈 Focus on foundational health:\n' +
+             '• Review Tier 1 biomarkers\n' +
+             '• Address underlying factors';
+    }
+  };
+
   return (
-    <PraxiomBackground>
-      <ScrollView style={styles.container}>
+    <LinearGradient
+      colors={['#FF6B35', '#F7931E', '#FDC830', '#00CED1']}
+      style={styles.container}
+    >
+      <ScrollView style={styles.scrollView}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.title}>Tier 2 Advanced Assessment</Text>
+          <Text style={styles.subtitle}>Personalized Profiling</Text>
         </View>
 
         {/* Date Selection */}
@@ -130,29 +277,19 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
             style={styles.dateButton}
             onPress={() => setShowDatePicker(true)}
           >
-            <Ionicons name="calendar-outline" size={20} color="#4ade80" />
+            <Ionicons name="calendar-outline" size={20} color="#fff" />
             <Text style={styles.dateText}>
               {selectedDate.toLocaleDateString()}
             </Text>
           </TouchableOpacity>
           {showDatePicker && (
-            <View>
-              <DateTimePicker
-                value={selectedDate}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={onDateChange}
-                maximumDate={new Date()}
-              />
-              {Platform.OS === 'ios' && (
-                <TouchableOpacity
-                  style={styles.doneDateButton}
-                  onPress={() => setShowDatePicker(false)}
-                >
-                  <Text style={styles.doneDateButtonText}>Done</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={onDateChange}
+              maximumDate={new Date()}
+            />
           )}
         </View>
 
@@ -161,41 +298,38 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
           <Text style={styles.sectionTitle}>🔥 Inflammatory Cytokines</Text>
           
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Interleukin-6 (IL-6) pg/mL *</Text>
-            <Text style={styles.hint}>Optimal: &lt;3 pg/mL | High Risk: &gt;10 pg/mL</Text>
+            <Text style={styles.label}>IL-6 (pg/mL, {'<'}2.0 optimal)</Text>
             <TextInput
               style={styles.input}
               value={il6}
               onChangeText={setIL6}
               keyboardType="decimal-pad"
-              placeholder="e.g., 2.5"
-              placeholderTextColor="#666"
+              placeholder="1.5"
+              placeholderTextColor="rgba(255,255,255,0.5)"
             />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Interleukin-1β (IL-1β) pg/mL *</Text>
-            <Text style={styles.hint}>Optimal: &lt;2 pg/mL</Text>
+            <Text style={styles.label}>IL-1β (pg/mL, {'<'}0.5 optimal)</Text>
             <TextInput
               style={styles.input}
               value={il1b}
               onChangeText={setIL1B}
               keyboardType="decimal-pad"
-              placeholder="e.g., 1.5"
-              placeholderTextColor="#666"
+              placeholder="0.3"
+              placeholderTextColor="rgba(255,255,255,0.5)"
             />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>TNF-α pg/mL *</Text>
-            <Text style={styles.hint}>Optimal: &lt;5 pg/mL | High Risk: &gt;8 pg/mL</Text>
+            <Text style={styles.label}>TNF-α (pg/mL, {'<'}8.0 optimal)</Text>
             <TextInput
               style={styles.input}
               value={tnfa}
               onChangeText={setTNFa}
               keyboardType="decimal-pad"
-              placeholder="e.g., 4.2"
-              placeholderTextColor="#666"
+              placeholder="6.5"
+              placeholderTextColor="rgba(255,255,255,0.5)"
             />
           </View>
         </View>
@@ -205,80 +339,71 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
           <Text style={styles.sectionTitle}>⚡ Oxidative Stress Markers</Text>
           
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>8-OHdG ng/mL *</Text>
-            <Text style={styles.hint}>DNA damage marker | Optimal: &lt;4 ng/mL | High Risk: &gt;8 ng/mL</Text>
+            <Text style={styles.label}>8-OHdG (ng/mL, {'<'}2.0 optimal)</Text>
             <TextInput
               style={styles.input}
               value={ohgd8}
               onChangeText={set8OHdG}
               keyboardType="decimal-pad"
-              placeholder="e.g., 3.5"
-              placeholderTextColor="#666"
+              placeholder="1.5"
+              placeholderTextColor="rgba(255,255,255,0.5)"
             />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Protein Carbonyls nmol/mg *</Text>
-            <Text style={styles.hint}>Protein oxidation | Explains 22.65% of age variance</Text>
+            <Text style={styles.label}>Protein Carbonyls (nmol/mg, {'<'}1.5 optimal)</Text>
             <TextInput
               style={styles.input}
               value={proteinCarbonyls}
               onChangeText={setProteinCarbonyls}
               keyboardType="decimal-pad"
-              placeholder="e.g., 1.2"
-              placeholderTextColor="#666"
+              placeholder="1.2"
+              placeholderTextColor="rgba(255,255,255,0.5)"
             />
           </View>
         </View>
 
-        {/* Advanced Markers (Optional) */}
+        {/* Advanced Markers */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🧬 Advanced Markers (Optional)</Text>
           
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>NAD+ μM (Optional)</Text>
-            <Text style={styles.hint}>Cellular energy marker | Declines with age</Text>
+            <Text style={styles.label}>NAD+ (μM, {'>'}40 optimal)</Text>
             <TextInput
               style={styles.input}
               value={nadPlus}
               onChangeText={setNADPlus}
               keyboardType="decimal-pad"
-              placeholder="Leave blank if not measured"
-              placeholderTextColor="#666"
+              placeholder="45"
+              placeholderTextColor="rgba(255,255,255,0.5)"
             />
           </View>
         </View>
 
-        {/* Info Card */}
-        <View style={styles.infoCard}>
-          <Ionicons name="information-circle" size={24} color="#4ade80" />
-          <Text style={styles.infoText}>
-            Tier 2 assessment provides advanced inflammatory and oxidative stress profiling for personalized intervention strategies.
-          </Text>
-        </View>
+        {/* Calculate Button */}
+        <TouchableOpacity 
+          style={[styles.calculateButton, loading && styles.calculateButtonDisabled]}
+          onPress={handleCalculate}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#FF6B35" />
+          ) : (
+            <Text style={styles.calculateButtonText}>Calculate Enhanced Bio-Age</Text>
+          )}
+        </TouchableOpacity>
 
-        {/* Action Buttons */}
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.saveButton, loading && styles.buttonDisabled]}
-            onPress={handleSave}
-            disabled={loading}
-          >
-            <Ionicons name="checkmark-circle" size={20} color="#000" />
-            <Text style={styles.saveButtonText}>
-              {loading ? 'Saving...' : 'Save Tier 2 Data'}
-            </Text>
-          </TouchableOpacity>
+        {/* Back Button */}
+        <TouchableOpacity 
+          style={styles.backToTier1Button}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backToTier1ButtonText}>← Back to Tier 1</Text>
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
+        <View style={{ height: 40 }} />
       </ScrollView>
-    </PraxiomBackground>
+    </LinearGradient>
   );
 };
 
@@ -286,128 +411,116 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollView: {
+    flex: 1,
+  },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
     paddingTop: 50,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   backButton: {
-    marginRight: 15,
+    marginBottom: 15,
   },
   title: {
-    fontSize: 22,
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#fff',
+    marginBottom: 5,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#fff',
+    opacity: 0.9,
   },
   section: {
-    padding: 20,
-    paddingTop: 10,
+    marginHorizontal: 20,
+    marginBottom: 25,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#4ade80',
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#fff',
     marginBottom: 15,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   dateButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e1e2e',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     padding: 15,
     borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#4ade80',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   dateText: {
+    color: '#fff',
     fontSize: 16,
-    color: '#ffffff',
     marginLeft: 10,
-  },
-  doneDateButton: {
-    backgroundColor: '#4ade80',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  doneDateButtonText: {
-    color: '#000',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 15,
   },
   label: {
     fontSize: 14,
-    color: '#ffffff',
-    marginBottom: 4,
-    fontWeight: '600',
-  },
-  hint: {
-    fontSize: 12,
-    color: '#8e8e93',
+    fontWeight: '500',
+    color: '#fff',
     marginBottom: 8,
-    fontStyle: 'italic',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   input: {
-    backgroundColor: '#FFFFFF',
-    color: '#000000',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderRadius: 12,
     padding: 15,
-    borderRadius: 12,
     fontSize: 16,
+    color: '#fff',
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    fontWeight: '600',
   },
-  infoCard: {
-    backgroundColor: '#1e1e2e',
-    padding: 20,
-    margin: 20,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#8e8e93',
-    marginLeft: 15,
-    flex: 1,
-  },
-  actions: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  saveButton: {
-    backgroundColor: '#4ade80',
+  calculateButton: {
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    borderRadius: 25,
     padding: 18,
-    borderRadius: 12,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+    marginTop: 10,
   },
-  saveButtonText: {
-    fontSize: 16,
+  calculateButtonDisabled: {
+    opacity: 0.6,
+  },
+  calculateButtonText: {
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#000',
-    marginLeft: 8,
+    color: '#FF6B35',
   },
-  cancelButton: {
-    backgroundColor: 'transparent',
-    padding: 18,
-    borderRadius: 12,
+  backToTier1Button: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    marginHorizontal: 20,
+    borderRadius: 25,
+    padding: 16,
     alignItems: 'center',
+    marginTop: 15,
     borderWidth: 2,
-    borderColor: '#8e8e93',
+    borderColor: '#fff',
   },
-  cancelButtonText: {
+  backToTier1ButtonText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#8e8e93',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
 
