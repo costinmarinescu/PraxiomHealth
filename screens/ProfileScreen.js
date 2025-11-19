@@ -13,7 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppContext } from '../AppContext';
 
 export default function ProfileScreen({ navigation }) {
-  const { state, updateState } = useContext(AppContext);
+  const { state, updateState } = useAppContext();
   
   // Form state
   const [name, setName] = useState('');
