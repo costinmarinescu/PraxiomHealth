@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,12 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { AppContext } from '../AppContext';
+import { useAppContext } from '../AppContext';
 import PraxiomBackground from '../components/PraxiomBackground';
 import SecureStorageService from '../services/SecureStorageService';
 
 const BiomarkerHistoryScreen = ({ navigation }) => {
-  const { state } = useContext(AppContext);
+  const { state } = useAppContext();
   const [history, setHistory] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
