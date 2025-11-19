@@ -4,7 +4,7 @@ import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { AppContextProvider } from './AppContext';
+import { AppProvider } from './AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import DashboardScreen from './screens/DashboardScreen';
 import WatchScreen from './screens/WatchScreen';
@@ -84,7 +84,7 @@ export default function App() {
   
   return (
     <ErrorBoundary>
-      <AppContextProvider>
+      <AppProvider>
         {/* ✅ NEW: Transparent status bar for Android */}
         <StatusBar 
           barStyle="light-content" 
@@ -149,7 +149,7 @@ export default function App() {
             </Tab.Navigator>
           </NavigationContainer>
         </View>
-      </AppContextProvider>
+      </AppProvider>
     </ErrorBoundary>
   );
 }
