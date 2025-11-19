@@ -81,14 +81,14 @@ export default function DashboardScreen({ navigation }) {
           <View style={styles.ageContainer}>
             <View style={styles.ageBox}>
               <Text style={styles.ageLabel}>Chronological Age</Text>
-              <Text style={styles.ageValue}>{state.chronologicalAge}</Text>
+              <Text style={styles.ageValue}>{state.userProfile?.chronologicalAge || '--'}</Text>
               <Text style={styles.ageUnit}>years</Text>
             </View>
 
             <View style={styles.ageBox}>
               <Text style={styles.ageLabel}>Praxiom Age</Text>
               <Text style={[styles.ageValue, styles.bioAge]}>
-                {state.biologicalAge.toFixed(1)}
+                {state.userProfile?.biologicalAge ? state.userProfile.biologicalAge.toFixed(1) : '--'}
               </Text>
               <Text style={styles.ageUnit}>years</Text>
             </View>
@@ -98,10 +98,14 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.deviationLabel}>Bio-Age Deviation:</Text>
             <Text style={[
               styles.deviationValue,
-              { color: getDeviationColor(state.biologicalAge - state.chronologicalAge) }
+              { color: getDeviationColor((state.userProfile?.biologicalAge || 0) - (state.userProfile?.chronologicalAge || 0)) }
             ]}>
-              {state.biologicalAge > state.chronologicalAge ? '+' : ''}
-              {(state.biologicalAge - state.chronologicalAge).toFixed(1)} years
+              {state.userProfile?.biologicalAge && state.userProfile?.chronologicalAge ? (
+                <>
+                  {state.userProfile.biologicalAge > state.userProfile.chronologicalAge ? '+' : ''}
+                  {(state.userProfile.biologicalAge - state.userProfile.chronologicalAge).toFixed(1)} years
+                </>
+              ) : '--'}
             </Text>
           </View>
         </View>
@@ -120,9 +124,9 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.watchButtonText}>
               {state.watchConnected ? 'Watch Connected' : 'Connect Watch'}
             </Text>
-            {state.watchConnected && state.lastSync && (
+            {state.watchConnected && state.lastSyncTime && (
               <Text style={styles.syncText}>
-                Last sync: {new Date(state.lastSync).toLocaleTimeString()}
+                Last sync: {new Date(state.lastSyncTime).toLocaleTimeString()}
               </Text>
             )}
           </View>

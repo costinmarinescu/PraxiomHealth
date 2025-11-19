@@ -195,7 +195,7 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
       console.log(`Enhanced Biological Age: ${enhancedBioAge.toFixed(1)} years`);
 
       // Calculate improvement vs Tier 1
-      const tier1BioAge = state.biologicalAge || state.chronologicalAge;
+      const tier1BioAge = state.userProfile?.biologicalAge || state.userProfile?.chronologicalAge;
       const improvement = tier1BioAge - enhancedBioAge;
 
       const message = improvement > 0
@@ -205,7 +205,7 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
       Alert.alert(
         'Tier 2 Analysis Complete! 🔬',
         `Enhanced Biological Age: ${enhancedBioAge.toFixed(1)} years\n` +
-        `Chronological Age: ${state.chronologicalAge} years\n\n` +
+        `Chronological Age: ${state.userProfile?.chronologicalAge || '--'} years\n\n` +
         `Adjusted Systemic Score: ${adjustedSystemicScore.toFixed(1)}%\n` +
         `Tier 2 Impact: -${totalAdjustment.toFixed(1)} points\n\n` +
         message +

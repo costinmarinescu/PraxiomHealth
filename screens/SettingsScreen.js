@@ -301,9 +301,9 @@ export default function SettingsScreen({ navigation }) {
             )}
             
             {/* ✅ NEW: Show calculated chronological age */}
-            {state.chronologicalAge > 0 && (
+            {state.userProfile?.chronologicalAge > 0 && (
               <Text style={styles.ageDisplay}>
-                Your age: {state.chronologicalAge} years
+                Your age: {state.userProfile.chronologicalAge} years
               </Text>
             )}
             
