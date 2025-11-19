@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,14 +12,14 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { AppContext } from '../AppContext';
+import { useAppContext } from '../AppContext';
 import PraxiomAlgorithm from '../services/PraxiomAlgorithm';
 import StorageService from '../services/StorageService';
 import WearableService from '../services/WearableService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function BiomarkerInputScreen({ navigation }) {
-  const { updateState } = useContext(AppContext);
+  const { updateState } = useAppContext();
   
   // ✅ Tier selection state
   const [selectedTier, setSelectedTier] = useState('tier1');
