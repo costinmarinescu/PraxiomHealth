@@ -1,553 +1,505 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import WearableService from './services/WearableService';
+import * as PraxiomAlgorithm from './services/PraxiomAlgorithm';
 
-// ✅ CRITICAL FIX: Wrap Oura import in try-catch to prevent crash if module has issues
-let OuraRingService = null;
-try {
-  OuraRingService = require('./services/OuraRingService').default;
-  console.log('✅ OuraRingService loaded successfully');
-} catch (error) {
-  console.error('⚠️ OuraRingService failed to load, disabling Oura features:', error);
-}
+const AppContext = createContext();
 
-export const AppContext = createContext();
+export const useAppContext = () => {
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useAppContext must be used within AppProvider');
+  }
+  return context;
+};
 
-export const AppContextProvider = ({ children }) => {
+export const AppProvider = ({ children }) => {
+  // State
   const [state, setState] = useState({
-    chronologicalAge: 0,
-    userName: '',
-    biologicalAge: 70.1,
-    oralHealthScore: 50,
-    systemicHealthScore: 45,
-    vitalityIndex: 47.5,
-    fitnessScore: 65,
+    // User Profile
+    userId: null,
+    userProfile: {
+      dateOfBirth: null,
+      chronologicalAge: null,
+      biologicalAge: null,
+      targetBioAge: null,
+      assessmentTier: 'Foundation', // Foundation, Personalization, Optimization
+    },
+
+    // Tier 1 - Foundation
+    tier1Data: {
+      // Oral Health Biomarkers
+      salivaryPH: null,
+      mmp8: null,
+      flowRate: null,
+      // Systemic Health Biomarkers
+      hsCRP: null,
+      omega3Index: null,
+      hba1c: null,
+      gdf15: null,
+      vitaminD: null,
+      // Optional HRV
+      hrv: null,
+    },
+
+    // Tier 2 - Personalization
+    tier2Data: {
+      // Advanced Inflammatory Panel
+      il6: null,
+      il1b: null,
+      ohd8g: null,
+      proteinCarbonyls: null,
+      inflammAge: null,
+      // NAD+ Metabolism Panel
+      nadPlus: null,
+      nadh: null,
+      nmethylNicotinamide: null,
+      cd38Activity: null,
+      // Wearable Integration (30-day averages)
+      hrvRMSSD: null,
+      sleepEfficiency: null,
+      deepSleep: null,
+      remSleep: null,
+      dailySteps: null,
+      activeMinutes: null,
+      // Oral Microbiome
+      pGingivalis: null,
+      fNucleatum: null,
+      tDenticola: null,
+      shannonDiversity: null,
+      dysbiosisIndex: null,
+    },
+
+    // Tier 3 - Optimization
+    tier3Data: {
+      // Epigenetic Clocks
+      dunedinPACE: null,
+      grimAge2: null,
+      phenoAge: null,
+      intrinsicCapacity: null,
+      // Proteomics
+      gdf15Protein: null,
+      igfbp2: null,
+      cystatinC: null,
+      osteopontin: null,
+      proteinAge: null,
+      // Cellular Senescence
+      p16INK4a: null,
+      saBetaGal: null,
+      saspCytokines: null,
+      // Optional Advanced Imaging
+      mriScore: null,
+      // Optional Genetic Risk
+      geneticRiskScore: null,
+    },
+
+    // Optional Fitness Score (Tier 1)
+    fitnessData: {
+      aerobicFitness: null,
+      flexibilityPosture: null,
+      coordinationBalance: null,
+      mentalPreparedness: null,
+      compositeScore: null,
+    },
+
+    // Calculated Scores
+    scores: {
+      oralHealthScore: null,
+      systemicHealthScore: null,
+      inflammatoryScore: null,
+      nadMetabolismScore: null,
+      wearableScore: null,
+      microbiomeScore: null,
+      fitnessScore: null,
+      vitalityIndex: null,
+      bioAgeDeviation: null,
+    },
+
+    // History
+    assessmentHistory: [],
+    
+    // Watch Connection
     watchConnected: false,
-    ouraConnected: false,
-    lastSync: null,
-    lastOuraSync: null,
-    
-    // Tier 1 Biomarkers
-    salivaryPH: null,
-    mmp8: null,
-    flowRate: null,
-    hsCRP: null,
-    omega3Index: null,
-    hba1c: null,
-    gdf15: null,
-    vitaminD: null,
-    
-    // Fitness Assessment Data
-    aerobicScore: null,
-    flexibilityScore: null,
-    balanceScore: null,
-    mindBodyScore: null,
-    fitnessAssessmentDate: null,
-    
-    // Wearable Data (PineTime)
-    heartRate: null,
-    steps: 0,
-    hrv: null,
-    
-    // Oura Ring Data
-    ouraHeartRate: null,
-    ouraHRV: null,
-    ouraSteps: null,
-    ouraSleepEfficiency: null,
-    ouraReadinessScore: null,
+    watchDevice: null,
+    lastSyncTime: null,
   });
 
-  // ✅ CRITICAL FIX: Wrap all initialization in error handlers
+  // Refs for services
+  const servicesInitialized = useRef(false);
+
+  // Initialize services on mount
   useEffect(() => {
-    const initializeApp = async () => {
-      try {
-        await loadSavedData();
-      } catch (error) {
-        console.error('Error loading saved data:', error);
-      }
-      
-      try {
-        await loadUserProfile();
-      } catch (error) {
-        console.error('Error loading user profile:', error);
-      }
-      
-      try {
-        await initializeWearables();
-      } catch (error) {
-        console.error('Error initializing wearables:', error);
-      }
-    };
-    
-    initializeApp();
+    if (!servicesInitialized.current) {
+      initializeServices();
+      loadStoredData();
+      servicesInitialized.current = true;
+    }
   }, []);
 
-  // ✅ CRITICAL FIX: Fully defensive initialization
-  const initializeWearables = async () => {
-    // Skip if Oura service didn't load
-    if (!OuraRingService) {
-      console.log('⚠️ Oura Ring features disabled (module not loaded)');
-      return;
-    }
-    
+  // Initialize any required services
+  const initializeServices = async () => {
     try {
-      await OuraRingService.initialize();
-      const ouraStatus = OuraRingService.getConnectionStatus();
-      
-      if (ouraStatus && ouraStatus.isConnected) {
-        updateState({
-          ouraConnected: true,
-          lastOuraSync: ouraStatus.lastSyncTime,
-        });
-        
-        // Try to sync, but don't let it crash the app
-        try {
-          await syncOuraData();
-        } catch (syncError) {
-          console.error('Oura sync failed, but app continues:', syncError);
-        }
-      }
+      console.log('📱 Initializing app services...');
+      // Add any service initialization here
+      console.log('✅ Services initialized');
     } catch (error) {
-      console.error('Oura initialization failed, but app continues:', error);
+      console.error('❌ Service initialization error:', error);
     }
   };
 
-  // ✅ CRITICAL FIX: Fully defensive sync
-  const syncOuraData = async () => {
-    if (!OuraRingService) {
-      return;
-    }
-    
+  // Load stored data from AsyncStorage
+  const loadStoredData = async () => {
     try {
-      const result = await OuraRingService.autoSync();
-      
-      // Handle boolean return value
-      if (result === false || result === null || result === undefined) {
-        console.log('⏭️ Oura Ring: Sync not needed or not connected');
-        return;
-      }
-      
-      // Handle object return value
-      if (typeof result === 'object' && result.success === true) {
-        try {
-          const metrics = OuraRingService.getLatestMetrics();
-          
-          if (metrics) {
-            updateState({
-              ouraHeartRate: metrics.heartRate,
-              ouraHRV: metrics.hrv,
-              ouraSteps: metrics.steps,
-              ouraSleepEfficiency: metrics.sleepEfficiency,
-              ouraReadinessScore: metrics.readinessScore,
-              lastOuraSync: metrics.syncTime,
-              ouraConnected: true,
-            });
-            
-            console.log('✅ Oura data synced:', metrics);
-          }
-        } catch (metricsError) {
-          console.error('Failed to get Oura metrics, but app continues:', metricsError);
-        }
-      }
-    } catch (error) {
-      console.error('Oura sync error, but app continues:', error);
-    }
-  };
+      const storedProfile = await AsyncStorage.getItem('userProfile');
+      const storedTier1 = await AsyncStorage.getItem('tier1Data');
+      const storedTier2 = await AsyncStorage.getItem('tier2Data');
+      const storedTier3 = await AsyncStorage.getItem('tier3Data');
+      const storedFitness = await AsyncStorage.getItem('fitnessData');
+      const storedHistory = await AsyncStorage.getItem('assessmentHistory');
 
-  // ✅ CRITICAL FIX: Only set up periodic sync if Oura is available
-  useEffect(() => {
-    if (!OuraRingService) {
-      return;
-    }
-    
-    const ouraInterval = setInterval(() => {
-      syncOuraData().catch(error => {
-        console.error('Periodic Oura sync failed:', error);
-      });
-    }, 60 * 60 * 1000); // 1 hour
-
-    // Initial sync
-    syncOuraData().catch(error => {
-      console.error('Initial Oura sync failed:', error);
-    });
-
-    return () => clearInterval(ouraInterval);
-  }, []);
-
-  const loadUserProfile = async () => {
-    try {
-      const savedAge = await AsyncStorage.getItem('chronologicalAge');
-      const savedName = await AsyncStorage.getItem('userName');
-      
-      if (savedAge) {
-        const age = parseInt(savedAge);
-        if (age >= 18 && age <= 120) {
-          updateState({ chronologicalAge: age });
-          console.log('✅ Loaded user age from profile:', age);
-        }
-      }
-      
-      if (savedName) {
-        updateState({ userName: savedName });
-        console.log('✅ Loaded user name from profile:', savedName);
-      }
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-    }
-  };
-
-  // Save critical data when it changes
-  useEffect(() => {
-    saveData().catch(error => {
-      console.error('Error saving data:', error);
-    });
-  }, [state.biologicalAge, state.oralHealthScore, state.systemicHealthScore, state.fitnessScore]);
-
-  // Auto-push Bio-Age to watch when it changes and watch is connected
-  useEffect(() => {
-    const pushBioAgeToWatch = async () => {
-      if (state.watchConnected && state.biologicalAge) {
-        try {
-          await WearableService.sendBioAge(state.biologicalAge);
-          
-          const now = new Date().toISOString();
-          await AsyncStorage.setItem('lastBioAgeSync', now);
-          updateState({ lastSync: now });
-          
-          console.log('✅ Bio-Age automatically pushed to watch:', state.biologicalAge);
-        } catch (error) {
-          console.error('❌ Auto-push Bio-Age failed:', error);
-        }
-      }
-    };
-    
-    pushBioAgeToWatch();
-  }, [state.biologicalAge, state.watchConnected]);
-
-  // Subscribe to PineTime wearable data updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      try {
-        const connectionStatus = WearableService.getConnectionStatus();
-        
-        if (connectionStatus.isConnected) {
-          try {
-            const wearableData = WearableService.getLatestData();
-            
-            updateState({
-              heartRate: wearableData.heartRate || null,
-              steps: wearableData.steps !== undefined ? wearableData.steps : 0,
-              hrv: wearableData.hrv || null,
-              watchConnected: true,
-            });
-            
-            console.log('📊 PineTime data updated:', {
-              hr: wearableData.heartRate,
-              steps: wearableData.steps,
-              hrv: wearableData.hrv
-            });
-          } catch (error) {
-            console.error('Error fetching wearable data:', error);
-          }
-        } else {
-          updateState({
-            watchConnected: false,
-            heartRate: null,
-            steps: 0,
-            hrv: null,
-          });
-        }
-      } catch (error) {
-        console.error('Error checking wearable connection:', error);
-      }
-    }, 10000); // Poll every 10 seconds
-
-    const connectionInterval = setInterval(async () => {
-      try {
-        const watchStatus = await AsyncStorage.getItem('watchConnected');
-        const connectionStatus = WearableService.getConnectionStatus();
-        const isConnected = watchStatus === 'true' && connectionStatus.isConnected;
-        
-        updateState({ watchConnected: isConnected });
-      } catch (error) {
-        console.error('Error checking watch connection:', error);
-      }
-    }, 5000); // Check every 5 seconds
-
-    return () => {
-      clearInterval(interval);
-      clearInterval(connectionInterval);
-    };
-  }, []);
-
-  const loadSavedData = async () => {
-    try {
-      const savedData = await AsyncStorage.getItem('praxiomHealthData');
-      const watchStatus = await AsyncStorage.getItem('watchConnected');
-      const lastBioAgeSync = await AsyncStorage.getItem('lastBioAgeSync');
-      
-      if (savedData) {
-        const parsedData = JSON.parse(savedData);
-        setState(prevState => ({
-          ...prevState,
-          ...parsedData,
-          watchConnected: watchStatus === 'true',
-          lastSync: lastBioAgeSync
+      if (storedProfile) {
+        const profile = JSON.parse(storedProfile);
+        setState(prev => ({
+          ...prev,
+          userProfile: { ...prev.userProfile, ...profile }
         }));
       }
+
+      if (storedTier1) {
+        setState(prev => ({
+          ...prev,
+          tier1Data: { ...prev.tier1Data, ...JSON.parse(storedTier1) }
+        }));
+      }
+
+      if (storedTier2) {
+        setState(prev => ({
+          ...prev,
+          tier2Data: { ...prev.tier2Data, ...JSON.parse(storedTier2) }
+        }));
+      }
+
+      if (storedTier3) {
+        setState(prev => ({
+          ...prev,
+          tier3Data: { ...prev.tier3Data, ...JSON.parse(storedTier3) }
+        }));
+      }
+
+      if (storedFitness) {
+        setState(prev => ({
+          ...prev,
+          fitnessData: { ...prev.fitnessData, ...JSON.parse(storedFitness) }
+        }));
+      }
+
+      if (storedHistory) {
+        setState(prev => ({
+          ...prev,
+          assessmentHistory: JSON.parse(storedHistory)
+        }));
+      }
+
+      console.log('✅ Loaded stored data successfully');
     } catch (error) {
-      console.error('Error loading saved data:', error);
+      console.error('❌ Error loading stored data:', error);
     }
   };
 
-  const saveData = async () => {
-    try {
-      const dataToSave = {
-        chronologicalAge: state.chronologicalAge,
-        biologicalAge: state.biologicalAge,
-        oralHealthScore: state.oralHealthScore,
-        systemicHealthScore: state.systemicHealthScore,
-        vitalityIndex: state.vitalityIndex,
-        fitnessScore: state.fitnessScore,
-        aerobicScore: state.aerobicScore,
-        flexibilityScore: state.flexibilityScore,
-        balanceScore: state.balanceScore,
-        mindBodyScore: state.mindBodyScore,
-        fitnessAssessmentDate: state.fitnessAssessmentDate,
-        salivaryPH: state.salivaryPH,
-        mmp8: state.mmp8,
-        flowRate: state.flowRate,
-        hsCRP: state.hsCRP,
-        omega3Index: state.omega3Index,
-        hba1c: state.hba1c,
-        gdf15: state.gdf15,
-        vitaminD: state.vitaminD,
-        ouraHeartRate: state.ouraHeartRate,
-        ouraHRV: state.ouraHRV,
-        ouraSteps: state.ouraSteps,
-        ouraSleepEfficiency: state.ouraSleepEfficiency,
-        ouraReadinessScore: state.ouraReadinessScore,
-        lastOuraSync: state.lastOuraSync,
-      };
-      await AsyncStorage.setItem('praxiomHealthData', JSON.stringify(dataToSave));
-    } catch (error) {
-      console.error('Error saving data:', error);
+  // Update state with automatic persistence
+  const updateState = async (updates) => {
+    setState(prev => {
+      const newState = { ...prev, ...updates };
+      
+      // Persist specific sections to AsyncStorage
+      if (updates.userProfile) {
+        AsyncStorage.setItem('userProfile', JSON.stringify(newState.userProfile));
+      }
+      if (updates.tier1Data) {
+        AsyncStorage.setItem('tier1Data', JSON.stringify(newState.tier1Data));
+      }
+      if (updates.tier2Data) {
+        AsyncStorage.setItem('tier2Data', JSON.stringify(newState.tier2Data));
+      }
+      if (updates.tier3Data) {
+        AsyncStorage.setItem('tier3Data', JSON.stringify(newState.tier3Data));
+      }
+      if (updates.fitnessData) {
+        AsyncStorage.setItem('fitnessData', JSON.stringify(newState.fitnessData));
+      }
+      if (updates.assessmentHistory) {
+        AsyncStorage.setItem('assessmentHistory', JSON.stringify(newState.assessmentHistory));
+      }
+      
+      return newState;
+    });
+  };
+
+  // Calculate chronological age from date of birth
+  const calculateChronologicalAge = (dateOfBirth) => {
+    if (!dateOfBirth) return null;
+    
+    const dob = new Date(dateOfBirth);
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+      age--;
     }
+    
+    return age;
   };
 
-  const updateState = (updates) => {
-    setState(prevState => ({
-      ...prevState,
-      ...updates
-    }));
+  // Update date of birth and recalculate age
+  const updateDateOfBirth = async (dateOfBirth) => {
+    const chronologicalAge = calculateChronologicalAge(dateOfBirth);
+    
+    await updateState({
+      userProfile: {
+        ...state.userProfile,
+        dateOfBirth,
+        chronologicalAge,
+      }
+    });
+
+    console.log('✅ Date of birth updated:', { dateOfBirth, chronologicalAge });
   };
 
-  const calculateBiologicalAge = () => {
+  // ========================================
+  // TIER 1 CALCULATION - Uses PraxiomAlgorithm.js
+  // ========================================
+  const calculateTier1BioAge = async () => {
     try {
-      let bioAge = state.chronologicalAge;
+      const chronAge = state.userProfile.chronologicalAge;
       
-      const oralHealthImpact = ((100 - state.oralHealthScore) / 100) * 15 - 5;
-      const systemicHealthImpact = ((100 - state.systemicHealthScore) / 100) * 15 - 5;
-      const fitnessImpact = state.fitnessScore ? ((100 - state.fitnessScore) / 100) * 5 - 2 : 0;
-      
-      bioAge = state.chronologicalAge + oralHealthImpact + systemicHealthImpact + fitnessImpact;
-      bioAge = Math.round(bioAge * 10) / 10;
-      
-      updateState({ biologicalAge: bioAge });
-      return bioAge;
-    } catch (error) {
-      console.error('Error calculating biological age:', error);
-      return state.chronologicalAge;
-    }
-  };
-
-  const calculateWearableScore = () => {
-    try {
-      let score = 50;
-      let count = 0;
-
-      const heartRate = state.ouraHeartRate || state.heartRate;
-      const hrv = state.ouraHRV || state.hrv;
-      const steps = state.ouraSteps || state.steps;
-
-      if (hrv !== null && hrv > 0) {
-        if (hrv >= 70) score += 100;
-        else if (hrv >= 50) score += 75;
-        else if (hrv >= 30) score += 50;
-        else score += 25;
-        count++;
+      if (!chronAge) {
+        throw new Error('Chronological age not set. Please enter date of birth first.');
       }
 
-      if (steps > 0) {
-        if (steps >= 8000) score += 100;
-        else if (steps >= 5000) score += 75;
-        else if (steps >= 3000) score += 50;
-        else score += 25;
-        count++;
-      }
-
-      if (heartRate !== null && heartRate > 0) {
-        if (heartRate >= 50 && heartRate <= 70) score += 100;
-        else if (heartRate >= 45 && heartRate <= 75) score += 75;
-        else if (heartRate >= 40 && heartRate <= 80) score += 50;
-        else score += 25;
-        count++;
-      }
-
-      if (state.ouraReadinessScore !== null) {
-        score += state.ouraReadinessScore;
-        count++;
-      }
-
-      if (count > 0) {
-        score = (score - 50) / count;
-      } else {
-        score = 50;
-      }
-
-      updateState({ fitnessScore: Math.round(score) });
-      return Math.round(score);
-    } catch (error) {
-      console.error('Error calculating wearable score:', error);
-      return 50;
-    }
-  };
-
-  const calculateScores = () => {
-    try {
-      // Calculate Oral Health Score
-      let oralScore = 100;
-      let oralCount = 0;
-      
-      if (state.salivaryPH !== null) {
-        const ph = parseFloat(state.salivaryPH);
-        if (ph >= 6.5 && ph <= 7.2) oralScore += 100;
-        else if (ph >= 6.0 && ph < 6.5) oralScore += 70;
-        else if (ph > 7.2 && ph <= 7.5) oralScore += 70;
-        else oralScore += 40;
-        oralCount++;
-      }
-      
-      if (state.mmp8 !== null) {
-        const mmp8 = parseFloat(state.mmp8);
-        if (mmp8 < 60) oralScore += 100;
-        else if (mmp8 < 100) oralScore += 70;
-        else oralScore += 40;
-        oralCount++;
-      }
-      
-      if (state.flowRate !== null) {
-        const flow = parseFloat(state.flowRate);
-        if (flow > 1.5) oralScore += 100;
-        else if (flow > 1.0) oralScore += 70;
-        else oralScore += 40;
-        oralCount++;
-      }
-      
-      if (oralCount > 0) {
-        oralScore = (oralScore - 100) / oralCount;
-      } else {
-        oralScore = 50;
-      }
-      
-      // Calculate Systemic Health Score
-      let systemicScore = 100;
-      let systemicCount = 0;
-      
-      if (state.hsCRP !== null) {
-        const hscrp = parseFloat(state.hsCRP);
-        if (hscrp < 1.0) systemicScore += 100;
-        else if (hscrp < 3.0) systemicScore += 70;
-        else systemicScore += 40;
-        systemicCount++;
-      }
-      
-      if (state.omega3Index !== null) {
-        const omega3 = parseFloat(state.omega3Index);
-        if (omega3 > 8) systemicScore += 100;
-        else if (omega3 > 6) systemicScore += 70;
-        else systemicScore += 40;
-        systemicCount++;
-      }
-      
-      if (state.hba1c !== null) {
-        const hba1c = parseFloat(state.hba1c);
-        if (hba1c < 5.7) systemicScore += 100;
-        else if (hba1c < 6.5) systemicScore += 70;
-        else systemicScore += 40;
-        systemicCount++;
-      }
-      
-      if (state.gdf15 !== null) {
-        const gdf15 = parseFloat(state.gdf15);
-        if (gdf15 < 1200) systemicScore += 100;
-        else if (gdf15 < 2000) systemicScore += 70;
-        else systemicScore += 40;
-        systemicCount++;
-      }
-      
-      if (state.vitaminD !== null) {
-        const vitD = parseFloat(state.vitaminD);
-        if (vitD >= 30 && vitD <= 100) systemicScore += 100;
-        else if (vitD >= 20 && vitD < 30) systemicScore += 70;
-        else systemicScore += 40;
-        systemicCount++;
-      }
-      
-      if (systemicCount > 0) {
-        systemicScore = (systemicScore - 100) / systemicCount;
-      } else {
-        systemicScore = 45;
-      }
-      
-      // Calculate wearable score
-      calculateWearableScore();
-      
-      // Calculate Vitality Index
-      const vitalityIndex = (oralScore + systemicScore) / 2;
-      
-      // Update all scores
-      updateState({
-        oralHealthScore: Math.round(oralScore),
-        systemicHealthScore: Math.round(systemicScore),
-        vitalityIndex: Math.round(vitalityIndex)
+      console.log('🧮 Starting Tier 1 Bio-Age Calculation...');
+      console.log('📊 Input Data:', {
+        chronologicalAge: chronAge,
+        tier1Data: state.tier1Data,
+        fitnessData: state.fitnessData,
       });
-      
-      return calculateBiologicalAge();
+
+      // Calculate using the PraxiomAlgorithm module
+      const result = PraxiomAlgorithm.calculateTier1BioAge(
+        chronAge,
+        state.tier1Data,
+        state.fitnessData
+      );
+
+      console.log('✅ Tier 1 Calculation Result:', result);
+
+      // Update state with results
+      await updateState({
+        userProfile: {
+          ...state.userProfile,
+          biologicalAge: result.bioAge,
+          targetBioAge: Math.max(18, result.bioAge - 5), // Target is 5 years younger
+        },
+        scores: {
+          ...state.scores,
+          oralHealthScore: result.scores.oralHealthScore,
+          systemicHealthScore: result.scores.systemicHealthScore,
+          fitnessScore: result.scores.fitnessScore,
+          vitalityIndex: result.scores.vitalityIndex,
+          bioAgeDeviation: result.bioAge - chronAge,
+        },
+        assessmentHistory: [
+          {
+            date: new Date().toISOString(),
+            tier: 'Foundation',
+            biologicalAge: result.bioAge,
+            chronologicalAge: chronAge,
+            scores: result.scores,
+            biomarkers: { ...state.tier1Data },
+          },
+          ...state.assessmentHistory,
+        ],
+      });
+
+      return result;
     } catch (error) {
-      console.error('Error calculating scores:', error);
-      return state.chronologicalAge;
+      console.error('❌ Tier 1 calculation error:', error);
+      throw error;
     }
   };
 
-  const updateFitnessAssessment = (fitnessData) => {
+  // ========================================
+  // TIER 2 CALCULATION - Uses PraxiomAlgorithm.js
+  // ========================================
+  const calculateTier2BioAge = async () => {
     try {
-      updateState({
-        aerobicScore: fitnessData.aerobicScore,
-        flexibilityScore: fitnessData.flexibilityScore,
-        balanceScore: fitnessData.balanceScore,
-        mindBodyScore: fitnessData.mindBodyScore,
-        fitnessScore: fitnessData.fitnessScore,
-        fitnessAssessmentDate: new Date().toISOString(),
+      const chronAge = state.userProfile.chronologicalAge;
+      
+      if (!chronAge) {
+        throw new Error('Chronological age not set. Please enter date of birth first.');
+      }
+
+      console.log('🧮 Starting Tier 2 Bio-Age Calculation...');
+      console.log('📊 Input Data:', {
+        chronologicalAge: chronAge,
+        tier1Data: state.tier1Data,
+        tier2Data: state.tier2Data,
+        fitnessData: state.fitnessData,
       });
+
+      // Calculate using the PraxiomAlgorithm module
+      const result = PraxiomAlgorithm.calculateTier2BioAge(
+        chronAge,
+        state.tier1Data,
+        state.tier2Data,
+        state.fitnessData
+      );
+
+      console.log('✅ Tier 2 Calculation Result:', result);
+
+      // Update state with results
+      await updateState({
+        userProfile: {
+          ...state.userProfile,
+          biologicalAge: result.bioAge,
+          targetBioAge: Math.max(18, result.bioAge - 5),
+          assessmentTier: 'Personalization',
+        },
+        scores: {
+          ...state.scores,
+          oralHealthScore: result.scores.oralHealthScore,
+          systemicHealthScore: result.scores.systemicHealthScore,
+          inflammatoryScore: result.scores.inflammatoryScore,
+          nadMetabolismScore: result.scores.nadMetabolismScore,
+          wearableScore: result.scores.wearableScore,
+          microbiomeScore: result.scores.microbiomeScore,
+          fitnessScore: result.scores.fitnessScore,
+          vitalityIndex: result.scores.vitalityIndex,
+          bioAgeDeviation: result.bioAge - chronAge,
+        },
+        assessmentHistory: [
+          {
+            date: new Date().toISOString(),
+            tier: 'Personalization',
+            biologicalAge: result.bioAge,
+            chronologicalAge: chronAge,
+            scores: result.scores,
+            biomarkers: { ...state.tier1Data, ...state.tier2Data },
+          },
+          ...state.assessmentHistory,
+        ],
+      });
+
+      return result;
     } catch (error) {
-      console.error('Error updating fitness assessment:', error);
+      console.error('❌ Tier 2 calculation error:', error);
+      throw error;
     }
+  };
+
+  // ========================================
+  // TIER 3 CALCULATION - Uses PraxiomAlgorithm.js
+  // ========================================
+  const calculateTier3BioAge = async () => {
+    try {
+      const chronAge = state.userProfile.chronologicalAge;
+      
+      if (!chronAge) {
+        throw new Error('Chronological age not set. Please enter date of birth first.');
+      }
+
+      console.log('🧮 Starting Tier 3 Bio-Age Calculation...');
+      console.log('📊 Input Data:', {
+        chronologicalAge: chronAge,
+        tier1Data: state.tier1Data,
+        tier2Data: state.tier2Data,
+        tier3Data: state.tier3Data,
+        fitnessData: state.fitnessData,
+      });
+
+      // Calculate using the PraxiomAlgorithm module
+      const result = PraxiomAlgorithm.calculateTier3BioAge(
+        chronAge,
+        state.tier1Data,
+        state.tier2Data,
+        state.tier3Data,
+        state.fitnessData
+      );
+
+      console.log('✅ Tier 3 Calculation Result:', result);
+
+      // Update state with results
+      await updateState({
+        userProfile: {
+          ...state.userProfile,
+          biologicalAge: result.bioAge,
+          targetBioAge: Math.max(18, result.bioAge - 10),
+          assessmentTier: 'Optimization',
+        },
+        scores: {
+          ...state.scores,
+          oralHealthScore: result.scores.oralHealthScore,
+          systemicHealthScore: result.scores.systemicHealthScore,
+          inflammatoryScore: result.scores.inflammatoryScore,
+          nadMetabolismScore: result.scores.nadMetabolismScore,
+          wearableScore: result.scores.wearableScore,
+          microbiomeScore: result.scores.microbiomeScore,
+          fitnessScore: result.scores.fitnessScore,
+          vitalityIndex: result.scores.vitalityIndex,
+          bioAgeDeviation: result.bioAge - chronAge,
+        },
+        assessmentHistory: [
+          {
+            date: new Date().toISOString(),
+            tier: 'Optimization',
+            biologicalAge: result.bioAge,
+            chronologicalAge: chronAge,
+            scores: result.scores,
+            biomarkers: { ...state.tier1Data, ...state.tier2Data, ...state.tier3Data },
+          },
+          ...state.assessmentHistory,
+        ],
+      });
+
+      return result;
+    } catch (error) {
+      console.error('❌ Tier 3 calculation error:', error);
+      throw error;
+    }
+  };
+
+  // Watch connection management
+  const setWatchConnection = async (connected, device = null) => {
+    await updateState({
+      watchConnected: connected,
+      watchDevice: device,
+      lastSyncTime: connected ? new Date().toISOString() : state.lastSyncTime,
+    });
+  };
+
+  // Context value
+  const contextValue = {
+    // State
+    ...state,
+    
+    // Functions
+    updateState,
+    updateDateOfBirth,
+    calculateChronologicalAge,
+    
+    // Tier Calculations
+    calculateTier1BioAge,
+    calculateTier2BioAge,
+    calculateTier3BioAge,
+    
+    // Watch Management
+    setWatchConnection,
   };
 
   return (
-    <AppContext.Provider value={{
-      state,
-      updateState,
-      calculateBiologicalAge,
-      calculateScores,
-      calculateWearableScore,
-      updateFitnessAssessment,
-      syncOuraData,
-      saveData,
-      loadSavedData
-    }}>
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );
 };
+
+export default AppContext;
