@@ -13,6 +13,8 @@ export const useAppContext = () => {
 };
 
 export const AppProvider = ({ children }) => {
+  console.log('🔧 AppProvider initializing...');
+  
   // State
   const [state, setState] = useState({
     // User Profile
@@ -121,18 +123,50 @@ export const AppProvider = ({ children }) => {
     watchConnected: false,
     watchDevice: null,
     lastSyncTime: null,
+    
+    // Loading state
+    isLoading: true,
+    loadError: null,
   });
 
   // Refs for services
   const servicesInitialized = useRef(false);
+  const isMounted = useRef(true);
 
   // Initialize services on mount
   useEffect(() => {
-    if (!servicesInitialized.current) {
-      initializeServices();
-      loadStoredData();
-      servicesInitialized.current = true;
-    }
+    console.log('🚀 AppContext useEffect triggered');
+    
+    const init = async () => {
+      if (!servicesInitialized.current) {
+        try {
+          console.log('📱 Starting initialization...');
+          await initializeServices();
+          await loadStoredData();
+          
+          if (isMounted.current) {
+            servicesInitialized.current = true;
+            setState(prev => ({ ...prev, isLoading: false }));
+            console.log('✅ Initialization complete');
+          }
+        } catch (error) {
+          console.error('❌ Initialization error:', error);
+          if (isMounted.current) {
+            setState(prev => ({ 
+              ...prev, 
+              isLoading: false,
+              loadError: error.message 
+            }));
+          }
+        }
+      }
+    };
+    
+    init();
+    
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
 
   // Initialize any required services
@@ -141,128 +175,186 @@ export const AppProvider = ({ children }) => {
       console.log('📱 Initializing app services...');
       // Add any service initialization here
       console.log('✅ Services initialized');
+      return true;
     } catch (error) {
       console.error('❌ Service initialization error:', error);
+      throw error;
     }
   };
 
   // Load stored data from AsyncStorage
   const loadStoredData = async () => {
     try {
-      const storedProfile = await AsyncStorage.getItem('userProfile');
-      const storedTier1 = await AsyncStorage.getItem('tier1Data');
-      const storedTier2 = await AsyncStorage.getItem('tier2Data');
-      const storedTier3 = await AsyncStorage.getItem('tier3Data');
-      const storedFitness = await AsyncStorage.getItem('fitnessData');
-      const storedHistory = await AsyncStorage.getItem('assessmentHistory');
+      console.log('💾 Loading stored data...');
+      
+      const [storedProfile, storedTier1, storedTier2, storedTier3, storedFitness, storedHistory] = await Promise.all([
+        AsyncStorage.getItem('userProfile').catch(e => { console.warn('Profile load error:', e); return null; }),
+        AsyncStorage.getItem('tier1Data').catch(e => { console.warn('Tier1 load error:', e); return null; }),
+        AsyncStorage.getItem('tier2Data').catch(e => { console.warn('Tier2 load error:', e); return null; }),
+        AsyncStorage.getItem('tier3Data').catch(e => { console.warn('Tier3 load error:', e); return null; }),
+        AsyncStorage.getItem('fitnessData').catch(e => { console.warn('Fitness load error:', e); return null; }),
+        AsyncStorage.getItem('assessmentHistory').catch(e => { console.warn('History load error:', e); return null; }),
+      ]);
 
+      const updates = {};
+      
       if (storedProfile) {
-        const profile = JSON.parse(storedProfile);
-        setState(prev => ({
-          ...prev,
-          userProfile: { ...prev.userProfile, ...profile }
-        }));
+        try {
+          const profile = JSON.parse(storedProfile);
+          updates.userProfile = { ...state.userProfile, ...profile };
+          console.log('✅ Loaded user profile');
+        } catch (e) {
+          console.warn('Failed to parse user profile:', e);
+        }
       }
 
       if (storedTier1) {
-        setState(prev => ({
-          ...prev,
-          tier1Data: { ...prev.tier1Data, ...JSON.parse(storedTier1) }
-        }));
+        try {
+          updates.tier1Data = { ...state.tier1Data, ...JSON.parse(storedTier1) };
+          console.log('✅ Loaded tier 1 data');
+        } catch (e) {
+          console.warn('Failed to parse tier 1 data:', e);
+        }
       }
 
       if (storedTier2) {
-        setState(prev => ({
-          ...prev,
-          tier2Data: { ...prev.tier2Data, ...JSON.parse(storedTier2) }
-        }));
+        try {
+          updates.tier2Data = { ...state.tier2Data, ...JSON.parse(storedTier2) };
+          console.log('✅ Loaded tier 2 data');
+        } catch (e) {
+          console.warn('Failed to parse tier 2 data:', e);
+        }
       }
 
       if (storedTier3) {
-        setState(prev => ({
-          ...prev,
-          tier3Data: { ...prev.tier3Data, ...JSON.parse(storedTier3) }
-        }));
+        try {
+          updates.tier3Data = { ...state.tier3Data, ...JSON.parse(storedTier3) };
+          console.log('✅ Loaded tier 3 data');
+        } catch (e) {
+          console.warn('Failed to parse tier 3 data:', e);
+        }
       }
 
       if (storedFitness) {
-        setState(prev => ({
-          ...prev,
-          fitnessData: { ...prev.fitnessData, ...JSON.parse(storedFitness) }
-        }));
+        try {
+          updates.fitnessData = { ...state.fitnessData, ...JSON.parse(storedFitness) };
+          console.log('✅ Loaded fitness data');
+        } catch (e) {
+          console.warn('Failed to parse fitness data:', e);
+        }
       }
 
       if (storedHistory) {
-        setState(prev => ({
-          ...prev,
-          assessmentHistory: JSON.parse(storedHistory)
-        }));
+        try {
+          updates.assessmentHistory = JSON.parse(storedHistory);
+          console.log('✅ Loaded assessment history');
+        } catch (e) {
+          console.warn('Failed to parse assessment history:', e);
+        }
+      }
+
+      if (Object.keys(updates).length > 0 && isMounted.current) {
+        setState(prev => ({ ...prev, ...updates }));
       }
 
       console.log('✅ Loaded stored data successfully');
+      return true;
     } catch (error) {
       console.error('❌ Error loading stored data:', error);
+      // Don't throw - allow app to continue with default state
+      return false;
     }
   };
 
   // Update state with automatic persistence
   const updateState = async (updates) => {
-    setState(prev => {
-      const newState = { ...prev, ...updates };
-      
-      // Persist specific sections to AsyncStorage
-      if (updates.userProfile) {
-        AsyncStorage.setItem('userProfile', JSON.stringify(newState.userProfile));
-      }
-      if (updates.tier1Data) {
-        AsyncStorage.setItem('tier1Data', JSON.stringify(newState.tier1Data));
-      }
-      if (updates.tier2Data) {
-        AsyncStorage.setItem('tier2Data', JSON.stringify(newState.tier2Data));
-      }
-      if (updates.tier3Data) {
-        AsyncStorage.setItem('tier3Data', JSON.stringify(newState.tier3Data));
-      }
-      if (updates.fitnessData) {
-        AsyncStorage.setItem('fitnessData', JSON.stringify(newState.fitnessData));
-      }
-      if (updates.assessmentHistory) {
-        AsyncStorage.setItem('assessmentHistory', JSON.stringify(newState.assessmentHistory));
-      }
-      
-      return newState;
-    });
+    try {
+      setState(prev => {
+        const newState = { ...prev, ...updates };
+        
+        // Persist specific sections to AsyncStorage (non-blocking)
+        if (updates.userProfile) {
+          AsyncStorage.setItem('userProfile', JSON.stringify(newState.userProfile)).catch(e => 
+            console.warn('Failed to save userProfile:', e)
+          );
+        }
+        if (updates.tier1Data) {
+          AsyncStorage.setItem('tier1Data', JSON.stringify(newState.tier1Data)).catch(e => 
+            console.warn('Failed to save tier1Data:', e)
+          );
+        }
+        if (updates.tier2Data) {
+          AsyncStorage.setItem('tier2Data', JSON.stringify(newState.tier2Data)).catch(e => 
+            console.warn('Failed to save tier2Data:', e)
+          );
+        }
+        if (updates.tier3Data) {
+          AsyncStorage.setItem('tier3Data', JSON.stringify(newState.tier3Data)).catch(e => 
+            console.warn('Failed to save tier3Data:', e)
+          );
+        }
+        if (updates.fitnessData) {
+          AsyncStorage.setItem('fitnessData', JSON.stringify(newState.fitnessData)).catch(e => 
+            console.warn('Failed to save fitnessData:', e)
+          );
+        }
+        if (updates.assessmentHistory) {
+          AsyncStorage.setItem('assessmentHistory', JSON.stringify(newState.assessmentHistory)).catch(e => 
+            console.warn('Failed to save assessmentHistory:', e)
+          );
+        }
+        
+        return newState;
+      });
+    } catch (error) {
+      console.error('❌ updateState error:', error);
+    }
   };
 
   // Calculate chronological age from date of birth
   const calculateChronologicalAge = (dateOfBirth) => {
-    if (!dateOfBirth) return null;
-    
-    const dob = new Date(dateOfBirth);
-    const today = new Date();
-    let age = today.getFullYear() - dob.getFullYear();
-    const monthDiff = today.getMonth() - dob.getMonth();
-    
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
-      age--;
+    try {
+      if (!dateOfBirth) return null;
+      
+      const dob = new Date(dateOfBirth);
+      if (isNaN(dob.getTime())) {
+        console.warn('Invalid date of birth:', dateOfBirth);
+        return null;
+      }
+      
+      const today = new Date();
+      let age = today.getFullYear() - dob.getFullYear();
+      const monthDiff = today.getMonth() - dob.getMonth();
+      
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+        age--;
+      }
+      
+      return age;
+    } catch (error) {
+      console.error('❌ calculateChronologicalAge error:', error);
+      return null;
     }
-    
-    return age;
   };
 
   // Update date of birth and recalculate age
   const updateDateOfBirth = async (dateOfBirth) => {
-    const chronologicalAge = calculateChronologicalAge(dateOfBirth);
-    
-    await updateState({
-      userProfile: {
-        ...state.userProfile,
-        dateOfBirth,
-        chronologicalAge,
-      }
-    });
+    try {
+      const chronologicalAge = calculateChronologicalAge(dateOfBirth);
+      
+      await updateState({
+        userProfile: {
+          ...state.userProfile,
+          dateOfBirth,
+          chronologicalAge,
+        }
+      });
 
-    console.log('✅ Date of birth updated:', { dateOfBirth, chronologicalAge });
+      console.log('✅ Date of birth updated:', { dateOfBirth, chronologicalAge });
+    } catch (error) {
+      console.error('❌ updateDateOfBirth error:', error);
+      throw error;
+    }
   };
 
   // ========================================
@@ -272,7 +364,7 @@ export const AppProvider = ({ children }) => {
     try {
       const chronAge = state.userProfile.chronologicalAge;
       
-      if (!chronAge) {
+      if (!chronAge || chronAge <= 0) {
         throw new Error('Chronological age not set. Please enter date of birth first.');
       }
 
@@ -334,7 +426,7 @@ export const AppProvider = ({ children }) => {
     try {
       const chronAge = state.userProfile.chronologicalAge;
       
-      if (!chronAge) {
+      if (!chronAge || chronAge <= 0) {
         throw new Error('Chronological age not set. Please enter date of birth first.');
       }
 
@@ -403,7 +495,7 @@ export const AppProvider = ({ children }) => {
     try {
       const chronAge = state.userProfile.chronologicalAge;
       
-      if (!chronAge) {
+      if (!chronAge || chronAge <= 0) {
         throw new Error('Chronological age not set. Please enter date of birth first.');
       }
 
@@ -469,11 +561,15 @@ export const AppProvider = ({ children }) => {
 
   // Watch connection management
   const setWatchConnection = async (connected, device = null) => {
-    await updateState({
-      watchConnected: connected,
-      watchDevice: device,
-      lastSyncTime: connected ? new Date().toISOString() : state.lastSyncTime,
-    });
+    try {
+      await updateState({
+        watchConnected: connected,
+        watchDevice: device,
+        lastSyncTime: connected ? new Date().toISOString() : state.lastSyncTime,
+      });
+    } catch (error) {
+      console.error('❌ setWatchConnection error:', error);
+    }
   };
 
   // Context value
@@ -494,6 +590,8 @@ export const AppProvider = ({ children }) => {
     // Watch Management
     setWatchConnection,
   };
+
+  console.log('✅ AppContext render complete, isLoading:', state.isLoading);
 
   return (
     <AppContext.Provider value={contextValue}>
