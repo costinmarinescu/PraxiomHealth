@@ -572,26 +572,49 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  // Context value
-  const contextValue = {
-    // State
-    ...state,
+  // Context value - useMemo to prevent recreating on every render
+  const contextValue = React.useMemo(() => ({
+    // State - spread all state properties
+    userId: state.userId,
+    userProfile: state.userProfile,
+    tier1Data: state.tier1Data,
+    tier2Data: state.tier2Data,
+    tier3Data: state.tier3Data,
+    fitnessData: state.fitnessData,
+    scores: state.scores,
+    assessmentHistory: state.assessmentHistory,
+    watchConnected: state.watchConnected,
+    watchDevice: state.watchDevice,
+    lastSyncTime: state.lastSyncTime,
+    isLoading: state.isLoading,
+    loadError: state.loadError,
     
     // Functions
     updateState,
     updateDateOfBirth,
     calculateChronologicalAge,
-    
-    // Tier Calculations
     calculateTier1BioAge,
     calculateTier2BioAge,
     calculateTier3BioAge,
-    
-    // Watch Management
     setWatchConnection,
-  };
+  }), [
+    state.userId,
+    state.userProfile,
+    state.tier1Data,
+    state.tier2Data,
+    state.tier3Data,
+    state.fitnessData,
+    state.scores,
+    state.assessmentHistory,
+    state.watchConnected,
+    state.watchDevice,
+    state.lastSyncTime,
+    state.isLoading,
+    state.loadError,
+  ]);
 
   console.log('✅ AppContext render complete, isLoading:', state.isLoading);
+  console.log('✅ Context value has userProfile:', !!contextValue.userProfile);
 
   return (
     <AppContext.Provider value={contextValue}>
