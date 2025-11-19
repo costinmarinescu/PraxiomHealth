@@ -15,7 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppContext } from '../AppContext';
 
 export default function SettingsScreen({ navigation }) {
-  const { state, updateState, disconnectWatch } = useContext(AppContext);
+  const { state, updateState, disconnectWatch } = useAppContext();
   
   // ✅ FIX: Simple date inputs instead of DateTimePicker
   const [birthYear, setBirthYear] = useState('');
