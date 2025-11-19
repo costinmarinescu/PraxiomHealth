@@ -1,490 +1,296 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
-  Text,
   ScrollView,
+  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ActivityIndicator
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppContext } from '../AppContext';
+import { useAppContext } from '../AppContext';
 
 export default function Tier1BiomarkerInputScreen({ navigation }) {
-  const context = useContext(AppContext);
-  
-  if (!context) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#FF6B35" />
-        <Text>Loading...</Text>
-      </View>
-    );
-  }
+  const { tier1Data, updateState, calculateTier1BioAge } = useAppContext();
 
-  const { state, updateState, calculateScores } = context;
-  const [isCalculating, setIsCalculating] = useState(false);
-  
-  // ✅ FIX: Simple date inputs
-  const [year, setYear] = useState('');
-  const [month, setMonth] = useState('');
-  const [day, setDay] = useState('');
-  
-  const [formData, setFormData] = useState({
-    salivaryPH: '',
-    activeMMP8: '',
-    salivaryFlow: '',
-    hsCRP: '',
-    omega3Index: '',
-    hba1c: '',
-    gdf15: '',
-    vitaminD: '',
-    hrvValue: ''
+  // Local state for inputs
+  const [biomarkers, setBiomarkers] = useState({
+    salivaryPH: tier1Data.salivaryPH?.toString() || '',
+    mmp8: tier1Data.mmp8?.toString() || '',
+    flowRate: tier1Data.flowRate?.toString() || '',
+    hsCRP: tier1Data.hsCRP?.toString() || '',
+    omega3Index: tier1Data.omega3Index?.toString() || '',
+    hba1c: tier1Data.hba1c?.toString() || '',
+    gdf15: tier1Data.gdf15?.toString() || '',
+    vitaminD: tier1Data.vitaminD?.toString() || '',
+    hrv: tier1Data.hrv?.toString() || '', // HRV field added
   });
 
-  useEffect(() => {
-    // Set today's date as default
-    const today = new Date();
-    setYear(today.getFullYear().toString());
-    setMonth((today.getMonth() + 1).toString());
-    setDay(today.getDate().toString());
-    
-    if (state?.wearableData?.hrv) {
-      setFormData(prev => ({ ...prev, hrvValue: String(state.wearableData.hrv) }));
-    }
-  }, [state?.wearableData?.hrv]);
+  const [isCalculating, setIsCalculating] = useState(false);
 
-  const updateField = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  // Handle input changes
+  const handleInputChange = (field, value) => {
+    setBiomarkers(prev => ({ ...prev, [field]: value }));
   };
 
+  // Validate inputs
   const validateInputs = () => {
-    const errors = [];
+    const required = ['salivaryPH', 'mmp8', 'flowRate', 'hsCRP', 'omega3Index', 'hba1c', 'gdf15', 'vitaminD'];
     
-    const requiredFields = {
-      salivaryPH: 'Salivary pH',
-      activeMMP8: 'Active MMP-8',
-      salivaryFlow: 'Salivary Flow Rate',
-      hsCRP: 'hs-CRP',
-      omega3Index: 'Omega-3 Index',
-      hba1c: 'HbA1c',
-      gdf15: 'GDF-15',
-      vitaminD: 'Vitamin D'
-    };
-    
-    for (const [field, label] of Object.entries(requiredFields)) {
-      if (!formData[field] || formData[field].trim() === '') {
-        errors.push(`${label} is required`);
+    for (const field of required) {
+      if (!biomarkers[field] || biomarkers[field].trim() === '') {
+        return { valid: false, field };
+      }
+      
+      const value = parseFloat(biomarkers[field]);
+      if (isNaN(value) || value < 0) {
+        return { valid: false, field };
       }
     }
     
-    if (errors.length > 0) {
-      Alert.alert('Missing Data', errors.join('\n'));
-      return false;
-    }
-    
-    const validations = {
-      salivaryPH: { min: 5.0, max: 9.0, name: 'Salivary pH' },
-      activeMMP8: { min: 0, max: 500, name: 'Active MMP-8' },
-      salivaryFlow: { min: 0, max: 10, name: 'Salivary Flow' },
-      hsCRP: { min: 0, max: 50, name: 'hs-CRP' },
-      omega3Index: { min: 0, max: 20, name: 'Omega-3 Index' },
-      hba1c: { min: 4.0, max: 15.0, name: 'HbA1c' },
-      gdf15: { min: 0, max: 10000, name: 'GDF-15' },
-      vitaminD: { min: 0, max: 200, name: 'Vitamin D' }
-    };
-    
-    for (const [field, { min, max, name }] of Object.entries(validations)) {
-      const value = parseFloat(formData[field]);
-      if (isNaN(value)) {
-        errors.push(`${name} must be a valid number`);
-      } else if (value < min || value > max) {
-        errors.push(`${name} must be between ${min} and ${max}`);
-      }
-    }
-    
-    if (errors.length > 0) {
-      Alert.alert('Invalid Data', errors.join('\n'));
-      return false;
-    }
-    
-    return true;
+    return { valid: true };
   };
 
+  // Handle calculate button press
   const handleCalculate = async () => {
-    try {
-      setIsCalculating(true);
-      
-      if (!state?.profile?.birthdate) {
-        Alert.alert(
-          'Profile Incomplete',
-          'Please set your birthdate in Settings before calculating Praxiom Age.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Go to Settings', onPress: () => {
-              try {
-                navigation.navigate('Settings', { screen: 'SettingsHome' });
-              } catch (e) {
-                navigation.navigate('Settings');
-              }
-            }}
-          ]
-        );
-        setIsCalculating(false);
-        return;
-      }
-      
-      if (!validateInputs()) {
-        setIsCalculating(false);
-        return;
-      }
-      
-      console.log('✅ Starting Tier 1 calculation...');
-      
-      // Create assessment date
-      const assessmentDate = new Date(
-        parseInt(year),
-        parseInt(month) - 1,
-        parseInt(day)
+    const validation = validateInputs();
+    
+    if (!validation.valid) {
+      Alert.alert(
+        'Missing Information',
+        `Please enter a valid value for ${validation.field.replace(/([A-Z])/g, ' $1').toLowerCase()}.`,
+        [{ text: 'OK' }]
       );
-      
-      // ✅ FIX: Save to history BEFORE calculation
-      const tier1Entry = {
-        salivaryPH: parseFloat(formData.salivaryPH),
-        activeMMP8: parseFloat(formData.activeMMP8),
-        salivaryFlow: parseFloat(formData.salivaryFlow),
-        hsCRP: parseFloat(formData.hsCRP),
-        omega3Index: parseFloat(formData.omega3Index),
-        hba1c: parseFloat(formData.hba1c),
-        gdf15: parseFloat(formData.gdf15),
-        vitaminD: parseFloat(formData.vitaminD),
-        hrvValue: formData.hrvValue ? parseFloat(formData.hrvValue) : null,
-        timestamp: assessmentDate.toISOString(),
-        dateEntered: assessmentDate.toLocaleDateString(),
-        tier: 1,
+      return;
+    }
+
+    setIsCalculating(true);
+
+    try {
+      // Convert strings to numbers and update context
+      const numericData = {
+        salivaryPH: parseFloat(biomarkers.salivaryPH),
+        mmp8: parseFloat(biomarkers.mmp8),
+        flowRate: parseFloat(biomarkers.flowRate),
+        hsCRP: parseFloat(biomarkers.hsCRP),
+        omega3Index: parseFloat(biomarkers.omega3Index),
+        hba1c: parseFloat(biomarkers.hba1c),
+        gdf15: parseFloat(biomarkers.gdf15),
+        vitaminD: parseFloat(biomarkers.vitaminD),
+        hrv: biomarkers.hrv ? parseFloat(biomarkers.hrv) : null, // Optional HRV
       };
 
-      try {
-        const existingData = await AsyncStorage.getItem('tier1Biomarkers');
-        const tier1Array = existingData ? JSON.parse(existingData) : [];
-        tier1Array.push(tier1Entry);
-        await AsyncStorage.setItem('tier1Biomarkers', JSON.stringify(tier1Array));
-        console.log('✅ Tier 1 data saved to history');
-      } catch (error) {
-        console.error('Error saving to history:', error);
-      }
-      
-      // Update state
-      try {
-        await updateState({
-          salivaryPH: parseFloat(formData.salivaryPH),
-          mmp8: parseFloat(formData.activeMMP8),
-          flowRate: parseFloat(formData.salivaryFlow),
-          hsCRP: parseFloat(formData.hsCRP),
-          omega3Index: parseFloat(formData.omega3Index),
-          hba1c: parseFloat(formData.hba1c),
-          gdf15: parseFloat(formData.gdf15),
-          vitaminD: parseFloat(formData.vitaminD),
-          hrv: formData.hrvValue ? parseFloat(formData.hrvValue) : null,
-        });
-      } catch (error) {
-        console.error('Error updating state:', error);
-        throw new Error('Failed to save biomarkers');
-      }
-      
-      console.log('✅ Biomarkers updated in state');
-      
-      await new Promise(resolve => setTimeout(resolve, 150));
-      
-      let biologicalAge;
-      try {
-        biologicalAge = calculateScores();
-      } catch (error) {
-        console.error('Error calculating scores:', error);
-        throw new Error('Failed to calculate scores');
-      }
-      
-      console.log('✅ Scores calculated, biological age:', biologicalAge);
-      
-      const oralScore = state?.oralHealthScore || 50;
-      const systemicScore = state?.systemicHealthScore || 50;
-      const vitalityIndex = state?.vitalityIndex || 50;
-      const chronologicalAge = state?.chronologicalAge || 0;
-      
-      const deviation = parseFloat((biologicalAge - chronologicalAge).toFixed(1));
-      
+      // Update tier1Data in context
+      await updateState({
+        tier1Data: numericData,
+      });
+
+      // Calculate bio-age
+      const result = await calculateTier1BioAge();
+
+      // Show success and navigate to results
       Alert.alert(
-        'Praxiom Age Calculated! ✅',
-        `Your Biological Age: ${biologicalAge.toFixed(1)} years\n` +
-        `Chronological Age: ${chronologicalAge} years\n` +
-        `Deviation: ${deviation > 0 ? '+' : ''}${deviation} years\n\n` +
-        `Oral Health Score: ${oralScore}%\n` +
-        `Systemic Health Score: ${systemicScore}%\n` +
-        `Vitality Index: ${vitalityIndex}%\n\n` +
-        `${getRecommendation(oralScore, systemicScore)}`,
+        'Success!',
+        `Your Biological Age: ${result.bioAge.toFixed(1)} years\n\nOral Health Score: ${result.scores.oralHealthScore.toFixed(1)}%\nSystemic Health Score: ${result.scores.systemicHealthScore.toFixed(1)}%\nVitality Index: ${result.scores.vitalityIndex.toFixed(1)}%`,
         [
-          { 
-            text: 'View Dashboard', 
-            onPress: () => {
-              try {
-                navigation.navigate('DashboardHome');
-              } catch (e) {
-                navigation.navigate('Dashboard');
-              }
-            }
+          {
+            text: 'View Dashboard',
+            onPress: () => navigation.navigate('Dashboard'),
           },
-          { 
-            text: 'OK',
-            style: 'cancel'
-          }
         ]
       );
-      
-      console.log('✅ Tier 1 calculation complete!');
-      
-      // Clear form
-      setFormData({
-        salivaryPH: '',
-        activeMMP8: '',
-        salivaryFlow: '',
-        hsCRP: '',
-        omega3Index: '',
-        hba1c: '',
-        gdf15: '',
-        vitaminD: '',
-        hrvValue: state?.wearableData?.hrv ? String(state.wearableData.hrv) : ''
-      });
-      
     } catch (error) {
-      console.error('❌ Calculation error:', error);
       Alert.alert(
         'Calculation Error',
-        `Failed to complete calculation.\n\nError: ${error.message}\n\nPlease check all values and try again.`
+        error.message || 'An error occurred during calculation. Please try again.',
+        [{ text: 'OK' }]
       );
+      console.error('Tier 1 calculation error:', error);
     } finally {
       setIsCalculating(false);
     }
   };
 
-  const getRecommendation = (oralScore, systemicScore) => {
-    if (oralScore < 75 || systemicScore < 75) {
-      return '⚠️ Some scores are below target. Consider upgrading to Tier 2 for personalized interventions.';
-    }
-    if (oralScore >= 85 && systemicScore >= 85) {
-      return '✅ Excellent scores! Continue current protocol and monitor regularly.';
-    }
-    return '📊 Good progress. Continue lifestyle optimizations to reach target scores.';
-  };
-
   return (
-    <LinearGradient colors={['#FF6B00', '#00CFC1']} style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        <View style={styles.header}>
-          <TouchableOpacity 
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <LinearGradient
+        colors={['#FF6B35', '#F7931E', '#00BFA6']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradient}
+      >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.title}>Foundation Biomarkers</Text>
+            <Text style={styles.subtitle}>Tier 1 Assessment</Text>
+          </View>
+
+          {/* Oral Health Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>🦷 Oral Health Biomarkers</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Salivary pH (6.0 - 7.5)</Text>
+              <TextInput
+                style={styles.input}
+                value={biomarkers.salivaryPH}
+                onChangeText={(value) => handleInputChange('salivaryPH', value)}
+                placeholder="e.g., 6.8"
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                keyboardType="decimal-pad"
+              />
+              <Text style={styles.helperText}>Target: 6.5 - 7.2 (optimal)</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Active MMP-8 (ng/mL)</Text>
+              <TextInput
+                style={styles.input}
+                value={biomarkers.mmp8}
+                onChangeText={(value) => handleInputChange('mmp8', value)}
+                placeholder="e.g., 45"
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                keyboardType="decimal-pad"
+              />
+              <Text style={styles.helperText}>Target: &lt;60 ng/mL (optimal)</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Salivary Flow Rate (mL/min)</Text>
+              <TextInput
+                style={styles.input}
+                value={biomarkers.flowRate}
+                onChangeText={(value) => handleInputChange('flowRate', value)}
+                placeholder="e.g., 1.8"
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                keyboardType="decimal-pad"
+              />
+              <Text style={styles.helperText}>Target: &gt;1.5 mL/min (optimal)</Text>
+            </View>
+          </View>
+
+          {/* Systemic Health Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>🩸 Systemic Health Biomarkers</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>hs-CRP (mg/L)</Text>
+              <TextInput
+                style={styles.input}
+                value={biomarkers.hsCRP}
+                onChangeText={(value) => handleInputChange('hsCRP', value)}
+                placeholder="e.g., 0.8"
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                keyboardType="decimal-pad"
+              />
+              <Text style={styles.helperText}>Target: &lt;1.0 mg/L (optimal)</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Omega-3 Index (%)</Text>
+              <TextInput
+                style={styles.input}
+                value={biomarkers.omega3Index}
+                onChangeText={(value) => handleInputChange('omega3Index', value)}
+                placeholder="e.g., 8.5"
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                keyboardType="decimal-pad"
+              />
+              <Text style={styles.helperText}>Target: &gt;8.0% (optimal)</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>HbA1c (%)</Text>
+              <TextInput
+                style={styles.input}
+                value={biomarkers.hba1c}
+                onChangeText={(value) => handleInputChange('hba1c', value)}
+                placeholder="e.g., 5.4"
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                keyboardType="decimal-pad"
+              />
+              <Text style={styles.helperText}>Target: &lt;5.7% (optimal)</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>GDF-15 (pg/mL)</Text>
+              <TextInput
+                style={styles.input}
+                value={biomarkers.gdf15}
+                onChangeText={(value) => handleInputChange('gdf15', value)}
+                placeholder="e.g., 950"
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                keyboardType="decimal-pad"
+              />
+              <Text style={styles.helperText}>Target: &lt;1200 pg/mL (optimal)</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Vitamin D (ng/mL)</Text>
+              <TextInput
+                style={styles.input}
+                value={biomarkers.vitaminD}
+                onChangeText={(value) => handleInputChange('vitaminD', value)}
+                placeholder="e.g., 45"
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                keyboardType="decimal-pad"
+              />
+              <Text style={styles.helperText}>Target: 40-60 ng/mL (optimal)</Text>
+            </View>
+          </View>
+
+          {/* Optional HRV Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>💓 Optional: Heart Rate Variability</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>HRV-RMSSD (ms) - Optional</Text>
+              <TextInput
+                style={styles.input}
+                value={biomarkers.hrv}
+                onChangeText={(value) => handleInputChange('hrv', value)}
+                placeholder="e.g., 45 (optional)"
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                keyboardType="decimal-pad"
+              />
+              <Text style={styles.helperText}>Age-adjusted optimal ranges apply</Text>
+            </View>
+          </View>
+
+          {/* Calculate Button */}
+          <TouchableOpacity
+            style={[styles.calculateButton, isCalculating && styles.calculateButtonDisabled]}
+            onPress={handleCalculate}
+            disabled={isCalculating}
           >
-            <Ionicons name="arrow-back" size={28} color="#fff" />
-          </TouchableOpacity>
-          
-          <Text style={styles.title}>Tier 1: Foundation</Text>
-          <Text style={styles.subtitle}>Core Biomarker Assessment</Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📅 Assessment Date</Text>
-          <View style={styles.dateInputContainer}>
-            <View style={styles.dateField}>
-              <Text style={styles.dateLabel}>Year</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={year}
-                onChangeText={setYear}
-                keyboardType="number-pad"
-                placeholder="2025"
-                placeholderTextColor="rgba(255,255,255,0.5)"
-                maxLength={4}
-              />
-            </View>
-            <View style={styles.dateField}>
-              <Text style={styles.dateLabel}>Month</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={month}
-                onChangeText={setMonth}
-                keyboardType="number-pad"
-                placeholder="11"
-                placeholderTextColor="rgba(255,255,255,0.5)"
-                maxLength={2}
-              />
-            </View>
-            <View style={styles.dateField}>
-              <Text style={styles.dateLabel}>Day</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={day}
-                onChangeText={setDay}
-                keyboardType="number-pad"
-                placeholder="18"
-                placeholderTextColor="rgba(255,255,255,0.5)"
-                maxLength={2}
-              />
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🦷 Oral Health Biomarkers</Text>
-          
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Salivary pH (6.5-7.2 optimal)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.salivaryPH}
-              onChangeText={(value) => updateField('salivaryPH', value)}
-              keyboardType="decimal-pad"
-              placeholder="7.0"
-              placeholderTextColor="rgba(255,255,255,0.5)"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Active MMP-8 (ng/mL, {'<'}60 optimal)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.activeMMP8}
-              onChangeText={(value) => updateField('activeMMP8', value)}
-              keyboardType="decimal-pad"
-              placeholder="50"
-              placeholderTextColor="rgba(255,255,255,0.5)"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Salivary Flow (mL/min, {'>'}1.5 optimal)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.salivaryFlow}
-              onChangeText={(value) => updateField('salivaryFlow', value)}
-              keyboardType="decimal-pad"
-              placeholder="1.8"
-              placeholderTextColor="rgba(255,255,255,0.5)"
-            />
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>💉 Systemic Health Biomarkers</Text>
-          
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>hs-CRP (mg/L, {'<'}1.0 optimal)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.hsCRP}
-              onChangeText={(value) => updateField('hsCRP', value)}
-              keyboardType="decimal-pad"
-              placeholder="0.8"
-              placeholderTextColor="rgba(255,255,255,0.5)"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Omega-3 Index (%, {'>'}8.0 optimal)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.omega3Index}
-              onChangeText={(value) => updateField('omega3Index', value)}
-              keyboardType="decimal-pad"
-              placeholder="8.5"
-              placeholderTextColor="rgba(255,255,255,0.5)"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>HbA1c (%, {'<'}5.7 optimal)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.hba1c}
-              onChangeText={(value) => updateField('hba1c', value)}
-              keyboardType="decimal-pad"
-              placeholder="5.5"
-              placeholderTextColor="rgba(255,255,255,0.5)"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>GDF-15 (pg/mL, {'<'}1200 optimal)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.gdf15}
-              onChangeText={(value) => updateField('gdf15', value)}
-              keyboardType="decimal-pad"
-              placeholder="1100"
-              placeholderTextColor="rgba(255,255,255,0.5)"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Vitamin D (ng/mL, 30-100 optimal)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.vitaminD}
-              onChangeText={(value) => updateField('vitaminD', value)}
-              keyboardType="decimal-pad"
-              placeholder="35"
-              placeholderTextColor="rgba(255,255,255,0.5)"
-            />
-          </View>
-        </View>
-
-        {/* ✅ NEW: HRV Input Field */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>❤️ Heart Rate Variability (Optional)</Text>
-          
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>HRV RMSSD (ms, age-adjusted)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.hrvValue}
-              onChangeText={(value) => updateField('hrvValue', value)}
-              keyboardType="decimal-pad"
-              placeholder={state?.wearableData?.hrv ? state.wearableData.hrv.toString() : "Enter HRV"}
-              placeholderTextColor="rgba(255,255,255,0.5)"
-            />
-            <Text style={styles.helperText}>
-              {state?.wearableData?.hrv 
-                ? '✅ Auto-filled from watch' 
-                : 'Leave empty if not measured'}
+            <Text style={styles.calculateButtonText}>
+              {isCalculating ? 'Calculating...' : 'Calculate Biological Age'}
             </Text>
-          </View>
-        </View>
+          </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.calculateButton, isCalculating && styles.calculateButtonDisabled]}
-          onPress={handleCalculate}
-          disabled={isCalculating}
-        >
-          {isCalculating ? (
-            <ActivityIndicator color="#FF6B35" />
-          ) : (
-            <Text style={styles.calculateButtonText}>Calculate Praxiom Age</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.upgradeButton}
-          onPress={() => navigation.navigate('Tier2BiomarkerInput')}
-        >
-          <Text style={styles.upgradeButtonText}>Upgrade to Tier 2 →</Text>
-        </TouchableOpacity>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
-    </LinearGradient>
+          {/* Upgrade to Tier 2 */}
+          <TouchableOpacity
+            style={styles.upgradeButton}
+            onPress={() => navigation.navigate('Tier2Input')}
+          >
+            <Text style={styles.upgradeButtonText}>
+              ⬆️ Upgrade to Tier 2 (Advanced Profiling)
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </LinearGradient>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -492,22 +298,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  gradient: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
   },
-  header: {
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+  scrollContent: {
+    paddingBottom: 40,
   },
-  backButton: {
-    marginBottom: 15,
+  header: {
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingBottom: 30,
+    alignItems: 'center',
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 5,
+    marginBottom: 8,
+    textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
@@ -529,34 +340,6 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-  },
-  dateInputContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  dateField: {
-    flex: 1,
-  },
-  dateLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#fff',
-    marginBottom: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  dateInput: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderRadius: 12,
-    padding: 15,
-    fontSize: 16,
-    color: '#fff',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    fontWeight: '600',
-    textAlign: 'center',
   },
   inputGroup: {
     marginBottom: 15,
