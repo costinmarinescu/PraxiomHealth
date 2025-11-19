@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,11 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { AppContext } from '../AppContext';
+import { useAppContext } from '../AppContext';
 import OuraRingService from '../services/OuraRingService';
 
 export default function OuraRingScreen({ navigation }) {
-  const { state, updateState } = useContext(AppContext);
+  const { state, updateState } = useAppContext();
   
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
