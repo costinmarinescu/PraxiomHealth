@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Sharing from 'expo-sharing';
 import PraxiomBackground from '../components/PraxiomBackground';
-import { AppContext } from '../AppContext';
+import { useAppContext } from '../AppContext';
 import PraxiomAlgorithm from '../services/PraxiomAlgorithm';
 
 const ReportScreen = ({ navigation }) => {
-  const { state } = useContext(AppContext);
+  const { state } = useAppContext();
 
   const getHealthStatus = (score) => {
     const status = PraxiomAlgorithm.getHealthStatus(score);
