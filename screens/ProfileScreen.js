@@ -1,10 +1,4 @@
-/**
- * ProfileScreen.js - FIXED VERSION
- * 
- * ✅ FIX #3: Using updateState() instead of dispatch()
- */
-
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -16,10 +10,10 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppContext } from '../AppContext';
+import { useAppContext } from '../AppContext';
 
 export default function ProfileScreen({ navigation }) {
-  const { updateState } = useContext(AppContext); // ✅ FIXED: Use updateState instead of dispatch
+  const { state, updateState } = useContext(AppContext);
   
   // Form state
   const [name, setName] = useState('');
