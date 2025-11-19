@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -13,11 +13,11 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { AppContext } from '../AppContext';
+import { useAppContext } from '../AppContext';
 
 const Tier2BiomarkerInputScreen = ({ navigation }) => {
   // ✅ FIX: Get correct functions from AppContext
-  const { state, updateState, calculateScores, calculateBiologicalAge } = useContext(AppContext);
+  const { state, updateState, calculateScores, calculateBiologicalAge } = useAppContext();
   
   // Date selection
   const [selectedDate, setSelectedDate] = useState(new Date());
