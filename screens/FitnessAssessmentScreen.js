@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { AppContext } from '../AppContext';
+import { useAppContext } from '../AppContext';
 import PraxiomAlgorithm from '../services/PraxiomAlgorithm';
 import PraxiomBackground from '../components/PraxiomBackground';
 
