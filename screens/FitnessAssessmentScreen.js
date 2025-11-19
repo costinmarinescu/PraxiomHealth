@@ -13,7 +13,7 @@ import PraxiomAlgorithm from '../services/PraxiomAlgorithm';
 import PraxiomBackground from '../components/PraxiomBackground';
 
 const FitnessAssessmentScreen = ({ navigation }) => {
-  const { healthData, setHealthData } = useContext(AppContext);
+  const { healthData, setHealthData } = useAppContext();
   const [assessmentType, setAssessmentType] = useState(null);
 
   // Aerobic Fitness
