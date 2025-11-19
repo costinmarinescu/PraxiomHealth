@@ -1,11 +1,11 @@
-import React, { useContext, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { AppContext } from '../AppContext';
+import { useAppContext } from '../AppContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function DashboardScreen({ navigation }) {
-  const { state, updateState, calculateScores } = useContext(AppContext);
+  const { state, updateState, calculateScores } = useAppContext();
   const [showWatchAlert, setShowWatchAlert] = React.useState(false);
 
   useEffect(() => {
