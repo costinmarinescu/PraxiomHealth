@@ -1,44 +1,65 @@
 {
   "expo": {
     "name": "PraxiomHealth",
-    "slug": "praxiomhealth",
-    "version": "1.0.0",
+    "slug": "praxiom-health",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "scheme": "praxiomhealth",
+    "owner": "costinmarinescu",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#FF6B35"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.praxiom.health",
+      "buildNumber": "1",
       "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "PraxiomHealth needs Bluetooth to sync your biological age data with your PineTime watch.",
-        "NSBluetoothPeripheralUsageDescription": "PraxiomHealth needs Bluetooth to communicate with your PineTime watch."
+        "NSBluetoothAlwaysUsageDescription": "PraxiomHealth needs Bluetooth to sync your biological age data with your PineTime watch and Oura Ring.",
+        "NSBluetoothPeripheralUsageDescription": "PraxiomHealth needs Bluetooth to communicate with your wearable devices.",
+        "NSCameraUsageDescription": "PraxiomHealth needs camera access to scan QR codes for device pairing.",
+        "NSHealthShareUsageDescription": "PraxiomHealth reads health data to calculate your biological age.",
+        "NSHealthUpdateUsageDescription": "PraxiomHealth saves your biological age calculations to Health.",
+        "NSLocationWhenInUseUsageDescription": "PraxiomHealth needs location access for Bluetooth device discovery."
       }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#FF6B35"
       },
       "package": "com.praxiom.health",
+      "versionCode": 1,
       "permissions": [
         "BLUETOOTH",
         "BLUETOOTH_ADMIN",
         "BLUETOOTH_CONNECT",
         "BLUETOOTH_SCAN",
+        "BLUETOOTH_ADVERTISE",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "POST_NOTIFICATIONS"
-      ]
+        "ACCESS_BACKGROUND_LOCATION",
+        "POST_NOTIFICATIONS",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "WAKE_LOCK"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": ""
+        }
+      }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
+      "expo-notifications",
+      "expo-secure-store",
       [
         "expo-build-properties",
         {
@@ -46,18 +67,39 @@
             "minSdkVersion": 23,
             "compileSdkVersion": 34,
             "targetSdkVersion": 34,
-            "buildToolsVersion": "34.0.0"
+            "buildToolsVersion": "34.0.0",
+            "kotlinVersion": "1.9.0"
           },
           "ios": {
             "deploymentTarget": "13.4"
           }
+        }
+      ],
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": true,
+          "modes": ["peripheral", "central"],
+          "bluetoothAlwaysPermission": "PraxiomHealth needs Bluetooth to sync with your devices"
         }
       ]
     ],
     "extra": {
       "eas": {
         "projectId": "0b25cc14-e855-4c8b-8272-95523bb9c592"
+      },
+      "praxiom": {
+        "apiUrl": "https://api.praxiomhealth.com",
+        "version": "2.0.0",
+        "buildDate": "2025-11-20"
       }
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/0b25cc14-e855-4c8b-8272-95523bb9c592"
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
     }
   }
 }
