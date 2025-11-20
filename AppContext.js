@@ -362,10 +362,20 @@ export const AppProvider = ({ children }) => {
   // ========================================
   const calculateTier1BioAge = async () => {
     try {
-      const chronAge = state.userProfile.chronologicalAge;
+      // ✅ FIX: Reload chronologicalAge from AsyncStorage to ensure we have latest value
+      let chronAge = state.userProfile.chronologicalAge;
       
       if (!chronAge || chronAge <= 0) {
-        throw new Error('Chronological age not set. Please enter date of birth first.');
+        // Try to load from AsyncStorage in case state is stale
+        const storedAge = await AsyncStorage.getItem('chronologicalAge');
+        if (storedAge) {
+          chronAge = parseFloat(storedAge);
+          console.log('✅ Loaded chronological age from storage:', chronAge);
+        }
+      }
+      
+      if (!chronAge || chronAge <= 0) {
+        throw new Error('Chronological age not set. Please enter your date of birth in Settings first.');
       }
 
       console.log('🧮 Starting Tier 1 Bio-Age Calculation...');
