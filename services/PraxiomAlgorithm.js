@@ -1310,3 +1310,170 @@ export function analyzeTrends(history) {
     daysBetween,
   };
 }
+
+// ========================================
+// ADDITIONAL UTILITY FUNCTIONS
+// ========================================
+
+/**
+ * Get health status from score
+ * @param {number} score - Health score 0-100
+ * @returns {object} { status, color, emoji, description }
+ */
+export function getHealthStatus(score) {
+  if (score >= 85) {
+    return { 
+      status: 'Optimal', 
+      color: '#47C83E', 
+      emoji: '✅',
+      description: 'Excellent health markers'
+    };
+  }
+  if (score >= 75) {
+    return { 
+      status: 'Good', 
+      color: '#FFB800', 
+      emoji: '⚠️',
+      description: 'Above average, room for improvement'
+    };
+  }
+  if (score >= 60) {
+    return { 
+      status: 'Fair', 
+      color: '#FFA500', 
+      emoji: '🔶',
+      description: 'Below optimal, intervention recommended'
+    };
+  }
+  return { 
+    status: 'Poor', 
+    color: '#E74C3C', 
+    emoji: '🔴',
+    description: 'Significant health risks detected'
+  };
+}
+
+// ========================================
+// INDIVIDUAL FITNESS COMPONENT SCORING
+// ========================================
+
+/**
+ * Calculate aerobic fitness score from test data
+ * @param {string} testType - 'stepTest' or '6minWalk'
+ * @param {number} value - Heart rate or distance
+ * @param {number} age - User's chronological age
+ * @returns {number} Score 0-10
+ */
+export function calculateAerobicScore(testType, value, age) {
+  if (testType === 'stepTest') {
+    // Recovery heart rate (lower is better)
+    if (age < 30) {
+      if (value <= 85) return 10;
+      if (value <= 95) return 8;
+      if (value <= 105) return 6;
+      if (value <= 115) return 4;
+      return 2;
+    } else if (age < 50) {
+      if (value <= 90) return 10;
+      if (value <= 100) return 8;
+      if (value <= 110) return 6;
+      if (value <= 120) return 4;
+      return 2;
+    } else {
+      if (value <= 95) return 10;
+      if (value <= 105) return 8;
+      if (value <= 115) return 6;
+      if (value <= 125) return 4;
+      return 2;
+    }
+  } else if (testType === '6minWalk') {
+    // Distance in meters (higher is better)
+    if (age < 30) {
+      if (value >= 650) return 10;
+      if (value >= 600) return 8;
+      if (value >= 550) return 6;
+      if (value >= 500) return 4;
+      return 2;
+    } else if (age < 50) {
+      if (value >= 600) return 10;
+      if (value >= 550) return 8;
+      if (value >= 500) return 6;
+      if (value >= 450) return 4;
+      return 2;
+    } else {
+      if (value >= 550) return 10;
+      if (value >= 500) return 8;
+      if (value >= 450) return 6;
+      if (value >= 400) return 4;
+      return 2;
+    }
+  }
+  return 5; // Default
+}
+
+/**
+ * Calculate flexibility and posture score
+ * @param {number} sitReach - Sit-and-reach distance in cm from toes (+ = beyond, - = short)
+ * @param {string} postureRating - 'excellent', 'good', 'fair', 'poor'
+ * @returns {number} Score 0-10
+ */
+export function calculateFlexibilityScore(sitReach, postureRating) {
+  // Sit and reach score (cm from toes)
+  let flexScore = 5;
+  if (sitReach >= 10) flexScore = 10;
+  else if (sitReach >= 5) flexScore = 9;
+  else if (sitReach >= 0) flexScore = 7;
+  else if (sitReach >= -5) flexScore = 5;
+  else if (sitReach >= -10) flexScore = 3;
+  else flexScore = 1;
+  
+  // Posture rating score
+  const postureScores = {
+    excellent: 10,
+    good: 8,
+    fair: 5,
+    poor: 2
+  };
+  
+  const postureScore = postureScores[postureRating?.toLowerCase()] || 5;
+  
+  // Equal weight (50/50)
+  return (flexScore + postureScore) / 2;
+}
+
+/**
+ * Calculate balance and coordination score
+ * @param {number} oneLegStandTime - Single-leg stand time in seconds
+ * @returns {number} Score 0-10
+ */
+export function calculateBalanceScore(oneLegStandTime) {
+  // Single-leg stand time in seconds
+  if (oneLegStandTime >= 30) return 10;
+  if (oneLegStandTime >= 25) return 9;
+  if (oneLegStandTime >= 20) return 8;
+  if (oneLegStandTime >= 15) return 7;
+  if (oneLegStandTime >= 10) return 6;
+  if (oneLegStandTime >= 7) return 5;
+  if (oneLegStandTime >= 5) return 4;
+  if (oneLegStandTime >= 3) return 3;
+  if (oneLegStandTime >= 2) return 2;
+  return 1;
+}
+
+/**
+ * Calculate mind-body alignment and mental preparedness score
+ * @param {number} confidenceRating - Self-rated confidence 0-10
+ * @param {boolean} hasKinesiophobia - Whether user has fear of movement/falling
+ * @returns {number} Score 0-10
+ */
+export function calculateMindBodyScore(confidenceRating, hasKinesiophobia = false) {
+  // Start with confidence rating (0-10)
+  let score = Math.min(10, Math.max(0, confidenceRating));
+  
+  // Reduce score significantly if fear of movement/falling present
+  if (hasKinesiophobia) {
+    score = Math.max(1, score - 3);
+  }
+  
+  return score;
+}
