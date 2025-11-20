@@ -26,15 +26,15 @@ export default function SettingsScreen({ navigation }) {
   const isWatchConnected = state.watchConnected === true;
   const connectedDeviceName = state.connectedDevice?.name || 'PineTime';
 
-  // Load existing birthdate
+  // ✅ FIX: Load existing DOB from correct path (userProfile.dateOfBirth)
   useEffect(() => {
-    if (state.profile?.birthdate) {
-      const date = new Date(state.profile.birthdate);
+    if (state.userProfile?.dateOfBirth) {
+      const date = new Date(state.userProfile.dateOfBirth);
       setBirthYear(date.getFullYear().toString());
       setBirthMonth((date.getMonth() + 1).toString());
       setBirthDay(date.getDate().toString());
     }
-  }, [state.profile?.birthdate]);
+  }, [state.userProfile?.dateOfBirth]);
 
   // ✅ NEW: Calculate age from birthdate
   const calculateAge = (birthdate) => {
@@ -90,17 +90,18 @@ export default function SettingsScreen({ navigation }) {
     }
     
     try {
-      // Save chronological age to AsyncStorage
+      // ✅ FIX: Save to AsyncStorage for fallback
       await AsyncStorage.setItem('chronologicalAge', chronologicalAge.toString());
-      console.log('✅ Chronological age saved:', chronologicalAge);
+      await AsyncStorage.setItem('dateOfBirth', birthdate.toISOString());
+      console.log('✅ DOB & chronological age saved:', birthdate.toISOString(), chronologicalAge);
       
-      // Update state with both birthdate AND chronological age
+      // ✅ FIX: Update userProfile (not profile) with correct property names
       updateState({
-        profile: {
-          ...state.profile,
-          birthdate: birthdate.toISOString()
-        },
-        chronologicalAge: chronologicalAge
+        userProfile: {
+          ...state.userProfile,
+          dateOfBirth: birthdate.toISOString(),  // ✅ Correct: dateOfBirth (not birthdate)
+          chronologicalAge: chronologicalAge      // ✅ Correct: inside userProfile
+        }
       });
       
       Alert.alert(
@@ -298,12 +299,13 @@ export default function SettingsScreen({ navigation }) {
               </View>
             </View>
             
-            {state.profile?.birthdate && (
+            {/* ✅ FIX: Display current DOB from correct path */}
+            {state.userProfile?.dateOfBirth && (
               <Text style={styles.currentValue}>
-                Current: {new Date(state.profile.birthdate).toLocaleDateString()}
+                Current: {new Date(state.userProfile.dateOfBirth).toLocaleDateString()} (Age: {state.userProfile.chronologicalAge} years)
               </Text>
             )}
-            {!state.profile?.birthdate && (
+            {!state.userProfile?.dateOfBirth && (
               <Text style={styles.noValue}>
                 Not set - Required for Praxiom Age calculation
               </Text>
