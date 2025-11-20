@@ -575,6 +575,7 @@ export const AppProvider = ({ children }) => {
   // Context value - useMemo to prevent recreating on every render
   const contextValue = React.useMemo(() => ({
     // State - spread all state properties
+    state,
     userId: state.userId,
     userProfile: state.userProfile,
     tier1Data: state.tier1Data,
@@ -598,6 +599,7 @@ export const AppProvider = ({ children }) => {
     calculateTier3BioAge,
     setWatchConnection,
   }), [
+    state,
     state.userId,
     state.userProfile,
     state.tier1Data,
