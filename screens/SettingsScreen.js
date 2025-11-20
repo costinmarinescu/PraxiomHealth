@@ -15,7 +15,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppContext } from '../AppContext';
 
 export default function SettingsScreen({ navigation }) {
-  const { state, updateState, disconnectWatch } = useAppContext();
+  // ✅ FIX: Use correct function name from AppContext
+  const { state, updateState, setWatchConnection } = useAppContext();
   
   // ✅ FIX: Simple date inputs instead of DateTimePicker
   const [birthYear, setBirthYear] = useState('');
@@ -192,7 +193,15 @@ export default function SettingsScreen({ navigation }) {
           {
             text: 'Disconnect',
             style: 'destructive',
-            onPress: disconnectWatch
+            onPress: async () => {
+              try {
+                await setWatchConnection(false, null);
+                Alert.alert('Watch Disconnected', 'Your watch has been disconnected successfully.');
+              } catch (error) {
+                console.error('Disconnect error:', error);
+                Alert.alert('Error', 'Failed to disconnect watch.');
+              }
+            }
           }
         ]
       );

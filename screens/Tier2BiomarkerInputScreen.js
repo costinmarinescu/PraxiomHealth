@@ -16,8 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppContext } from '../AppContext';
 
 const Tier2BiomarkerInputScreen = ({ navigation }) => {
-  // ✅ FIX: Get correct functions from AppContext
-  const { state, updateState, calculateScores, calculateBiologicalAge } = useAppContext();
+  // ✅ FIX: Use correct function name from AppContext
+  const { state, updateState, calculateTier2BioAge } = useAppContext();
   
   // Date selection
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -189,10 +189,12 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
       // Small delay to ensure state update
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Recalculate biological age with adjusted scores
-      const enhancedBioAge = calculateBiologicalAge();
+      // Recalculate biological age with Tier 2 data using correct function
+      const result = await calculateTier2BioAge();
+      const enhancedBioAge = result.bioAge;
       
       console.log(`Enhanced Biological Age: ${enhancedBioAge.toFixed(1)} years`);
+      console.log('Tier 2 Calculation Result:', result);
 
       // Calculate improvement vs Tier 1
       const tier1BioAge = state.userProfile?.biologicalAge || state.userProfile?.chronologicalAge;

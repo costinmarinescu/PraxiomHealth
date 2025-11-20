@@ -5,7 +5,8 @@ import { useAppContext } from '../AppContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function DashboardScreen({ navigation }) {
-  const { state, updateState, calculateScores } = useAppContext();
+  // ✅ FIX: Use the correct function name from AppContext
+  const { state, updateState, calculateTier1BioAge } = useAppContext();
   const [showWatchAlert, setShowWatchAlert] = React.useState(false);
 
   useEffect(() => {
@@ -43,17 +44,67 @@ export default function DashboardScreen({ navigation }) {
     return '#E74C3C';
   };
 
-  const handleRecalculateAge = () => {
-    const newBioAge = calculateScores();
-    if (newBioAge && !isNaN(newBioAge)) {
-      Alert.alert(
-        '✅ Recalculated',
-        `Your Bio-Age has been recalculated based on your latest biomarkers.\n\nNew Bio-Age: ${newBioAge.toFixed(1)} years`
+  // ✅ FIX: Changed to use calculateTier1BioAge() instead of calculateScores()
+  const handleRecalculateAge = async () => {
+    try {
+      // Check if user has entered their date of birth first
+      if (!state.userProfile?.chronologicalAge) {
+        Alert.alert(
+          'Date of Birth Required',
+          'Please set your date of birth in the Profile screen first.'
+        );
+        return;
+      }
+
+      // Check if user has entered any Tier 1 biomarkers
+      const hasBiomarkers = state.tier1Data && (
+        state.tier1Data.salivaryPH ||
+        state.tier1Data.mmp8 ||
+        state.tier1Data.hsCRP ||
+        state.tier1Data.omega3Index ||
+        state.tier1Data.hba1c
       );
-    } else {
+
+      if (!hasBiomarkers) {
+        Alert.alert(
+          'No Biomarkers Found',
+          'Please enter your Tier 1 biomarkers first to calculate your biological age.',
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel'
+            },
+            {
+              text: 'Enter Biomarkers',
+              onPress: () => navigation.navigate('Tier1BiomarkerInput')
+            }
+          ]
+        );
+        return;
+      }
+
+      // Calculate using the correct function from AppContext
+      const result = await calculateTier1BioAge();
+      
+      if (result && result.bioAge && !isNaN(result.bioAge)) {
+        Alert.alert(
+          '✅ Recalculated',
+          `Your Bio-Age has been recalculated based on your latest biomarkers.\n\n` +
+          `Biological Age: ${result.bioAge.toFixed(1)} years\n` +
+          `Chronological Age: ${state.userProfile.chronologicalAge.toFixed(1)} years\n` +
+          `Deviation: ${(result.bioAge - state.userProfile.chronologicalAge).toFixed(1)} years`
+        );
+      } else {
+        Alert.alert(
+          'Calculation Error',
+          'There was an error calculating your biological age. Please check your biomarker values.'
+        );
+      }
+    } catch (error) {
+      console.error('Recalculation error:', error);
       Alert.alert(
-        'Unable to Calculate',
-        'Please enter your biomarkers first to calculate your biological age.'
+        'Calculation Error',
+        error.message || 'Unable to calculate biological age. Please try again.'
       );
     }
   };
@@ -135,25 +186,25 @@ export default function DashboardScreen({ navigation }) {
         <View style={styles.scoreCardsContainer}>
           <View style={styles.scoreCard}>
             <Text style={styles.scoreTitle}>Oral Health</Text>
-            <Text style={[styles.scoreValue, { color: getScoreColor(state.oralHealthScore) }]}>
-              {state.oralHealthScore}%
+            <Text style={[styles.scoreValue, { color: getScoreColor(state.scores?.oralHealthScore || 0) }]}>
+              {state.scores?.oralHealthScore || 0}%
             </Text>
             <Text style={styles.scoreTarget}>Target: &gt;85%</Text>
             <View style={[
               styles.scoreIndicator,
-              { backgroundColor: getScoreColor(state.oralHealthScore) }
+              { backgroundColor: getScoreColor(state.scores?.oralHealthScore || 0) }
             ]} />
           </View>
 
           <View style={styles.scoreCard}>
             <Text style={styles.scoreTitle}>Systemic Health</Text>
-            <Text style={[styles.scoreValue, { color: getScoreColor(state.systemicHealthScore) }]}>
-              {state.systemicHealthScore}%
+            <Text style={[styles.scoreValue, { color: getScoreColor(state.scores?.systemicHealthScore || 0) }]}>
+              {state.scores?.systemicHealthScore || 0}%
             </Text>
             <Text style={styles.scoreTarget}>Target: &gt;85%</Text>
             <View style={[
               styles.scoreIndicator,
-              { backgroundColor: getScoreColor(state.systemicHealthScore) }
+              { backgroundColor: getScoreColor(state.scores?.systemicHealthScore || 0) }
             ]} />
           </View>
         </View>
@@ -161,22 +212,22 @@ export default function DashboardScreen({ navigation }) {
         <View style={styles.scoreCardsContainer}>
           <View style={styles.scoreCard}>
             <Text style={styles.scoreTitle}>Fitness Score</Text>
-            <Text style={[styles.scoreValue, { color: getScoreColor(state.fitnessScore) }]}>
-              {state.fitnessScore}%
+            <Text style={[styles.scoreValue, { color: getScoreColor(state.scores?.fitnessScore || 0) }]}>
+              {state.scores?.fitnessScore || 0}%
             </Text>
             <Text style={styles.scoreTarget}>Target: &gt;85%</Text>
             <View style={[
               styles.scoreIndicator,
-              { backgroundColor: getScoreColor(state.fitnessScore) }
+              { backgroundColor: getScoreColor(state.scores?.fitnessScore || 0) }
             ]} />
           </View>
 
           <View style={styles.scoreCard}>
             <Text style={styles.scoreTitle}>Wearable Data</Text>
             <View style={styles.wearableData}>
-              <Text style={styles.wearableItem}>❤️ {state.heartRate || '--'} bpm</Text>
-              <Text style={styles.wearableItem}>👟 {state.steps || 0}</Text>
-              <Text style={styles.wearableItem}>📊 HRV: {state.hrv || '--'}</Text>
+              <Text style={styles.wearableItem}>❤️ {state.tier1Data?.hrv || '--'} ms</Text>
+              <Text style={styles.wearableItem}>👟 {state.tier2Data?.dailySteps || 0}</Text>
+              <Text style={styles.wearableItem}>📊 HRV: {state.tier2Data?.hrvRMSSD || '--'}</Text>
             </View>
           </View>
         </View>
@@ -216,7 +267,7 @@ export default function DashboardScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {(state.oralHealthScore < 75 || state.systemicHealthScore < 75) && (
+        {(state.scores?.oralHealthScore < 75 || state.scores?.systemicHealthScore < 75) && (
           <View style={styles.alertCard}>
             <Text style={styles.alertTitle}>⚠️ Tier Upgrade Recommended</Text>
             <Text style={styles.alertText}>
