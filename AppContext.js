@@ -15,7 +15,7 @@ import * as SecureStore from 'expo-secure-store';
 import { BleManager } from 'react-native-ble-plx';
 
 // CRITICAL: Import the COMPLETE algorithm implementation
-import PraxiomAlgorithm from './PraxiomAlgorithm';
+import PraxiomAlgorithm from './services/PraxiomAlgorithm';
 
 // Create context
 const AppContext = createContext();
