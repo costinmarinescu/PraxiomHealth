@@ -7,7 +7,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-  RefreshControl
+  RefreshControl,
+  TextInput
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,10 +23,74 @@ export default function OuraRingScreen({ navigation }) {
   const [isConnected, setIsConnected] = useState(false);
   const [healthData, setHealthData] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // ✅ NEW: Oura API Credentials State
+  const [showCredentials, setShowCredentials] = useState(false);
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [credentialsSaved, setCredentialsSaved] = useState(false);
 
   useEffect(() => {
     checkConnection();
+    loadCredentials();
   }, []);
+  
+  /**
+   * ✅ NEW: Load saved credentials on mount
+   */
+  const loadCredentials = async () => {
+    try {
+      const saved = await OuraRingService.loadCredentials();
+      setCredentialsSaved(saved);
+      
+      if (saved) {
+        console.log('✅ Oura credentials already configured');
+      }
+    } catch (error) {
+      console.error('Error loading Oura credentials:', error);
+    }
+  };
+  
+  /**
+   * ✅ NEW: Save user's Oura API credentials
+   */
+  const handleSaveCredentials = async () => {
+    try {
+      if (!clientId || !clientSecret) {
+        Alert.alert('Error', 'Please enter both Client ID and Client Secret');
+        return;
+      }
+      
+      if (clientId.length < 30) {
+        Alert.alert('Error', 'Client ID appears too short. Please check your credentials.');
+        return;
+      }
+      
+      if (clientSecret.length < 30) {
+        Alert.alert('Error', 'Client Secret appears too short. Please check your credentials.');
+        return;
+      }
+      
+      console.log('💾 Saving Oura credentials...');
+      
+      await OuraRingService.setCredentials(clientId, clientSecret);
+      
+      setCredentialsSaved(true);
+      setShowCredentials(false);
+      
+      Alert.alert(
+        'Success', 
+        'Oura API credentials saved securely. You can now connect your Oura Ring.',
+        [{ text: 'OK' }]
+      );
+      
+      console.log('✅ Credentials saved successfully');
+      
+    } catch (error) {
+      console.error('Error saving credentials:', error);
+      Alert.alert('Error', 'Failed to save credentials: ' + error.message);
+    }
+  };
 
   const checkConnection = async () => {
     try {
@@ -44,6 +109,18 @@ export default function OuraRingScreen({ navigation }) {
 
   const handleConnect = async () => {
     try {
+      if (!credentialsSaved) {
+        Alert.alert(
+          'Credentials Required',
+          'Please configure your Oura API credentials first.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Configure', onPress: () => setShowCredentials(true) }
+          ]
+        );
+        return;
+      }
+      
       setIsConnecting(true);
       
       const result = await OuraRingService.authenticate();
@@ -167,6 +244,72 @@ export default function OuraRingScreen({ navigation }) {
             Automatically import your HRV, sleep, and activity data for more accurate Bio-Age calculations
           </Text>
 
+          {/* ✅ NEW: API Credentials Configuration Section */}
+          <View style={styles.credentialsSection}>
+            <TouchableOpacity 
+              onPress={() => setShowCredentials(!showCredentials)}
+              style={styles.expandButton}
+            >
+              <Ionicons 
+                name={showCredentials ? "chevron-down" : "chevron-forward"} 
+                size={20} 
+                color="#00CFC1" 
+              />
+              <Text style={styles.expandText}>
+                {credentialsSaved ? '✓ ' : ''}Configure API Credentials
+              </Text>
+              {credentialsSaved && (
+                <View style={styles.savedBadge}>
+                  <Text style={styles.savedBadgeText}>Saved</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            
+            {showCredentials && (
+              <View style={styles.credentialsForm}>
+                <Text style={styles.helperText}>
+                  💡 Get your Oura API credentials from{'\n'}
+                  <Text style={styles.linkText}>cloud.ouraring.com</Text>
+                </Text>
+                
+                <Text style={styles.inputLabel}>Client ID</Text>
+                <TextInput
+                  style={styles.input}
+                  value={clientId}
+                  onChangeText={setClientId}
+                  placeholder="18a798fd-289f-45d4-99b6-ade377b3ba15"
+                  placeholderTextColor="#555"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                
+                <Text style={styles.inputLabel}>Client Secret</Text>
+                <TextInput
+                  style={styles.input}
+                  value={clientSecret}
+                  onChangeText={setClientSecret}
+                  placeholder="07SqBRP_v7zSdetMcidQNtv3gKsI..."
+                  placeholderTextColor="#555"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry={true}
+                />
+                
+                <TouchableOpacity
+                  style={styles.saveButton}
+                  onPress={handleSaveCredentials}
+                >
+                  <Ionicons name="save" size={20} color="#FFF" />
+                  <Text style={styles.saveButtonText}>Save Credentials</Text>
+                </TouchableOpacity>
+                
+                <Text style={styles.securityNote}>
+                  🔒 Credentials are stored securely and encrypted
+                </Text>
+              </View>
+            )}
+          </View>
+
           <View style={styles.featuresList}>
             <View style={styles.featureItem}>
               <Ionicons name="heart" size={24} color="#00CFC1" />
@@ -187,16 +330,21 @@ export default function OuraRingScreen({ navigation }) {
           </View>
 
           <TouchableOpacity
-            style={styles.connectButton}
+            style={[
+              styles.connectButton,
+              !credentialsSaved && styles.connectButtonDisabled
+            ]}
             onPress={handleConnect}
-            disabled={isConnecting}
+            disabled={isConnecting || !credentialsSaved}
           >
             {isConnecting ? (
               <ActivityIndicator color="#FFF" />
             ) : (
               <>
                 <Ionicons name="link" size={24} color="#FFF" />
-                <Text style={styles.connectButtonText}>Connect Oura Ring</Text>
+                <Text style={styles.connectButtonText}>
+                  {credentialsSaved ? 'Connect Oura Ring' : 'Configure Credentials First'}
+                </Text>
               </>
             )}
           </TouchableOpacity>
@@ -281,9 +429,9 @@ export default function OuraRingScreen({ navigation }) {
                   </Text>
                 </View>
                 <View style={styles.metric}>
-                  <Text style={styles.metricLabel}>Deep Sleep</Text>
+                  <Text style={styles.metricLabel}>Score</Text>
                   <Text style={styles.metricValue}>
-                    {Math.round((healthData.sleep.deep_sleep_duration || 0) / 60)}min
+                    {healthData.sleep.score || 0}
                   </Text>
                 </View>
               </View>
@@ -413,9 +561,92 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#999',
     textAlign: 'center',
-    marginBottom: 40,
+    marginBottom: 30,
     paddingHorizontal: 20,
     lineHeight: 24,
+  },
+  // ✅ NEW: Credentials section styles
+  credentialsSection: {
+    width: '100%',
+    backgroundColor: 'rgba(0, 207, 193, 0.1)',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 207, 193, 0.3)',
+  },
+  expandButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  expandText: {
+    fontSize: 16,
+    color: '#00CFC1',
+    fontWeight: '600',
+    marginLeft: 8,
+    flex: 1,
+  },
+  savedBadge: {
+    backgroundColor: 'rgba(0, 207, 193, 0.3)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  savedBadgeText: {
+    color: '#00CFC1',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  credentialsForm: {
+    marginTop: 15,
+  },
+  inputLabel: {
+    fontSize: 14,
+    color: '#999',
+    marginBottom: 8,
+    marginTop: 12,
+    fontWeight: '600',
+  },
+  input: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 10,
+    padding: 15,
+    fontSize: 14,
+    color: '#FFF',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  saveButton: {
+    flexDirection: 'row',
+    backgroundColor: '#00CFC1',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFF',
+    marginLeft: 8,
+  },
+  helperText: {
+    fontSize: 13,
+    color: '#999',
+    marginBottom: 5,
+    lineHeight: 20,
+  },
+  linkText: {
+    color: '#00CFC1',
+    fontWeight: '600',
+  },
+  securityNote: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 10,
+    textAlign: 'center',
   },
   featuresList: {
     width: '100%',
@@ -442,6 +673,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginBottom: 20,
+  },
+  connectButtonDisabled: {
+    backgroundColor: '#555',
+    opacity: 0.6,
   },
   connectButtonText: {
     fontSize: 18,
