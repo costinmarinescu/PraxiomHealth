@@ -14,7 +14,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAppContext } from '../AppContext';
 
 export default function Tier1BiomarkerInputScreen({ navigation }) {
-  const { tier1Data, updateState, calculateTier1BioAge } = useAppContext();
+  const { state, updateState, calculateTier1BioAge } = useAppContext();
+  const tier1Data = state.tier1Data;
+
+  // ✅ NEW: Display current chronological age from state
+  const chronologicalAge = state.userProfile?.chronologicalAge;
+  const hasAge = chronologicalAge && chronologicalAge > 0;
 
   // Local state for inputs
   const [biomarkers, setBiomarkers] = useState({
@@ -29,7 +34,26 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
     hrv: tier1Data.hrv?.toString() || '', // HRV field added
   });
 
+  // Date input state for biomarker entry
+  const [entryYear, setEntryYear] = useState('');
+  const [entryMonth, setEntryMonth] = useState('');
+  const [entryDay, setEntryDay] = useState('');
+
   const [isCalculating, setIsCalculating] = useState(false);
+
+  // ✅ NEW: Check if DOB is set on mount
+  React.useEffect(() => {
+    if (!hasAge) {
+      Alert.alert(
+        'Date of Birth Required',
+        'Please set your date of birth in Settings before entering biomarkers.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Go to Settings', onPress: () => navigation.navigate('Settings') }
+        ]
+      );
+    }
+  }, []);
 
   // Handle input changes
   const handleInputChange = (field, value) => {
@@ -134,6 +158,64 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
           <View style={styles.header}>
             <Text style={styles.title}>Foundation Biomarkers</Text>
             <Text style={styles.subtitle}>Tier 1 Assessment</Text>
+            {/* ✅ NEW: Show current chronological age */}
+            {hasAge ? (
+              <View style={styles.ageIndicator}>
+                <Text style={styles.ageIndicatorText}>
+                  Your Current Age: {chronologicalAge.toFixed(0)} years
+                </Text>
+              </View>
+            ) : (
+              <View style={[styles.ageIndicator, styles.warningIndicator]}>
+                <Text style={styles.warningText}>
+                  ⚠️ Please set your date of birth in Settings first
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* ✅ NEW: Date of Entry Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>📅 Date of Entry</Text>
+            <View style={styles.dateInputRow}>
+              <View style={styles.dateInputGroup}>
+                <Text style={styles.label}>Year</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  value={entryYear}
+                  onChangeText={setEntryYear}
+                  placeholder="YYYY"
+                  placeholderTextColor="rgba(255,255,255,0.6)"
+                  keyboardType="number-pad"
+                  maxLength={4}
+                />
+              </View>
+              <View style={styles.dateInputGroup}>
+                <Text style={styles.label}>Month</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  value={entryMonth}
+                  onChangeText={setEntryMonth}
+                  placeholder="MM"
+                  placeholderTextColor="rgba(255,255,255,0.6)"
+                  keyboardType="number-pad"
+                  maxLength={2}
+                />
+              </View>
+              <View style={styles.dateInputGroup}>
+                <Text style={styles.label}>Day</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  value={entryDay}
+                  onChangeText={setEntryDay}
+                  placeholder="DD"
+                  placeholderTextColor="rgba(255,255,255,0.6)"
+                  keyboardType="number-pad"
+                  maxLength={2}
+                />
+              </View>
+            </View>
+            <Text style={styles.helperText}>Date when biomarkers were measured</Text>
           </View>
 
           {/* Oral Health Section */}
@@ -270,12 +352,15 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
 
           {/* Calculate Button */}
           <TouchableOpacity
-            style={[styles.calculateButton, isCalculating && styles.calculateButtonDisabled]}
+            style={[
+              styles.calculateButton, 
+              (isCalculating || !hasAge) && styles.calculateButtonDisabled
+            ]}
             onPress={handleCalculate}
-            disabled={isCalculating}
+            disabled={isCalculating || !hasAge}
           >
             <Text style={styles.calculateButtonText}>
-              {isCalculating ? 'Calculating...' : 'Calculate Biological Age'}
+              {isCalculating ? 'Calculating...' : !hasAge ? 'Set Date of Birth First' : 'Calculate Biological Age'}
             </Text>
           </TouchableOpacity>
 
@@ -328,6 +413,31 @@ const styles = StyleSheet.create({
     color: '#fff',
     opacity: 0.9,
   },
+  ageIndicator: {
+    marginTop: 15,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  ageIndicatorText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  warningIndicator: {
+    backgroundColor: 'rgba(255, 107, 53, 0.3)',
+    borderColor: 'rgba(255, 107, 53, 0.5)',
+  },
+  warningText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   section: {
     marginHorizontal: 20,
     marginBottom: 25,
@@ -369,6 +479,25 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     marginTop: 5,
     fontStyle: 'italic',
+  },
+  dateInputRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  dateInputGroup: {
+    flex: 1,
+  },
+  dateInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderRadius: 12,
+    padding: 15,
+    fontSize: 16,
+    color: '#fff',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    fontWeight: '600',
+    textAlign: 'center',
   },
   calculateButton: {
     backgroundColor: '#fff',
