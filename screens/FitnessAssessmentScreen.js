@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { useAppContext } from '../AppContext';
-import PraxiomAlgorithm from '../services/PraxiomAlgorithm';
+import * as PraxiomAlgorithm from '../services/PraxiomAlgorithm';
 import PraxiomBackground from '../components/PraxiomBackground';
 
 const FitnessAssessmentScreen = ({ navigation }) => {

@@ -282,7 +282,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
           {/* Upgrade to Tier 2 */}
           <TouchableOpacity
             style={styles.upgradeButton}
-            onPress={() => navigation.navigate('Tier2Input')}
+            onPress={() => navigation.navigate('Tier2BiomarkerInput')}
           >
             <Text style={styles.upgradeButtonText}>
               ⬆️ Upgrade to Tier 2 (Advanced Profiling)

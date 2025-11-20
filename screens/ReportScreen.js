@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Sharing from 'expo-sharing';
 import PraxiomBackground from '../components/PraxiomBackground';
 import { useAppContext } from '../AppContext';
-import PraxiomAlgorithm from '../services/PraxiomAlgorithm';
+import * as PraxiomAlgorithm from '../services/PraxiomAlgorithm';
 
 const ReportScreen = ({ navigation }) => {
   const { state } = useAppContext();
