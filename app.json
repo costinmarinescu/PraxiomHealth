@@ -1,26 +1,22 @@
 {
   "expo": {
-    "name": "Praxiom Health",
-    "slug": "praxiom-health",
+    "name": "PraxiomHealth",
+    "slug": "praxiomhealth",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "scheme": "praxiomhealth",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.praxiom.health",
       "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to your PineTime watch for health monitoring.",
-        "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to connect to your PineTime watch for health monitoring."
+        "NSBluetoothAlwaysUsageDescription": "PraxiomHealth needs Bluetooth to sync your biological age data with your PineTime watch.",
+        "NSBluetoothPeripheralUsageDescription": "PraxiomHealth needs Bluetooth to communicate with your PineTime watch."
       }
     },
     "android": {
@@ -34,21 +30,8 @@
         "BLUETOOTH_ADMIN",
         "BLUETOOTH_CONNECT",
         "BLUETOOTH_SCAN",
-        "ACCESS_FINE_LOCATION"
-      ],
-      "intentFilters": [
-        {
-          "action": "VIEW",
-          "data": [
-            {
-              "scheme": "praxiomhealth"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        }
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
       ]
     },
     "web": {
@@ -59,23 +42,14 @@
         "expo-build-properties",
         {
           "android": {
+            "minSdkVersion": 23,
             "compileSdkVersion": 34,
             "targetSdkVersion": 34,
-            "minSdkVersion": 23,
-            "buildToolsVersion": "34.0.0",
-            "kotlinVersion": "1.9.0"
+            "buildToolsVersion": "34.0.0"
+          },
+          "ios": {
+            "deploymentTarget": "13.4"
           }
-        }
-      ],
-      [
-        "react-native-ble-plx",
-        {
-          "isBackgroundEnabled": true,
-          "modes": [
-            "peripheral",
-            "central"
-          ],
-          "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to your PineTime watch"
         }
       ]
     ],
