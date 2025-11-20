@@ -1,638 +1,644 @@
-import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as PraxiomAlgorithm from './services/PraxiomAlgorithm';
+import React, { createContext, useState, useEffect, useCallback } from 'react';
+import * as Device from 'expo-device';
+import { Platform } from 'react-native';
+import { BleManager } from 'react-native-ble-plx';
+import SecureStorageService from './services/SecureStorageService';
+import { 
+  calculateTier1BioAge,
+  calculateTier2BioAge, 
+  calculateTier3BioAge 
+} from './services/PraxiomAlgorithm';
 
-const AppContext = createContext();
+export const AppContext = createContext();
 
-export const useAppContext = () => {
-  const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useAppContext must be used within AppProvider');
-  }
-  return context;
-};
+const bleManager = new BleManager();
+
+// PineTime BLE Service UUIDs
+const PINETIME_SERVICE_UUID = '00000000-78fc-48fe-8e23-433b3a1942d0';
+const BIO_AGE_CHAR_UUID = '00000001-78fc-48fe-8e23-433b3a1942d0';
 
 export const AppProvider = ({ children }) => {
-  console.log('🔧 AppProvider initializing...');
+  // User Profile State
+  const [dateOfBirth, setDateOfBirth] = useState(null);
+  const [chronologicalAge, setChronologicalAge] = useState(null);
   
-  // State
-  const [state, setState] = useState({
-    // User Profile
-    userId: null,
-    userProfile: {
-      dateOfBirth: null,
-      chronologicalAge: null,
-      biologicalAge: null,
-      targetBioAge: null,
-      assessmentTier: 'Foundation', // Foundation, Personalization, Optimization
-    },
+  // Biological Age State
+  const [bioAge, setBioAge] = useState(null);
+  const [lastCalculated, setLastCalculated] = useState(null);
+  
+  // Biomarker Data State
+  const [tier1Biomarkers, setTier1Biomarkers] = useState({});
+  const [tier2Biomarkers, setTier2Biomarkers] = useState({});
+  const [tier3Biomarkers, setTier3Biomarkers] = useState({});
+  
+  // Assessment Results State  
+  const [tier1Results, setTier1Results] = useState(null);
+  const [tier2Results, setTier2Results] = useState(null);
+  const [tier3Results, setTier3Results] = useState(null);
+  const [fitnessAssessment, setFitnessAssessment] = useState(null);
+  
+  // History State
+  const [biomarkerHistory, setBiomarkerHistory] = useState([]);
+  
+  // Watch Connection State
+  const [watchConnected, setWatchConnected] = useState(false);
+  const [connectedDevice, setConnectedDevice] = useState(null);
+  const [autoSync, setAutoSync] = useState(true);
+  
+  // Settings State
+  const [notifications, setNotifications] = useState(true);
+  const [dataSharing, setDataSharing] = useState(false);
+  
+  // Loading State
+  const [isLoading, setIsLoading] = useState(true);
 
-    // Tier 1 - Foundation
-    tier1Data: {
-      // Oral Health Biomarkers
-      salivaryPH: null,
-      mmp8: null,
-      flowRate: null,
-      // Systemic Health Biomarkers
-      hsCRP: null,
-      omega3Index: null,
-      hba1c: null,
-      gdf15: null,
-      vitaminD: null,
-      // Optional HRV
-      hrv: null,
-    },
-
-    // Tier 2 - Personalization
-    tier2Data: {
-      // Advanced Inflammatory Panel
-      il6: null,
-      il1b: null,
-      ohd8g: null,
-      proteinCarbonyls: null,
-      inflammAge: null,
-      // NAD+ Metabolism Panel
-      nadPlus: null,
-      nadh: null,
-      nmethylNicotinamide: null,
-      cd38Activity: null,
-      // Wearable Integration (30-day averages)
-      hrvRMSSD: null,
-      sleepEfficiency: null,
-      deepSleep: null,
-      remSleep: null,
-      dailySteps: null,
-      activeMinutes: null,
-      // Oral Microbiome
-      pGingivalis: null,
-      fNucleatum: null,
-      tDenticola: null,
-      shannonDiversity: null,
-      dysbiosisIndex: null,
-    },
-
-    // Tier 3 - Optimization
-    tier3Data: {
-      // Epigenetic Clocks
-      dunedinPACE: null,
-      grimAge2: null,
-      phenoAge: null,
-      intrinsicCapacity: null,
-      // Proteomics
-      gdf15Protein: null,
-      igfbp2: null,
-      cystatinC: null,
-      osteopontin: null,
-      proteinAge: null,
-      // Cellular Senescence
-      p16INK4a: null,
-      saBetaGal: null,
-      saspCytokines: null,
-      // Optional Advanced Imaging
-      mriScore: null,
-      // Optional Genetic Risk
-      geneticRiskScore: null,
-    },
-
-    // Optional Fitness Score (Tier 1)
-    fitnessData: {
-      aerobicFitness: null,
-      flexibilityPosture: null,
-      coordinationBalance: null,
-      mentalPreparedness: null,
-      compositeScore: null,
-    },
-
-    // Calculated Scores
-    scores: {
-      oralHealthScore: null,
-      systemicHealthScore: null,
-      inflammatoryScore: null,
-      nadMetabolismScore: null,
-      wearableScore: null,
-      microbiomeScore: null,
-      fitnessScore: null,
-      vitalityIndex: null,
-      bioAgeDeviation: null,
-    },
-
-    // History
-    assessmentHistory: [],
-    
-    // Watch Connection
-    watchConnected: false,
-    watchDevice: null,
-    lastSyncTime: null,
-    
-    // Loading state
-    isLoading: true,
-    loadError: null,
-  });
-
-  // Refs for services
-  const servicesInitialized = useRef(false);
-  const isMounted = useRef(true);
-
-  // Initialize services on mount
+  /**
+   * Initialize app - load all data from secure storage
+   */
   useEffect(() => {
-    console.log('🚀 AppContext useEffect triggered');
-    
-    const init = async () => {
-      if (!servicesInitialized.current) {
-        try {
-          console.log('📱 Starting initialization...');
-          await initializeServices();
-          await loadStoredData();
-          
-          if (isMounted.current) {
-            servicesInitialized.current = true;
-            setState(prev => ({ ...prev, isLoading: false }));
-            console.log('✅ Initialization complete');
-          }
-        } catch (error) {
-          console.error('❌ Initialization error:', error);
-          if (isMounted.current) {
-            setState(prev => ({ 
-              ...prev, 
-              isLoading: false,
-              loadError: error.message 
-            }));
-          }
+    const initializeApp = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Load user profile
+        const savedDOB = await SecureStorageService.getItem('dateOfBirth');
+        if (savedDOB) {
+          setDateOfBirth(savedDOB);
+          const age = calculateAge(savedDOB);
+          setChronologicalAge(age);
         }
+        
+        // Load biological age
+        const savedBioAge = await SecureStorageService.getItem('bioAge');
+        if (savedBioAge) setBioAge(savedBioAge);
+        
+        const savedLastCalc = await SecureStorageService.getItem('lastCalculated');
+        if (savedLastCalc) setLastCalculated(savedLastCalc);
+        
+        // Load biomarkers
+        const savedT1 = await SecureStorageService.getItem('tier1Biomarkers');
+        if (savedT1) setTier1Biomarkers(savedT1);
+        
+        const savedT2 = await SecureStorageService.getItem('tier2Biomarkers');
+        if (savedT2) setTier2Biomarkers(savedT2);
+        
+        const savedT3 = await SecureStorageService.getItem('tier3Biomarkers');
+        if (savedT3) setTier3Biomarkers(savedT3);
+        
+        // Load assessment results
+        const savedT1Results = await SecureStorageService.getItem('tier1Results');
+        if (savedT1Results) setTier1Results(savedT1Results);
+        
+        const savedT2Results = await SecureStorageService.getItem('tier2Results');
+        if (savedT2Results) setTier2Results(savedT2Results);
+        
+        const savedT3Results = await SecureStorageService.getItem('tier3Results');
+        if (savedT3Results) setTier3Results(savedT3Results);
+        
+        const savedFitness = await SecureStorageService.getItem('fitnessAssessment');
+        if (savedFitness) setFitnessAssessment(savedFitness);
+        
+        // Load history
+        const savedHistory = await SecureStorageService.getItem('biomarkerHistory');
+        if (savedHistory) setBiomarkerHistory(savedHistory);
+        
+        // Load settings (unencrypted)
+        const savedAutoSync = await SecureStorageService.getItem('autoSync');
+        if (savedAutoSync !== null) setAutoSync(savedAutoSync);
+        
+        const savedNotif = await SecureStorageService.getItem('notifications');
+        if (savedNotif !== null) setNotifications(savedNotif);
+        
+        const savedSharing = await SecureStorageService.getItem('dataSharing');
+        if (savedSharing !== null) setDataSharing(savedSharing);
+        
+        console.log('✅ App initialized successfully');
+      } catch (error) {
+        console.error('❌ App initialization error:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
     
-    init();
-    
-    return () => {
-      isMounted.current = false;
-    };
+    initializeApp();
   }, []);
 
-  // Initialize any required services
-  const initializeServices = async () => {
+  /**
+   * Calculate age from date of birth
+   */
+  const calculateAge = (dob) => {
+    if (!dob) return null;
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  /**
+   * Save date of birth and calculate age
+   */
+  const saveDateOfBirth = async (dob) => {
     try {
-      console.log('📱 Initializing app services...');
-      // Add any service initialization here
-      console.log('✅ Services initialized');
-      return true;
+      await SecureStorageService.setItem('dateOfBirth', dob);
+      setDateOfBirth(dob);
+      const age = calculateAge(dob);
+      setChronologicalAge(age);
+      console.log(`✅ DOB saved: ${dob}, Age: ${age}`);
     } catch (error) {
-      console.error('❌ Service initialization error:', error);
+      console.error('❌ Error saving DOB:', error);
       throw error;
     }
   };
 
-  // Load stored data from AsyncStorage
-  const loadStoredData = async () => {
-    try {
-      console.log('💾 Loading stored data...');
-      
-      const [storedProfile, storedTier1, storedTier2, storedTier3, storedFitness, storedHistory] = await Promise.all([
-        AsyncStorage.getItem('userProfile').catch(e => { console.warn('Profile load error:', e); return null; }),
-        AsyncStorage.getItem('tier1Data').catch(e => { console.warn('Tier1 load error:', e); return null; }),
-        AsyncStorage.getItem('tier2Data').catch(e => { console.warn('Tier2 load error:', e); return null; }),
-        AsyncStorage.getItem('tier3Data').catch(e => { console.warn('Tier3 load error:', e); return null; }),
-        AsyncStorage.getItem('fitnessData').catch(e => { console.warn('Fitness load error:', e); return null; }),
-        AsyncStorage.getItem('assessmentHistory').catch(e => { console.warn('History load error:', e); return null; }),
-      ]);
-
-      const updates = {};
-      
-      if (storedProfile) {
-        try {
-          const profile = JSON.parse(storedProfile);
-          updates.userProfile = { ...state.userProfile, ...profile };
-          console.log('✅ Loaded user profile');
-        } catch (e) {
-          console.warn('Failed to parse user profile:', e);
-        }
-      }
-
-      if (storedTier1) {
-        try {
-          updates.tier1Data = { ...state.tier1Data, ...JSON.parse(storedTier1) };
-          console.log('✅ Loaded tier 1 data');
-        } catch (e) {
-          console.warn('Failed to parse tier 1 data:', e);
-        }
-      }
-
-      if (storedTier2) {
-        try {
-          updates.tier2Data = { ...state.tier2Data, ...JSON.parse(storedTier2) };
-          console.log('✅ Loaded tier 2 data');
-        } catch (e) {
-          console.warn('Failed to parse tier 2 data:', e);
-        }
-      }
-
-      if (storedTier3) {
-        try {
-          updates.tier3Data = { ...state.tier3Data, ...JSON.parse(storedTier3) };
-          console.log('✅ Loaded tier 3 data');
-        } catch (e) {
-          console.warn('Failed to parse tier 3 data:', e);
-        }
-      }
-
-      if (storedFitness) {
-        try {
-          updates.fitnessData = { ...state.fitnessData, ...JSON.parse(storedFitness) };
-          console.log('✅ Loaded fitness data');
-        } catch (e) {
-          console.warn('Failed to parse fitness data:', e);
-        }
-      }
-
-      if (storedHistory) {
-        try {
-          updates.assessmentHistory = JSON.parse(storedHistory);
-          console.log('✅ Loaded assessment history');
-        } catch (e) {
-          console.warn('Failed to parse assessment history:', e);
-        }
-      }
-
-      if (Object.keys(updates).length > 0 && isMounted.current) {
-        setState(prev => ({ ...prev, ...updates }));
-      }
-
-      console.log('✅ Loaded stored data successfully');
-      return true;
-    } catch (error) {
-      console.error('❌ Error loading stored data:', error);
-      // Don't throw - allow app to continue with default state
-      return false;
-    }
-  };
-
-  // Update state with automatic persistence
-  const updateState = async (updates) => {
-    try {
-      setState(prev => {
-        const newState = { ...prev, ...updates };
-        
-        // Persist specific sections to AsyncStorage (non-blocking)
-        if (updates.userProfile) {
-          AsyncStorage.setItem('userProfile', JSON.stringify(newState.userProfile)).catch(e => 
-            console.warn('Failed to save userProfile:', e)
-          );
-        }
-        if (updates.tier1Data) {
-          AsyncStorage.setItem('tier1Data', JSON.stringify(newState.tier1Data)).catch(e => 
-            console.warn('Failed to save tier1Data:', e)
-          );
-        }
-        if (updates.tier2Data) {
-          AsyncStorage.setItem('tier2Data', JSON.stringify(newState.tier2Data)).catch(e => 
-            console.warn('Failed to save tier2Data:', e)
-          );
-        }
-        if (updates.tier3Data) {
-          AsyncStorage.setItem('tier3Data', JSON.stringify(newState.tier3Data)).catch(e => 
-            console.warn('Failed to save tier3Data:', e)
-          );
-        }
-        if (updates.fitnessData) {
-          AsyncStorage.setItem('fitnessData', JSON.stringify(newState.fitnessData)).catch(e => 
-            console.warn('Failed to save fitnessData:', e)
-          );
-        }
-        if (updates.assessmentHistory) {
-          AsyncStorage.setItem('assessmentHistory', JSON.stringify(newState.assessmentHistory)).catch(e => 
-            console.warn('Failed to save assessmentHistory:', e)
-          );
-        }
-        
-        return newState;
-      });
-    } catch (error) {
-      console.error('❌ updateState error:', error);
-    }
-  };
-
-  // Calculate chronological age from date of birth
-  const calculateChronologicalAge = (dateOfBirth) => {
-    try {
-      if (!dateOfBirth) return null;
-      
-      const dob = new Date(dateOfBirth);
-      if (isNaN(dob.getTime())) {
-        console.warn('Invalid date of birth:', dateOfBirth);
-        return null;
-      }
-      
-      const today = new Date();
-      let age = today.getFullYear() - dob.getFullYear();
-      const monthDiff = today.getMonth() - dob.getMonth();
-      
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
-        age--;
-      }
-      
-      return age;
-    } catch (error) {
-      console.error('❌ calculateChronologicalAge error:', error);
-      return null;
-    }
-  };
-
-  // Update date of birth and recalculate age
-  const updateDateOfBirth = async (dateOfBirth) => {
-    try {
-      const chronologicalAge = calculateChronologicalAge(dateOfBirth);
-      
-      await updateState({
-        userProfile: {
-          ...state.userProfile,
-          dateOfBirth,
-          chronologicalAge,
-        }
-      });
-
-      console.log('✅ Date of birth updated:', { dateOfBirth, chronologicalAge });
-    } catch (error) {
-      console.error('❌ updateDateOfBirth error:', error);
-      throw error;
-    }
-  };
-
-  // ========================================
-  // TIER 1 CALCULATION - Uses PraxiomAlgorithm.js
-  // ========================================
+  /**
+   * Calculate Tier 1 Bio-Age
+   */
   const calculateTier1BioAge = async () => {
     try {
-      // ✅ FIX: Reload chronologicalAge from AsyncStorage to ensure we have latest value
-      let chronAge = state.userProfile.chronologicalAge;
-      
-      if (!chronAge || chronAge <= 0) {
-        // Try to load from AsyncStorage in case state is stale
-        const storedAge = await AsyncStorage.getItem('chronologicalAge');
-        if (storedAge) {
-          chronAge = parseFloat(storedAge);
-          console.log('✅ Loaded chronological age from storage:', chronAge);
-        }
-      }
-      
-      if (!chronAge || chronAge <= 0) {
-        throw new Error('Chronological age not set. Please enter your date of birth in Settings first.');
+      if (!chronologicalAge) {
+        throw new Error('Please set your date of birth first');
       }
 
-      console.log('🧮 Starting Tier 1 Bio-Age Calculation...');
-      console.log('📊 Input Data:', {
-        chronologicalAge: chronAge,
-        tier1Data: state.tier1Data,
-        fitnessData: state.fitnessData,
-      });
+      console.log('🧮 Calculating Tier 1 Bio-Age...');
+      console.log('Input data:', { chronologicalAge, tier1Biomarkers, fitnessAssessment });
 
-      // Calculate using the PraxiomAlgorithm module
-      const result = PraxiomAlgorithm.calculateTier1BioAge(
-        chronAge,
-        state.tier1Data,
-        state.fitnessData
+      // Call algorithm
+      const results = calculateTier1BioAge(
+        chronologicalAge,
+        tier1Biomarkers,
+        fitnessAssessment
       );
 
-      console.log('✅ Tier 1 Calculation Result:', result);
+      console.log('📊 Tier 1 Results:', results);
 
-      // Update state with results
-      await updateState({
-        userProfile: {
-          ...state.userProfile,
-          biologicalAge: result.bioAge,
-          targetBioAge: Math.max(18, result.bioAge - 5), // Target is 5 years younger
-        },
-        scores: {
-          ...state.scores,
-          oralHealthScore: result.scores.oralHealthScore,
-          systemicHealthScore: result.scores.systemicHealthScore,
-          fitnessScore: result.scores.fitnessScore,
-          vitalityIndex: result.scores.vitalityIndex,
-          bioAgeDeviation: result.bioAge - chronAge,
-        },
-        assessmentHistory: [
-          {
-            date: new Date().toISOString(),
-            tier: 'Foundation',
-            biologicalAge: result.bioAge,
-            chronologicalAge: chronAge,
-            scores: result.scores,
-            biomarkers: { ...state.tier1Data },
-          },
-          ...state.assessmentHistory,
-        ],
+      // Save results
+      await SecureStorageService.setItem('tier1Results', results);
+      setTier1Results(results);
+
+      // Save bio-age
+      await SecureStorageService.setItem('bioAge', results.bioAge);
+      setBioAge(results.bioAge);
+
+      const timestamp = new Date().toISOString();
+      await SecureStorageService.setItem('lastCalculated', timestamp);
+      setLastCalculated(timestamp);
+
+      // 🔥 FIX #1: Add to history immediately
+      await addToHistory({
+        tier: 1,
+        bioAge: results.bioAge,
+        ohs: results.oralHealthScore,
+        shs: results.systemicHealthScore,
+        fs: results.fitnessScore,
+        timestamp: timestamp
       });
 
-      return result;
+      // 🔥 FIX #2: Auto-sync to watch if enabled
+      if (autoSync && watchConnected && connectedDevice) {
+        console.log('🔄 Auto-syncing to watch...');
+        await syncBioAgeToWatch(results.bioAge);
+      }
+
+      console.log('✅ Tier 1 calculation complete');
+      return results;
+
     } catch (error) {
       console.error('❌ Tier 1 calculation error:', error);
       throw error;
     }
   };
 
-  // ========================================
-  // TIER 2 CALCULATION - Uses PraxiomAlgorithm.js
-  // ========================================
+  /**
+   * Calculate Tier 2 Bio-Age
+   */
   const calculateTier2BioAge = async () => {
     try {
-      const chronAge = state.userProfile.chronologicalAge;
-      
-      if (!chronAge || chronAge <= 0) {
-        throw new Error('Chronological age not set. Please enter date of birth first.');
+      if (!chronologicalAge) {
+        throw new Error('Please set your date of birth first');
+      }
+      if (!tier1Results) {
+        throw new Error('Please complete Tier 1 assessment first');
       }
 
-      console.log('🧮 Starting Tier 2 Bio-Age Calculation...');
-      console.log('📊 Input Data:', {
-        chronologicalAge: chronAge,
-        tier1Data: state.tier1Data,
-        tier2Data: state.tier2Data,
-        fitnessData: state.fitnessData,
-      });
+      console.log('🧮 Calculating Tier 2 Bio-Age...');
 
-      // Calculate using the PraxiomAlgorithm module
-      const result = PraxiomAlgorithm.calculateTier2BioAge(
-        chronAge,
-        state.tier1Data,
-        state.tier2Data,
-        state.fitnessData
+      const results = calculateTier2BioAge(
+        chronologicalAge,
+        tier1Results,
+        tier2Biomarkers,
+        fitnessAssessment
       );
 
-      console.log('✅ Tier 2 Calculation Result:', result);
+      console.log('📊 Tier 2 Results:', results);
 
-      // Update state with results
-      await updateState({
-        userProfile: {
-          ...state.userProfile,
-          biologicalAge: result.bioAge,
-          targetBioAge: Math.max(18, result.bioAge - 5),
-          assessmentTier: 'Personalization',
-        },
-        scores: {
-          ...state.scores,
-          oralHealthScore: result.scores.oralHealthScore,
-          systemicHealthScore: result.scores.systemicHealthScore,
-          inflammatoryScore: result.scores.inflammatoryScore,
-          nadMetabolismScore: result.scores.nadMetabolismScore,
-          wearableScore: result.scores.wearableScore,
-          microbiomeScore: result.scores.microbiomeScore,
-          fitnessScore: result.scores.fitnessScore,
-          vitalityIndex: result.scores.vitalityIndex,
-          bioAgeDeviation: result.bioAge - chronAge,
-        },
-        assessmentHistory: [
-          {
-            date: new Date().toISOString(),
-            tier: 'Personalization',
-            biologicalAge: result.bioAge,
-            chronologicalAge: chronAge,
-            scores: result.scores,
-            biomarkers: { ...state.tier1Data, ...state.tier2Data },
-          },
-          ...state.assessmentHistory,
-        ],
+      await SecureStorageService.setItem('tier2Results', results);
+      setTier2Results(results);
+
+      await SecureStorageService.setItem('bioAge', results.bioAge);
+      setBioAge(results.bioAge);
+
+      const timestamp = new Date().toISOString();
+      await SecureStorageService.setItem('lastCalculated', timestamp);
+      setLastCalculated(timestamp);
+
+      // 🔥 FIX #1: Add to history
+      await addToHistory({
+        tier: 2,
+        bioAge: results.bioAge,
+        ohs: results.oralHealthScore,
+        shs: results.systemicHealthScore,
+        inflammatoryScore: results.inflammatoryScore,
+        nadScore: results.nadMetabolismScore,
+        timestamp: timestamp
       });
 
-      return result;
+      // 🔥 FIX #2: Auto-sync to watch
+      if (autoSync && watchConnected && connectedDevice) {
+        await syncBioAgeToWatch(results.bioAge);
+      }
+
+      console.log('✅ Tier 2 calculation complete');
+      return results;
+
     } catch (error) {
       console.error('❌ Tier 2 calculation error:', error);
       throw error;
     }
   };
 
-  // ========================================
-  // TIER 3 CALCULATION - Uses PraxiomAlgorithm.js
-  // ========================================
+  /**
+   * Calculate Tier 3 Bio-Age
+   */
   const calculateTier3BioAge = async () => {
     try {
-      const chronAge = state.userProfile.chronologicalAge;
-      
-      if (!chronAge || chronAge <= 0) {
-        throw new Error('Chronological age not set. Please enter date of birth first.');
+      if (!chronologicalAge) {
+        throw new Error('Please set your date of birth first');
+      }
+      if (!tier2Results) {
+        throw new Error('Please complete Tier 2 assessment first');
       }
 
-      console.log('🧮 Starting Tier 3 Bio-Age Calculation...');
-      console.log('📊 Input Data:', {
-        chronologicalAge: chronAge,
-        tier1Data: state.tier1Data,
-        tier2Data: state.tier2Data,
-        tier3Data: state.tier3Data,
-        fitnessData: state.fitnessData,
-      });
+      console.log('🧮 Calculating Tier 3 Bio-Age...');
 
-      // Calculate using the PraxiomAlgorithm module
-      const result = PraxiomAlgorithm.calculateTier3BioAge(
-        chronAge,
-        state.tier1Data,
-        state.tier2Data,
-        state.tier3Data,
-        state.fitnessData
+      const results = calculateTier3BioAge(
+        chronologicalAge,
+        tier2Results,
+        tier3Biomarkers
       );
 
-      console.log('✅ Tier 3 Calculation Result:', result);
+      console.log('📊 Tier 3 Results:', results);
 
-      // Update state with results
-      await updateState({
-        userProfile: {
-          ...state.userProfile,
-          biologicalAge: result.bioAge,
-          targetBioAge: Math.max(18, result.bioAge - 10),
-          assessmentTier: 'Optimization',
-        },
-        scores: {
-          ...state.scores,
-          oralHealthScore: result.scores.oralHealthScore,
-          systemicHealthScore: result.scores.systemicHealthScore,
-          inflammatoryScore: result.scores.inflammatoryScore,
-          nadMetabolismScore: result.scores.nadMetabolismScore,
-          wearableScore: result.scores.wearableScore,
-          microbiomeScore: result.scores.microbiomeScore,
-          fitnessScore: result.scores.fitnessScore,
-          vitalityIndex: result.scores.vitalityIndex,
-          bioAgeDeviation: result.bioAge - chronAge,
-        },
-        assessmentHistory: [
-          {
-            date: new Date().toISOString(),
-            tier: 'Optimization',
-            biologicalAge: result.bioAge,
-            chronologicalAge: chronAge,
-            scores: result.scores,
-            biomarkers: { ...state.tier1Data, ...state.tier2Data, ...state.tier3Data },
-          },
-          ...state.assessmentHistory,
-        ],
+      await SecureStorageService.setItem('tier3Results', results);
+      setTier3Results(results);
+
+      await SecureStorageService.setItem('bioAge', results.bioAge);
+      setBioAge(results.bioAge);
+
+      const timestamp = new Date().toISOString();
+      await SecureStorageService.setItem('lastCalculated', timestamp);
+      setLastCalculated(timestamp);
+
+      // 🔥 FIX #1: Add to history
+      await addToHistory({
+        tier: 3,
+        bioAge: results.bioAge,
+        epigeneticDeviation: results.epigeneticDeviation,
+        proteomicAdjustment: results.proteomicAdjustment,
+        senescenceBurden: results.senescenceBurden,
+        timestamp: timestamp
       });
 
-      return result;
+      // 🔥 FIX #2: Auto-sync to watch
+      if (autoSync && watchConnected && connectedDevice) {
+        await syncBioAgeToWatch(results.bioAge);
+      }
+
+      console.log('✅ Tier 3 calculation complete');
+      return results;
+
     } catch (error) {
       console.error('❌ Tier 3 calculation error:', error);
       throw error;
     }
   };
 
-  // Watch connection management
-  const setWatchConnection = async (connected, device = null) => {
+  /**
+   * 🔥 FIX #3: Add entry to history with proper persistence
+   */
+  const addToHistory = async (entry) => {
     try {
-      await updateState({
-        watchConnected: connected,
-        watchDevice: device,
-        lastSyncTime: connected ? new Date().toISOString() : state.lastSyncTime,
-      });
+      console.log('📝 Adding to history:', entry);
+      
+      const newHistory = [entry, ...biomarkerHistory];
+      
+      // Save to storage immediately
+      await SecureStorageService.setItem('biomarkerHistory', newHistory);
+      
+      // Update state
+      setBiomarkerHistory(newHistory);
+      
+      console.log('✅ History updated. Total entries:', newHistory.length);
     } catch (error) {
-      console.error('❌ setWatchConnection error:', error);
+      console.error('❌ Error adding to history:', error);
+      throw error;
     }
   };
 
-  // Context value - useMemo to prevent recreating on every render
-  const contextValue = React.useMemo(() => ({
-    // State - spread all state properties
-    state,
-    userId: state.userId,
-    userProfile: state.userProfile,
-    tier1Data: state.tier1Data,
-    tier2Data: state.tier2Data,
-    tier3Data: state.tier3Data,
-    fitnessData: state.fitnessData,
-    scores: state.scores,
-    assessmentHistory: state.assessmentHistory,
-    watchConnected: state.watchConnected,
-    watchDevice: state.watchDevice,
-    lastSyncTime: state.lastSyncTime,
-    isLoading: state.isLoading,
-    loadError: state.loadError,
+  /**
+   * Save Tier 1 biomarkers
+   */
+  const saveTier1Biomarkers = async (biomarkers) => {
+    try {
+      await SecureStorageService.setItem('tier1Biomarkers', biomarkers);
+      setTier1Biomarkers(biomarkers);
+      console.log('✅ Tier 1 biomarkers saved');
+    } catch (error) {
+      console.error('❌ Error saving Tier 1 biomarkers:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Save Tier 2 biomarkers
+   */
+  const saveTier2Biomarkers = async (biomarkers) => {
+    try {
+      await SecureStorageService.setItem('tier2Biomarkers', biomarkers);
+      setTier2Biomarkers(biomarkers);
+      console.log('✅ Tier 2 biomarkers saved');
+    } catch (error) {
+      console.error('❌ Error saving Tier 2 biomarkers:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Save Tier 3 biomarkers
+   */
+  const saveTier3Biomarkers = async (biomarkers) => {
+    try {
+      await SecureStorageService.setItem('tier3Biomarkers', biomarkers);
+      setTier3Biomarkers(biomarkers);
+      console.log('✅ Tier 3 biomarkers saved');
+    } catch (error) {
+      console.error('❌ Error saving Tier 3 biomarkers:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Save fitness assessment
+   */
+  const saveFitnessAssessment = async (assessment) => {
+    try {
+      await SecureStorageService.setItem('fitnessAssessment', assessment);
+      setFitnessAssessment(assessment);
+      console.log('✅ Fitness assessment saved');
+    } catch (error) {
+      console.error('❌ Error saving fitness assessment:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * 🔥 FIX #4: Sync bio-age to watch with proper error handling
+   */
+  const syncBioAgeToWatch = async (bioAgeValue = null) => {
+    try {
+      const ageToSync = bioAgeValue || bioAge;
+      
+      if (!ageToSync) {
+        throw new Error('No bio-age to sync');
+      }
+      
+      if (!watchConnected || !connectedDevice) {
+        throw new Error('Watch not connected');
+      }
+
+      console.log(`📡 Syncing bio-age to watch: ${ageToSync}`);
+
+      // Convert bio-age to bytes for BLE transmission
+      const ageBytes = Buffer.from(ageToSync.toString());
+      const base64Data = ageBytes.toString('base64');
+
+      // Write to characteristic
+      await connectedDevice.writeCharacteristicWithResponseForService(
+        PINETIME_SERVICE_UUID,
+        BIO_AGE_CHAR_UUID,
+        base64Data
+      );
+
+      console.log('✅ Bio-age synced to watch successfully');
+      return true;
+
+    } catch (error) {
+      console.error('❌ Watch sync error:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Connect to PineTime watch
+   */
+  const connectToWatch = async () => {
+    try {
+      console.log('🔍 Scanning for PineTime watch...');
+
+      const devices = await bleManager.startDeviceScan(
+        [PINETIME_SERVICE_UUID],
+        null,
+        (error, device) => {
+          if (error) {
+            console.error('Scan error:', error);
+            return;
+          }
+
+          if (device && device.name?.includes('PineTime')) {
+            bleManager.stopDeviceScan();
+            connectToDevice(device);
+          }
+        }
+      );
+
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        bleManager.stopDeviceScan();
+        console.log('⏱️ Scan timeout');
+      }, 10000);
+
+    } catch (error) {
+      console.error('❌ Connection error:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Connect to specific device
+   */
+  const connectToDevice = async (device) => {
+    try {
+      const connected = await device.connect();
+      await connected.discoverAllServicesAndCharacteristics();
+      
+      setConnectedDevice(connected);
+      setWatchConnected(true);
+      
+      console.log('✅ Connected to PineTime watch');
+
+      // Auto-sync if enabled and bio-age exists
+      if (autoSync && bioAge) {
+        await syncBioAgeToWatch();
+      }
+
+    } catch (error) {
+      console.error('❌ Device connection error:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Disconnect from watch
+   */
+  const disconnectFromWatch = async () => {
+    try {
+      if (connectedDevice) {
+        await connectedDevice.cancelConnection();
+      }
+      setConnectedDevice(null);
+      setWatchConnected(false);
+      console.log('✅ Disconnected from watch');
+    } catch (error) {
+      console.error('❌ Disconnect error:', error);
+    }
+  };
+
+  /**
+   * 🔥 FIX #5: Toggle auto-sync with proper persistence
+   */
+  const toggleAutoSync = async (value) => {
+    try {
+      console.log(`🔄 Setting auto-sync to: ${value}`);
+      
+      // Save to storage first
+      await SecureStorageService.setItem('autoSync', value);
+      
+      // Then update state
+      setAutoSync(value);
+      
+      console.log('✅ Auto-sync setting saved');
+      
+      // If enabling and conditions are met, sync immediately
+      if (value && watchConnected && bioAge) {
+        await syncBioAgeToWatch();
+      }
+      
+    } catch (error) {
+      console.error('❌ Error toggling auto-sync:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Toggle notifications
+   */
+  const toggleNotifications = async (value) => {
+    try {
+      await SecureStorageService.setItem('notifications', value);
+      setNotifications(value);
+    } catch (error) {
+      console.error('❌ Error toggling notifications:', error);
+    }
+  };
+
+  /**
+   * Toggle data sharing
+   */
+  const toggleDataSharing = async (value) => {
+    try {
+      await SecureStorageService.setItem('dataSharing', value);
+      setDataSharing(value);
+    } catch (error) {
+      console.error('❌ Error toggling data sharing:', error);
+    }
+  };
+
+  /**
+   * Get watch connection info
+   */
+  const getWatchInfo = () => {
+    return {
+      connected: watchConnected,
+      deviceName: connectedDevice?.name || 'Not connected',
+      autoSync: autoSync
+    };
+  };
+
+  // Context value
+  const value = {
+    // User Profile
+    dateOfBirth,
+    chronologicalAge,
+    saveDateOfBirth,
     
-    // Functions
-    updateState,
-    updateDateOfBirth,
-    calculateChronologicalAge,
+    // Biological Age
+    bioAge,
+    lastCalculated,
+    
+    // Biomarkers
+    tier1Biomarkers,
+    tier2Biomarkers,
+    tier3Biomarkers,
+    saveTier1Biomarkers,
+    saveTier2Biomarkers,
+    saveTier3Biomarkers,
+    
+    // Assessment Results
+    tier1Results,
+    tier2Results,
+    tier3Results,
+    fitnessAssessment,
+    saveFitnessAssessment,
+    
+    // Calculations
     calculateTier1BioAge,
     calculateTier2BioAge,
     calculateTier3BioAge,
-    setWatchConnection,
-  }), [
-    state,
-    state.userId,
-    state.userProfile,
-    state.tier1Data,
-    state.tier2Data,
-    state.tier3Data,
-    state.fitnessData,
-    state.scores,
-    state.assessmentHistory,
-    state.watchConnected,
-    state.watchDevice,
-    state.lastSyncTime,
-    state.isLoading,
-    state.loadError,
-  ]);
+    
+    // History
+    biomarkerHistory,
+    addToHistory,
+    
+    // Watch Connection
+    watchConnected,
+    connectedDevice,
+    autoSync,
+    connectToWatch,
+    disconnectFromWatch,
+    syncBioAgeToWatch,
+    toggleAutoSync,
+    getWatchInfo,
+    
+    // Settings
+    notifications,
+    dataSharing,
+    toggleNotifications,
+    toggleDataSharing,
+    
+    // Loading
+    isLoading
+  };
 
-  console.log('✅ AppContext render complete, isLoading:', state.isLoading);
-  console.log('✅ Context value has userProfile:', !!contextValue.userProfile);
+  if (isLoading) {
+    return null; // Or return a loading screen component
+  }
 
   return (
-    <AppContext.Provider value={contextValue}>
+    <AppContext.Provider value={value}>
       {children}
     </AppContext.Provider>
   );
 };
-
-export default AppContext;
