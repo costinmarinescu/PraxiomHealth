@@ -1,30 +1,38 @@
-name: Build Praxiom Health APK
+name: Build Praxiom Health Android App
 
 on:
   push:
+    branches: [ main ]
+  pull_request:
     branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-      
+        uses: actions/checkout@v3
+
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
           node-version: 18
-      
-      - name: Setup Expo and EAS
+          cache: 'npm'
+
+      - name: Setup Expo
         uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
-      
+
       - name: Install dependencies
-        run: npm install
-      
-      - name: Build Android APK with cleared cache
-        run: eas build --platform android --profile preview --non-interactive --clear-cache
+        run: npm install --legacy-peer-deps
+
+      - name: Run EAS Init
+        run: eas init --id ${{ secrets.EXPO_PROJECT_ID }} --non-interactive
+        continue-on-error: true
+
+      - name: Build Android APK
+        run: eas build --platform android --profile preview --non-interactive
