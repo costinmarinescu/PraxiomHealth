@@ -3,10 +3,13 @@ import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { BleManager } from 'react-native-ble-plx';
 import SecureStorageService from './services/SecureStorageService';
+import { encode as base64Encode } from 'base-64';
+
+// ✅ FIX #1: Import with aliases to avoid shadowing
 import { 
-  calculateTier1BioAge,
-  calculateTier2BioAge, 
-  calculateTier3BioAge 
+  calculateTier1BioAge as tier1Algorithm,
+  calculateTier2BioAge as tier2Algorithm, 
+  calculateTier3BioAge as tier3Algorithm 
 } from './services/PraxiomAlgorithm';
 
 export const AppContext = createContext();
@@ -102,15 +105,21 @@ export const AppProvider = ({ children }) => {
         const savedHistory = await SecureStorageService.getItem('biomarkerHistory');
         if (savedHistory) setBiomarkerHistory(savedHistory);
         
-        // Load settings (unencrypted)
+        // ✅ FIX #2: Ensure boolean values properly restored
         const savedAutoSync = await SecureStorageService.getItem('autoSync');
-        if (savedAutoSync !== null) setAutoSync(savedAutoSync);
+        if (savedAutoSync !== null) {
+          setAutoSync(savedAutoSync === true || savedAutoSync === 'true');
+        }
         
         const savedNotif = await SecureStorageService.getItem('notifications');
-        if (savedNotif !== null) setNotifications(savedNotif);
+        if (savedNotif !== null) {
+          setNotifications(savedNotif === true || savedNotif === 'true');
+        }
         
         const savedSharing = await SecureStorageService.getItem('dataSharing');
-        if (savedSharing !== null) setDataSharing(savedSharing);
+        if (savedSharing !== null) {
+          setDataSharing(savedSharing === true || savedSharing === 'true');
+        }
         
         console.log('✅ App initialized successfully');
       } catch (error) {
@@ -155,19 +164,19 @@ export const AppProvider = ({ children }) => {
   };
 
   /**
-   * Calculate Tier 1 Bio-Age
+   * ✅ FIX #1: Calculate Tier 1 Bio-Age using imported algorithm
    */
-  const calculateTier1BioAge = async () => {
+  const processTier1Calculation = async () => {
     try {
       if (!chronologicalAge) {
         throw new Error('Please set your date of birth first');
       }
 
-      console.log('🧮 Calculating Tier 1 Bio-Age...');
+      console.log('🧮 Calculating Tier 1 Bio-Age with PraxiomAlgorithm...');
       console.log('Input data:', { chronologicalAge, tier1Biomarkers, fitnessAssessment });
 
-      // Call algorithm
-      const results = calculateTier1BioAge(
+      // ✅ Call the IMPORTED algorithm function (not local)
+      const results = tier1Algorithm(
         chronologicalAge,
         tier1Biomarkers,
         fitnessAssessment
@@ -187,7 +196,7 @@ export const AppProvider = ({ children }) => {
       await SecureStorageService.setItem('lastCalculated', timestamp);
       setLastCalculated(timestamp);
 
-      // 🔥 FIX #1: Add to history immediately
+      // Add to history immediately
       await addToHistory({
         tier: 1,
         bioAge: results.bioAge,
@@ -197,10 +206,18 @@ export const AppProvider = ({ children }) => {
         timestamp: timestamp
       });
 
-      // 🔥 FIX #2: Auto-sync to watch if enabled
-      if (autoSync && watchConnected && connectedDevice) {
-        console.log('🔄 Auto-syncing to watch...');
+      // ✅ FIX #2: Auto-sync to watch if enabled (with proper type checking)
+      console.log(`🔄 Auto-sync check: enabled=${autoSync} (type: ${typeof autoSync}), connected=${watchConnected}`);
+      if (autoSync === true && watchConnected && connectedDevice) {
+        console.log('🔄 Auto-syncing bio-age to watch...');
         await syncBioAgeToWatch(results.bioAge);
+      } else {
+        console.log('⏸️ Auto-sync skipped:', {
+          autoSync: autoSync,
+          autoSyncType: typeof autoSync,
+          watchConnected,
+          hasDevice: !!connectedDevice
+        });
       }
 
       console.log('✅ Tier 1 calculation complete');
@@ -213,9 +230,9 @@ export const AppProvider = ({ children }) => {
   };
 
   /**
-   * Calculate Tier 2 Bio-Age
+   * ✅ FIX #1: Calculate Tier 2 Bio-Age using imported algorithm
    */
-  const calculateTier2BioAge = async () => {
+  const processTier2Calculation = async () => {
     try {
       if (!chronologicalAge) {
         throw new Error('Please set your date of birth first');
@@ -224,9 +241,10 @@ export const AppProvider = ({ children }) => {
         throw new Error('Please complete Tier 1 assessment first');
       }
 
-      console.log('🧮 Calculating Tier 2 Bio-Age...');
+      console.log('🧮 Calculating Tier 2 Bio-Age with PraxiomAlgorithm...');
 
-      const results = calculateTier2BioAge(
+      // ✅ Call the IMPORTED algorithm function
+      const results = tier2Algorithm(
         chronologicalAge,
         tier1Results,
         tier2Biomarkers,
@@ -245,7 +263,7 @@ export const AppProvider = ({ children }) => {
       await SecureStorageService.setItem('lastCalculated', timestamp);
       setLastCalculated(timestamp);
 
-      // 🔥 FIX #1: Add to history
+      // Add to history
       await addToHistory({
         tier: 2,
         bioAge: results.bioAge,
@@ -256,8 +274,10 @@ export const AppProvider = ({ children }) => {
         timestamp: timestamp
       });
 
-      // 🔥 FIX #2: Auto-sync to watch
-      if (autoSync && watchConnected && connectedDevice) {
+      // Auto-sync to watch
+      console.log(`🔄 Auto-sync check: enabled=${autoSync}, connected=${watchConnected}`);
+      if (autoSync === true && watchConnected && connectedDevice) {
+        console.log('🔄 Auto-syncing bio-age to watch...');
         await syncBioAgeToWatch(results.bioAge);
       }
 
@@ -271,9 +291,9 @@ export const AppProvider = ({ children }) => {
   };
 
   /**
-   * Calculate Tier 3 Bio-Age
+   * ✅ FIX #1: Calculate Tier 3 Bio-Age using imported algorithm
    */
-  const calculateTier3BioAge = async () => {
+  const processTier3Calculation = async () => {
     try {
       if (!chronologicalAge) {
         throw new Error('Please set your date of birth first');
@@ -282,12 +302,15 @@ export const AppProvider = ({ children }) => {
         throw new Error('Please complete Tier 2 assessment first');
       }
 
-      console.log('🧮 Calculating Tier 3 Bio-Age...');
+      console.log('🧮 Calculating Tier 3 Bio-Age with PraxiomAlgorithm...');
 
-      const results = calculateTier3BioAge(
+      // ✅ Call the IMPORTED algorithm function
+      const results = tier3Algorithm(
         chronologicalAge,
+        tier1Results,
         tier2Results,
-        tier3Biomarkers
+        tier3Biomarkers,
+        fitnessAssessment
       );
 
       console.log('📊 Tier 3 Results:', results);
@@ -302,18 +325,21 @@ export const AppProvider = ({ children }) => {
       await SecureStorageService.setItem('lastCalculated', timestamp);
       setLastCalculated(timestamp);
 
-      // 🔥 FIX #1: Add to history
+      // Add to history
       await addToHistory({
         tier: 3,
         bioAge: results.bioAge,
-        epigeneticDeviation: results.epigeneticDeviation,
-        proteomicAdjustment: results.proteomicAdjustment,
-        senescenceBurden: results.senescenceBurden,
+        ohs: results.oralHealthScore,
+        shs: results.systemicHealthScore,
+        epigeneticScore: results.epigeneticDeviation,
+        proteomicScore: results.proteomicAdjustment,
         timestamp: timestamp
       });
 
-      // 🔥 FIX #2: Auto-sync to watch
-      if (autoSync && watchConnected && connectedDevice) {
+      // Auto-sync to watch
+      console.log(`🔄 Auto-sync check: enabled=${autoSync}, connected=${watchConnected}`);
+      if (autoSync === true && watchConnected && connectedDevice) {
+        console.log('🔄 Auto-syncing bio-age to watch...');
         await syncBioAgeToWatch(results.bioAge);
       }
 
@@ -327,24 +353,16 @@ export const AppProvider = ({ children }) => {
   };
 
   /**
-   * 🔥 FIX #3: Add entry to history with proper persistence
+   * Add entry to biomarker history
    */
   const addToHistory = async (entry) => {
     try {
-      console.log('📝 Adding to history:', entry);
-      
-      const newHistory = [entry, ...biomarkerHistory];
-      
-      // Save to storage immediately
-      await SecureStorageService.setItem('biomarkerHistory', newHistory);
-      
-      // Update state
-      setBiomarkerHistory(newHistory);
-      
-      console.log('✅ History updated. Total entries:', newHistory.length);
+      const updatedHistory = [...biomarkerHistory, entry];
+      await SecureStorageService.setItem('biomarkerHistory', updatedHistory);
+      setBiomarkerHistory(updatedHistory);
+      console.log('✅ Added to history');
     } catch (error) {
       console.error('❌ Error adding to history:', error);
-      throw error;
     }
   };
 
@@ -405,7 +423,7 @@ export const AppProvider = ({ children }) => {
   };
 
   /**
-   * 🔥 FIX #4: Sync bio-age to watch with proper error handling
+   * ✅ FIX #4: Sync bio-age to watch with proper React Native encoding
    */
   const syncBioAgeToWatch = async (bioAgeValue = null) => {
     try {
@@ -421,9 +439,9 @@ export const AppProvider = ({ children }) => {
 
       console.log(`📡 Syncing bio-age to watch: ${ageToSync}`);
 
-      // Convert bio-age to bytes for BLE transmission
-      const ageBytes = Buffer.from(ageToSync.toString());
-      const base64Data = ageBytes.toString('base64');
+      // ✅ Use React Native compatible base64 encoding
+      const ageString = ageToSync.toString();
+      const base64Data = base64Encode(ageString);
 
       // Write to characteristic
       await connectedDevice.writeCharacteristicWithResponseForService(
@@ -490,7 +508,8 @@ export const AppProvider = ({ children }) => {
       console.log('✅ Connected to PineTime watch');
 
       // Auto-sync if enabled and bio-age exists
-      if (autoSync && bioAge) {
+      if (autoSync === true && bioAge) {
+        console.log('🔄 Auto-syncing on connection...');
         await syncBioAgeToWatch();
       }
 
@@ -517,22 +536,26 @@ export const AppProvider = ({ children }) => {
   };
 
   /**
-   * 🔥 FIX #5: Toggle auto-sync with proper persistence
+   * ✅ FIX #2: Toggle auto-sync with proper boolean handling
    */
   const toggleAutoSync = async (value) => {
     try {
-      console.log(`🔄 Setting auto-sync to: ${value}`);
+      // Ensure boolean value
+      const boolValue = value === true || value === 'true';
+      
+      console.log(`🔄 Setting auto-sync to: ${boolValue} (type: ${typeof boolValue})`);
       
       // Save to storage first
-      await SecureStorageService.setItem('autoSync', value);
+      await SecureStorageService.setItem('autoSync', boolValue);
       
       // Then update state
-      setAutoSync(value);
+      setAutoSync(boolValue);
       
       console.log('✅ Auto-sync setting saved');
       
       // If enabling and conditions are met, sync immediately
-      if (value && watchConnected && bioAge) {
+      if (boolValue && watchConnected && bioAge) {
+        console.log('🔄 Auto-sync enabled, syncing immediately...');
         await syncBioAgeToWatch();
       }
       
@@ -547,8 +570,9 @@ export const AppProvider = ({ children }) => {
    */
   const toggleNotifications = async (value) => {
     try {
-      await SecureStorageService.setItem('notifications', value);
-      setNotifications(value);
+      const boolValue = value === true || value === 'true';
+      await SecureStorageService.setItem('notifications', boolValue);
+      setNotifications(boolValue);
     } catch (error) {
       console.error('❌ Error toggling notifications:', error);
     }
@@ -559,8 +583,9 @@ export const AppProvider = ({ children }) => {
    */
   const toggleDataSharing = async (value) => {
     try {
-      await SecureStorageService.setItem('dataSharing', value);
-      setDataSharing(value);
+      const boolValue = value === true || value === 'true';
+      await SecureStorageService.setItem('dataSharing', boolValue);
+      setDataSharing(boolValue);
     } catch (error) {
       console.error('❌ Error toggling data sharing:', error);
     }
@@ -603,10 +628,10 @@ export const AppProvider = ({ children }) => {
     fitnessAssessment,
     saveFitnessAssessment,
     
-    // Calculations
-    calculateTier1BioAge,
-    calculateTier2BioAge,
-    calculateTier3BioAge,
+    // ✅ FIX: Export renamed functions (not shadowing imports)
+    calculateTier1BioAge: processTier1Calculation,
+    calculateTier2BioAge: processTier2Calculation,
+    calculateTier3BioAge: processTier3Calculation,
     
     // History
     biomarkerHistory,
