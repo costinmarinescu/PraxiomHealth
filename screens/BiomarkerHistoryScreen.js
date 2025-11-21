@@ -25,12 +25,36 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
 
   const loadHistory = async () => {
     try {
-      const historyData = await AsyncStorage.getItem('@praxiom_biomarker_history');
-      if (historyData) {
-        const parsed = JSON.parse(historyData);
-        console.log('📋 Loaded history entries:', parsed.length);
-        setHistory(parsed);
+      // Load from multiple sources for backward compatibility
+      const tier1Data = await AsyncStorage.getItem('tier1Biomarkers');
+      const tier2Data = await AsyncStorage.getItem('tier2Biomarkers');
+      const legacyData = await AsyncStorage.getItem('@praxiom_biomarker_history');
+      
+      let allHistory = [];
+      
+      if (tier1Data) {
+        const tier1Array = JSON.parse(tier1Data);
+        allHistory = [...allHistory, ...tier1Array];
+        console.log('📋 Loaded Tier 1 history:', tier1Array.length, 'entries');
       }
+      
+      if (tier2Data) {
+        const tier2Array = JSON.parse(tier2Data);
+        allHistory = [...allHistory, ...tier2Array];
+        console.log('📋 Loaded Tier 2 history:', tier2Array.length, 'entries');
+      }
+      
+      if (legacyData) {
+        const legacyArray = JSON.parse(legacyData);
+        allHistory = [...allHistory, ...legacyArray];
+        console.log('📋 Loaded legacy history:', legacyArray.length, 'entries');
+      }
+      
+      // Sort by timestamp, newest first
+      allHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      
+      console.log('📋 Total history entries:', allHistory.length);
+      setHistory(allHistory);
     } catch (error) {
       console.error('Error loading history:', error);
     }
@@ -68,10 +92,38 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
         {
           text: 'Delete',
           onPress: async () => {
-            const updated = history.filter(h => h.timestamp !== timestamp);
-            setHistory(updated);
-            await AsyncStorage.setItem('@praxiom_biomarker_history', JSON.stringify(updated));
-            console.log('🗑️ Entry deleted');
+            try {
+              // Find which tier this entry belongs to
+              const entryToDelete = history.find(h => h.timestamp === timestamp);
+              
+              if (entryToDelete) {
+                // Delete from the appropriate storage based on tier
+                if (entryToDelete.tier === 1) {
+                  const tier1Data = await AsyncStorage.getItem('tier1Biomarkers');
+                  if (tier1Data) {
+                    const tier1Array = JSON.parse(tier1Data);
+                    const updated = tier1Array.filter(h => h.timestamp !== timestamp);
+                    await AsyncStorage.setItem('tier1Biomarkers', JSON.stringify(updated));
+                  }
+                } else if (entryToDelete.tier === 2) {
+                  const tier2Data = await AsyncStorage.getItem('tier2Biomarkers');
+                  if (tier2Data) {
+                    const tier2Array = JSON.parse(tier2Data);
+                    const updated = tier2Array.filter(h => h.timestamp !== timestamp);
+                    await AsyncStorage.setItem('tier2Biomarkers', JSON.stringify(updated));
+                  }
+                }
+              }
+              
+              // Update local state
+              const updatedHistory = history.filter(h => h.timestamp !== timestamp);
+              setHistory(updatedHistory);
+              
+              console.log('🗑️ Entry deleted');
+            } catch (error) {
+              console.error('Error deleting entry:', error);
+              Alert.alert('Error', 'Failed to delete entry');
+            }
           },
           style: 'destructive',
         },
