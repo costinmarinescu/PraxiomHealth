@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import WearableService from './services/WearableService';
 import PraxiomAlgorithm from './services/PraxiomAlgorithm';
+import StorageService from './services/StorageService';
 
 // ✅ CRITICAL FIX: Wrap Oura import in try-catch to prevent crash if module has issues
 let OuraRingService = null;
@@ -59,9 +60,37 @@ export const AppContextProvider = ({ children }) => {
     ouraData: null, // ✅ NEW: Store full Oura data object
   });
 
-  // ✅ CRITICAL FIX: Wrap all initialization in error handlers
+  // ✅ UPDATED: Wrap all initialization in error handlers + data migration
   useEffect(() => {
     const initializeApp = async () => {
+      // ✅ NEW: Run data migration FIRST (before loading any data)
+      try {
+        console.log('🔄 Checking for legacy data migration...');
+        const migrationResult = await StorageService.migrateLegacyData();
+        
+        if (migrationResult.success) {
+          if (migrationResult.migrated > 0) {
+            console.log(`✅ Successfully migrated ${migrationResult.migrated} legacy entries to encrypted storage`);
+            console.log(`   - Tier 1: ${migrationResult.tier1 || 0} entries`);
+            console.log(`   - Tier 2: ${migrationResult.tier2 || 0} entries`);
+            console.log(`   - Fitness: ${migrationResult.fitness || 0} entries`);
+          } else if (migrationResult.alreadyCompleted) {
+            console.log('✅ Data migration already completed previously');
+          } else {
+            console.log('✅ No legacy data found to migrate');
+          }
+        } else {
+          console.error('⚠️ Migration failed (non-fatal):', migrationResult.error);
+        }
+
+        // Also clean up old backup data if retention period expired
+        await StorageService.cleanupLegacyData();
+      } catch (error) {
+        console.error('⚠️ Migration error (non-fatal):', error);
+        // Don't let migration errors stop app initialization
+      }
+
+      // Load data after migration
       try {
         await loadSavedData();
       } catch (error) {
