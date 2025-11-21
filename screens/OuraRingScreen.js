@@ -7,12 +7,16 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-  RefreshControl
+  RefreshControl,
+  TextInput,
+  Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { AppContext } from '../AppContext';
 import OuraRingService from '../services/OuraRingService';
+import PraxiomBackground from '../components/PraxiomBackground';
+import * as SecureStorage from '../services/SecureStorageService';
 
 export default function OuraRingScreen({ navigation }) {
   const { state, updateState } = useContext(AppContext);
@@ -22,27 +26,87 @@ export default function OuraRingScreen({ navigation }) {
   const [isConnected, setIsConnected] = useState(false);
   const [healthData, setHealthData] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Credentials management
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [hasCredentials, setHasCredentials] = useState(false);
 
   useEffect(() => {
-    checkConnection();
+    checkCredentialsAndConnection();
   }, []);
 
-  const checkConnection = async () => {
+  const checkCredentialsAndConnection = async () => {
     try {
-      const initialized = await OuraRingService.init();
-      const authenticated = OuraRingService.isAuthenticated();
+      // Check if credentials are saved
+      const savedClientId = await SecureStorage.getItem('oura_client_id');
+      const savedClientSecret = await SecureStorage.getItem('oura_client_secret');
       
-      setIsConnected(authenticated);
-      
-      if (authenticated) {
-        await fetchHealthData();
+      if (savedClientId && savedClientSecret) {
+        setHasCredentials(true);
+        setClientId(savedClientId);
+        setClientSecret(savedClientSecret);
+        
+        // Initialize service with saved credentials
+        await OuraRingService.init(savedClientId, savedClientSecret);
+        
+        // Check connection status
+        const authenticated = OuraRingService.isAuthenticated();
+        setIsConnected(authenticated);
+        
+        if (authenticated) {
+          await fetchHealthData();
+        }
+      } else {
+        // No credentials - show modal
+        setShowCredentialsModal(true);
       }
     } catch (error) {
-      console.error('Error checking Oura connection:', error);
+      console.error('Error checking Oura credentials:', error);
+    }
+  };
+
+  const saveCredentials = async () => {
+    if (!clientId || !clientSecret) {
+      Alert.alert('Error', 'Please enter both Client ID and Client Secret');
+      return;
+    }
+
+    try {
+      // Save credentials securely
+      await SecureStorage.setItem('oura_client_id', clientId.trim());
+      await SecureStorage.setItem('oura_client_secret', clientSecret.trim());
+      
+      // Initialize service with new credentials
+      await OuraRingService.init(clientId.trim(), clientSecret.trim());
+      
+      setHasCredentials(true);
+      setShowCredentialsModal(false);
+      
+      Alert.alert(
+        'Credentials Saved',
+        'Your Oura API credentials have been saved securely. You can now connect to your Oura Ring.',
+        [{ text: 'OK', onPress: () => {} }]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save credentials: ' + error.message);
     }
   };
 
   const handleConnect = async () => {
+    if (!hasCredentials) {
+      Alert.alert(
+        'Credentials Required',
+        'Please enter your Oura API credentials first',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Enter Credentials', onPress: () => setShowCredentialsModal(true) }
+        ]
+      );
+      return;
+    }
+
     try {
       setIsConnecting(true);
       
@@ -97,473 +161,567 @@ export default function OuraRingScreen({ navigation }) {
     );
   };
 
+  const clearCredentials = () => {
+    Alert.alert(
+      'Clear Credentials',
+      'This will remove your saved Oura API credentials. You will need to re-enter them to connect.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await SecureStorage.removeItem('oura_client_id');
+              await SecureStorage.removeItem('oura_client_secret');
+              await OuraRingService.disconnect();
+              
+              setClientId('');
+              setClientSecret('');
+              setHasCredentials(false);
+              setIsConnected(false);
+              setHealthData(null);
+              
+              Alert.alert('Success', 'Credentials cleared');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to clear credentials: ' + error.message);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const fetchHealthData = async () => {
     try {
       setIsSyncing(true);
+      const data = await OuraRingService.getLatestHealthData();
+      setHealthData(data);
       
-      const summary = await OuraRingService.getHealthSummary();
-      
-      if (summary) {
-        setHealthData(summary);
-        
-        // Update app context with HRV for bio-age calculation
-        if (summary.hrv && summary.hrv.hrv) {
-          updateState({
-            ouraData: summary,
-            wearableData: {
-              ...state.wearableData,
-              hrv: summary.hrv.hrv,
-              source: 'Oura Ring'
-            }
-          });
-        }
+      // Update app context with latest data
+      if (data) {
+        updateState({
+          ouraHeartRate: data.heartRate,
+          ouraHRV: data.hrv,
+          ouraSteps: data.steps,
+          ouraSleepEfficiency: data.sleepEfficiency,
+          ouraReadinessScore: data.readinessScore,
+          lastOuraSync: new Date().toISOString()
+        });
       }
     } catch (error) {
       console.error('Error fetching health data:', error);
-      Alert.alert('Sync Error', 'Failed to sync data from Oura Ring');
+      Alert.alert('Sync Error', 'Failed to fetch latest health data');
     } finally {
       setIsSyncing(false);
       setRefreshing(false);
     }
   };
 
-  const handleRefresh = async () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    await fetchHealthData();
+    if (isConnected) {
+      await fetchHealthData();
+    } else {
+      setRefreshing(false);
+    }
   };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString();
-  };
-
-  const getScoreColor = (score) => {
-    if (score >= 85) return '#00CFC1';
-    if (score >= 70) return '#FFC107';
-    return '#F44336';
-  };
-
-  if (!isConnected) {
-    return (
-      <LinearGradient
-        colors={['#1a1a2e', '#16213e']}
-        style={styles.container}
-      >
-        <ScrollView contentContainerStyle={styles.centerContent}>
-          <View style={styles.headerContainer}>
-            <TouchableOpacity 
-              style={styles.backButton}
-              onPress={() => navigation.goBack()}
-            >
-              <Ionicons name="arrow-back" size={24} color="#FFF" />
-              <Text style={styles.backButtonText}>Back</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Ionicons name="fitness" size={100} color="#00CFC1" />
-          
-          <Text style={styles.title}>Connect Oura Ring</Text>
-          <Text style={styles.subtitle}>
-            Automatically import your HRV, sleep, and activity data for more accurate Bio-Age calculations
-          </Text>
-
-          <View style={styles.featuresList}>
-            <View style={styles.featureItem}>
-              <Ionicons name="heart" size={24} color="#00CFC1" />
-              <Text style={styles.featureText}>Auto-sync HRV for bio-age</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Ionicons name="moon" size={24} color="#00CFC1" />
-              <Text style={styles.featureText}>Track sleep quality</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Ionicons name="trending-up" size={24} color="#00CFC1" />
-              <Text style={styles.featureText}>Monitor readiness scores</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Ionicons name="flash" size={24} color="#00CFC1" />
-              <Text style={styles.featureText}>View activity metrics</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.connectButton}
-            onPress={handleConnect}
-            disabled={isConnecting}
-          >
-            {isConnecting ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <>
-                <Ionicons name="link" size={24} color="#FFF" />
-                <Text style={styles.connectButtonText}>Connect Oura Ring</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <Text style={styles.privacyText}>
-            🔒 Your data is secure and only used for Bio-Age calculations
-          </Text>
-        </ScrollView>
-      </LinearGradient>
-    );
-  }
 
   return (
-    <LinearGradient
-      colors={['#1a1a2e', '#16213e']}
-      style={styles.container}
-    >
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
+    <PraxiomBackground>
+      <ScrollView
+        style={styles.container}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="#00CFC1"
+            onRefresh={onRefresh}
+            tintColor="#47C83E"
           />
         }
       >
-        <View style={styles.headerContainer}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#FFF" />
-            <Text style={styles.backButtonText}>Back</Text>
-          </TouchableOpacity>
+        <View style={styles.header}>
+          <Ionicons name="fitness" size={48} color="#47C83E" />
+          <Text style={styles.title}>Oura Ring</Text>
+          <Text style={styles.subtitle}>Enhanced HRV & Sleep Tracking</Text>
         </View>
 
-        <View style={styles.connectedHeader}>
-          <Ionicons name="fitness" size={40} color="#00CFC1" />
-          <View style={styles.connectedInfo}>
-            <Text style={styles.connectedTitle}>Oura Ring Connected</Text>
-            <Text style={styles.connectedSubtitle}>Last synced: {healthData?.lastUpdated ? new Date(healthData.lastUpdated).toLocaleTimeString() : 'Never'}</Text>
-          </View>
-        </View>
-
-        {/* HRV Card */}
-        {healthData?.hrv && (
-          <View style={styles.dataCard}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="heart" size={24} color="#00CFC1" />
-              <Text style={styles.cardTitle}>Heart Rate Variability</Text>
-            </View>
-            <View style={styles.cardContent}>
-              <Text style={styles.bigValue}>{healthData.hrv.hrv} ms</Text>
-              <Text style={styles.cardSubtext}>RMSSD - {formatDate(healthData.hrv.date)}</Text>
-              <Text style={styles.cardInfo}>
-                ✅ This value will be used automatically in your next Praxiom Age calculation
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Sleep Card */}
-        {healthData?.sleep && (
-          <View style={styles.dataCard}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="moon" size={24} color="#00CFC1" />
-              <Text style={styles.cardTitle}>Sleep Quality</Text>
-            </View>
-            <View style={styles.cardContent}>
-              <View style={styles.metricsRow}>
-                <View style={styles.metric}>
-                  <Text style={styles.metricLabel}>Duration</Text>
-                  <Text style={styles.metricValue}>
-                    {Math.round((healthData.sleep.total_sleep_duration || 0) / 3600)}h
-                  </Text>
-                </View>
-                <View style={styles.metric}>
-                  <Text style={styles.metricLabel}>Efficiency</Text>
-                  <Text style={styles.metricValue}>
-                    {healthData.sleep.sleep_efficiency || 0}%
-                  </Text>
-                </View>
-                <View style={styles.metric}>
-                  <Text style={styles.metricLabel}>Deep Sleep</Text>
-                  <Text style={styles.metricValue}>
-                    {Math.round((healthData.sleep.deep_sleep_duration || 0) / 60)}min
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Readiness Card */}
-        {healthData?.readiness && (
-          <View style={styles.dataCard}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="fitness-outline" size={24} color="#00CFC1" />
-              <Text style={styles.cardTitle}>Readiness Score</Text>
-            </View>
-            <View style={styles.cardContent}>
-              <Text style={[
-                styles.bigValue,
-                { color: getScoreColor(healthData.readiness.score || 0) }
-              ]}>
-                {healthData.readiness.score || 0}/100
-              </Text>
-              <Text style={styles.cardSubtext}>
-                {healthData.readiness.score >= 85 ? 'Optimal Recovery' :
-                 healthData.readiness.score >= 70 ? 'Moderate Recovery' :
-                 'Poor Recovery'}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Activity Card */}
-        {healthData?.activity && (
-          <View style={styles.dataCard}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="walk" size={24} color="#00CFC1" />
-              <Text style={styles.cardTitle}>Activity</Text>
-            </View>
-            <View style={styles.cardContent}>
-              <View style={styles.metricsRow}>
-                <View style={styles.metric}>
-                  <Text style={styles.metricLabel}>Steps</Text>
-                  <Text style={styles.metricValue}>
-                    {(healthData.activity.steps || 0).toLocaleString()}
-                  </Text>
-                </View>
-                <View style={styles.metric}>
-                  <Text style={styles.metricLabel}>Calories</Text>
-                  <Text style={styles.metricValue}>
-                    {healthData.activity.active_calories || 0}
-                  </Text>
-                </View>
-                <View style={styles.metric}>
-                  <Text style={styles.metricLabel}>Score</Text>
-                  <Text style={styles.metricValue}>
-                    {healthData.activity.score || 0}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Actions */}
-        <TouchableOpacity
-          style={styles.syncButton}
-          onPress={handleRefresh}
-          disabled={isSyncing}
+        {/* Credentials Modal */}
+        <Modal
+          visible={showCredentialsModal}
+          transparent={true}
+          animationType="slide"
         >
-          {isSyncing ? (
-            <ActivityIndicator color="#FFF" />
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Oura API Credentials</Text>
+                <TouchableOpacity onPress={() => setShowCredentialsModal(false)}>
+                  <Ionicons name="close" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.modalDescription}>
+                To connect your Oura Ring, you need to create an app in the Oura Developer Portal and enter your credentials below.
+              </Text>
+
+              <Text style={styles.inputLabel}>Client ID</Text>
+              <TextInput
+                style={styles.input}
+                value={clientId}
+                onChangeText={setClientId}
+                placeholder="18a798fd-289f-45d4-99b6-ade377b3ba15"
+                placeholderTextColor="#999"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+
+              <Text style={styles.inputLabel}>Client Secret</Text>
+              <TextInput
+                style={styles.input}
+                value={clientSecret}
+                onChangeText={setClientSecret}
+                placeholder="07SgBRP_w7zSdetMcidQNtv3gKsUmKQokpq0_0HUw"
+                placeholderTextColor="#999"
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry={true}
+              />
+
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={saveCredentials}
+              >
+                <Text style={styles.saveButtonText}>Save Credentials</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.helpButton}
+                onPress={() => {
+                  Alert.alert(
+                    'How to Get Credentials',
+                    '1. Go to cloud.ouraring.com\n' +
+                    '2. Log in with your Oura account\n' +
+                    '3. Go to "Personal Access Tokens"\n' +
+                    '4. Click "Create New Personal Access Token"\n' +
+                    '5. Create an OAuth Application\n' +
+                    '6. Copy your Client ID and Client Secret\n\n' +
+                    'Redirect URI: praxiomhealth://oura-callback'
+                  );
+                }}
+              >
+                <Text style={styles.helpButtonText}>How to get credentials?</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Connection Status */}
+        <View style={styles.statusCard}>
+          <View style={styles.statusHeader}>
+            <View style={styles.statusIndicator}>
+              <View style={[
+                styles.statusDot,
+                { backgroundColor: isConnected ? '#47C83E' : '#E74C3C' }
+              ]} />
+              <Text style={styles.statusText}>
+                {isConnected ? 'Connected' : 'Not Connected'}
+              </Text>
+            </View>
+            {hasCredentials && (
+              <TouchableOpacity onPress={() => setShowCredentialsModal(true)}>
+                <Ionicons name="settings-outline" size={24} color="#666" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {!isConnected ? (
+            <TouchableOpacity
+              style={[styles.connectButton, isConnecting && styles.connectButtonDisabled]}
+              onPress={handleConnect}
+              disabled={isConnecting}
+            >
+              {isConnecting ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <>
+                  <Ionicons name="link" size={20} color="#FFF" />
+                  <Text style={styles.connectButtonText}>
+                    {hasCredentials ? 'Connect to Oura Ring' : 'Enter Credentials First'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
           ) : (
-            <>
-              <Ionicons name="sync" size={20} color="#FFF" />
-              <Text style={styles.syncButtonText}>Sync Now</Text>
-            </>
-          )}
-        </TouchableOpacity>
+            <View style={styles.connectedActions}>
+              <TouchableOpacity
+                style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]}
+                onPress={fetchHealthData}
+                disabled={isSyncing}
+              >
+                {isSyncing ? (
+                  <ActivityIndicator color="#47C83E" />
+                ) : (
+                  <>
+                    <Ionicons name="sync" size={20} color="#47C83E" />
+                    <Text style={styles.syncButtonText}>Sync Now</Text>
+                  </>
+                )}
+              </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.disconnectButton}
-          onPress={handleDisconnect}
-        >
-          <Ionicons name="unlink" size={20} color="#F44336" />
-          <Text style={styles.disconnectButtonText}>Disconnect Oura Ring</Text>
-        </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.disconnectButton}
+                onPress={handleDisconnect}
+              >
+                <Ionicons name="close-circle" size={20} color="#E74C3C" />
+                <Text style={styles.disconnectButtonText}>Disconnect</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* Credentials Management */}
+        {hasCredentials && (
+          <View style={styles.credentialsCard}>
+            <Text style={styles.credentialsTitle}>API Credentials</Text>
+            <Text style={styles.credentialsText}>
+              ✅ Client ID: {clientId.substring(0, 8)}...
+            </Text>
+            <Text style={styles.credentialsText}>
+              ✅ Client Secret: ***********
+            </Text>
+            <TouchableOpacity
+              style={styles.clearCredentialsButton}
+              onPress={clearCredentials}
+            >
+              <Text style={styles.clearCredentialsText}>Clear Credentials</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Health Data Display */}
+        {isConnected && healthData && (
+          <View style={styles.dataSection}>
+            <Text style={styles.sectionTitle}>Latest Health Metrics</Text>
+
+            <View style={styles.metricsGrid}>
+              <View style={styles.metricCard}>
+                <Ionicons name="heart" size={32} color="#E74C3C" />
+                <Text style={styles.metricValue}>
+                  {healthData.heartRate || '--'} bpm
+                </Text>
+                <Text style={styles.metricLabel}>Heart Rate</Text>
+              </View>
+
+              <View style={styles.metricCard}>
+                <Ionicons name="pulse" size={32} color="#47C83E" />
+                <Text style={styles.metricValue}>
+                  {healthData.hrv || '--'}
+                </Text>
+                <Text style={styles.metricLabel}>HRV</Text>
+              </View>
+
+              <View style={styles.metricCard}>
+                <Ionicons name="walk" size={32} color="#3498DB" />
+                <Text style={styles.metricValue}>
+                  {healthData.steps || 0}
+                </Text>
+                <Text style={styles.metricLabel}>Steps</Text>
+              </View>
+
+              <View style={styles.metricCard}>
+                <Ionicons name="moon" size={32} color="#9B59B6" />
+                <Text style={styles.metricValue}>
+                  {healthData.sleepEfficiency || '--'}%
+                </Text>
+                <Text style={styles.metricLabel}>Sleep</Text>
+              </View>
+
+              <View style={styles.metricCard}>
+                <Ionicons name="analytics" size={32} color="#F39C12" />
+                <Text style={styles.metricValue}>
+                  {healthData.readinessScore || '--'}
+                </Text>
+                <Text style={styles.metricLabel}>Readiness</Text>
+              </View>
+            </View>
+
+            {healthData.lastSync && (
+              <Text style={styles.lastSyncText}>
+                Last synced: {new Date(healthData.lastSync).toLocaleString()}
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* Integration Info */}
+        <View style={styles.infoSection}>
+          <Text style={styles.infoTitle}>💡 Oura Integration Benefits</Text>
+          <Text style={styles.infoText}>
+            • Continuous HRV monitoring{'\n'}
+            • Enhanced sleep quality tracking{'\n'}
+            • Readiness score integration{'\n'}
+            • Automatic Bio-Age updates{'\n'}
+            • Recovery optimization insights
+          </Text>
+        </View>
+
+        <View style={{ height: 40 }} />
       </ScrollView>
-    </LinearGradient>
+    </PraxiomBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  centerContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     padding: 20,
   },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 60,
-  },
-  headerContainer: {
-    marginBottom: 20,
-  },
-  backButton: {
-    flexDirection: 'row',
+  header: {
     alignItems: 'center',
-  },
-  backButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    marginLeft: 8,
-    fontWeight: '600',
+    marginBottom: 30,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#FFF',
-    marginTop: 30,
-    marginBottom: 10,
-    textAlign: 'center',
+    marginTop: 10,
   },
   subtitle: {
     fontSize: 16,
-    color: '#999',
-    textAlign: 'center',
-    marginBottom: 40,
-    paddingHorizontal: 20,
-    lineHeight: 24,
-  },
-  featuresList: {
-    width: '100%',
-    marginBottom: 40,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-  featureText: {
-    fontSize: 16,
-    color: '#FFF',
-    marginLeft: 15,
-  },
-  connectButton: {
-    flexDirection: 'row',
-    backgroundColor: '#00CFC1',
-    paddingHorizontal: 40,
-    paddingVertical: 18,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  connectButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFF',
-    marginLeft: 10,
-  },
-  privacyText: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-  },
-  connectedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 207, 193, 0.1)',
-    padding: 20,
-    borderRadius: 15,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 207, 193, 0.3)',
-  },
-  connectedInfo: {
-    marginLeft: 15,
-    flex: 1,
-  },
-  connectedTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#00CFC1',
-  },
-  connectedSubtitle: {
-    fontSize: 14,
-    color: '#999',
-    marginTop: 4,
-  },
-  dataCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 15,
-    padding: 20,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFF',
-    marginLeft: 10,
-  },
-  cardContent: {
-    alignItems: 'center',
-  },
-  bigValue: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#00CFC1',
-  },
-  cardSubtext: {
-    fontSize: 14,
-    color: '#999',
+    color: '#CCC',
     marginTop: 5,
   },
-  cardInfo: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 10,
-    textAlign: 'center',
+  statusCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
   },
-  metricsRow: {
+  statusHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
   },
-  metric: {
+  statusIndicator: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  metricLabel: {
-    fontSize: 12,
-    color: '#999',
+  statusDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  statusText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  connectButton: {
+    backgroundColor: '#47C83E',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 10,
+    gap: 10,
+  },
+  connectButtonDisabled: {
+    opacity: 0.6,
+  },
+  connectButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  connectedActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  syncButton: {
+    flex: 1,
+    backgroundColor: 'rgba(71, 200, 62, 0.2)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#47C83E',
+    gap: 10,
+  },
+  syncButtonDisabled: {
+    opacity: 0.6,
+  },
+  syncButtonText: {
+    color: '#47C83E',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  disconnectButton: {
+    flex: 1,
+    backgroundColor: 'rgba(231, 76, 60, 0.2)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#E74C3C',
+    gap: 10,
+  },
+  disconnectButtonText: {
+    color: '#E74C3C',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  credentialsCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+  },
+  credentialsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFF',
+    marginBottom: 10,
+  },
+  credentialsText: {
+    fontSize: 14,
+    color: '#CCC',
     marginBottom: 5,
+  },
+  clearCredentialsButton: {
+    marginTop: 10,
+    paddingVertical: 8,
+  },
+  clearCredentialsText: {
+    color: '#E74C3C',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  dataSection: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFF',
+    marginBottom: 15,
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  metricCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 15,
+    padding: 15,
+    alignItems: 'center',
+    flex: 1,
+    minWidth: '45%',
   },
   metricValue: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#FFF',
-  },
-  syncButton: {
-    flexDirection: 'row',
-    backgroundColor: '#00CFC1',
-    paddingVertical: 15,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginTop: 10,
   },
-  syncButtonText: {
-    fontSize: 16,
+  metricLabel: {
+    fontSize: 14,
+    color: '#CCC',
+    marginTop: 5,
+  },
+  lastSyncText: {
+    textAlign: 'center',
+    color: '#999',
+    fontSize: 12,
+    marginTop: 15,
+  },
+  infoSection: {
+    backgroundColor: 'rgba(71, 200, 62, 0.1)',
+    borderRadius: 15,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#47C83E',
+  },
+  infoTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#47C83E',
+    marginBottom: 10,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#CCC',
+    lineHeight: 22,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#2C2C2C',
+    borderRadius: 20,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  modalTitle: {
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#FFF',
-    marginLeft: 10,
   },
-  disconnectButton: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(244, 67, 54, 0.1)',
-    paddingVertical: 15,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  modalDescription: {
+    fontSize: 14,
+    color: '#CCC',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
+    marginBottom: 8,
     marginTop: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(244, 67, 54, 0.3)',
   },
-  disconnectButtonText: {
+  input: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 10,
+    padding: 15,
+    fontSize: 14,
+    color: '#FFF',
+    borderWidth: 1,
+    borderColor: '#444',
+  },
+  saveButton: {
+    backgroundColor: '#47C83E',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  saveButtonText: {
+    color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#F44336',
-    marginLeft: 10,
+  },
+  helpButton: {
+    padding: 15,
+    alignItems: 'center',
+  },
+  helpButtonText: {
+    color: '#47C83E',
+    fontSize: 14,
   },
 });
