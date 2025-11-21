@@ -18,7 +18,7 @@ import PraxiomBackground from '../components/PraxiomBackground';
 const BiomarkerHistoryScreen = ({ navigation }) => {
   const { state } = useContext(AppContext);
   const [history, setHistory] = useState([]);
-  const [expandedId, setExpandedId] = useState(null); // ✅ NEW: Track which entry is expanded
+  const [expandedId, setExpandedId] = useState(null);
 
   useEffect(() => {
     loadHistory();
@@ -29,26 +29,31 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
       // ✅ Load from encrypted storage for medical data
       const tier1Data = await SecureStorage.getItem('tier1Biomarkers');
       const tier2Data = await SecureStorage.getItem('tier2Biomarkers');
+      const fitnessData = await SecureStorage.getItem('fitnessAssessments'); // ✅ NEW: Load fitness assessments
       const legacyData = await AsyncStorage.getItem('@praxiom_biomarker_history');
       
       let allHistory = [];
       
       if (tier1Data) {
-        // SecureStorage.getItem already returns parsed data
         const tier1Array = Array.isArray(tier1Data) ? tier1Data : [tier1Data];
         allHistory = [...allHistory, ...tier1Array];
         console.log('📋 Loaded Tier 1 history:', tier1Array.length, 'entries');
       }
       
       if (tier2Data) {
-        // SecureStorage.getItem already returns parsed data
         const tier2Array = Array.isArray(tier2Data) ? tier2Data : [tier2Data];
         allHistory = [...allHistory, ...tier2Array];
         console.log('📋 Loaded Tier 2 history:', tier2Array.length, 'entries');
       }
       
+      // ✅ NEW: Load fitness assessments
+      if (fitnessData) {
+        const fitnessArray = Array.isArray(fitnessData) ? fitnessData : [fitnessData];
+        allHistory = [...allHistory, ...fitnessArray];
+        console.log('📋 Loaded Fitness history:', fitnessArray.length, 'entries');
+      }
+      
       if (legacyData) {
-        // Legacy data needs to be parsed
         const legacyArray = JSON.parse(legacyData);
         allHistory = [...allHistory, ...legacyArray];
         console.log('📋 Loaded legacy history:', legacyArray.length, 'entries');
@@ -97,22 +102,29 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
           text: 'Delete',
           onPress: async () => {
             try {
-              // Find which tier this entry belongs to
               const entryToDelete = history.find(h => h.timestamp === timestamp);
               
               if (entryToDelete) {
-                // Delete from the appropriate encrypted storage based on tier
-                if (entryToDelete.tier === 1) {
+                // ✅ Determine which storage key to delete from
+                if (entryToDelete.tier === 'Fitness Assessment') {
+                  // Delete from fitness assessments
+                  const fitnessData = await SecureStorage.getItem('fitnessAssessments');
+                  if (fitnessData) {
+                    const fitnessArray = Array.isArray(fitnessData) ? fitnessData : [fitnessData];
+                    const updated = fitnessArray.filter(h => h.timestamp !== timestamp);
+                    await SecureStorage.setItem('fitnessAssessments', updated);
+                  }
+                } else if (entryToDelete.tier === 1) {
                   const tier1Data = await SecureStorage.getItem('tier1Biomarkers');
                   if (tier1Data) {
-                    const tier1Array = Array.isArray(tier1Data) ? tier1Data : JSON.parse(tier1Data);
+                    const tier1Array = Array.isArray(tier1Data) ? tier1Data : [tier1Data];
                     const updated = tier1Array.filter(h => h.timestamp !== timestamp);
                     await SecureStorage.setItem('tier1Biomarkers', updated);
                   }
                 } else if (entryToDelete.tier === 2) {
                   const tier2Data = await SecureStorage.getItem('tier2Biomarkers');
                   if (tier2Data) {
-                    const tier2Array = Array.isArray(tier2Data) ? tier2Data : JSON.parse(tier2Data);
+                    const tier2Array = Array.isArray(tier2Data) ? tier2Data : [tier2Data];
                     const updated = tier2Array.filter(h => h.timestamp !== timestamp);
                     await SecureStorage.setItem('tier2Biomarkers', updated);
                   }
@@ -135,7 +147,6 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
     );
   };
 
-  // ✅ NEW: Toggle expansion of entry details
   const toggleExpand = (timestamp) => {
     setExpandedId(expandedId === timestamp ? null : timestamp);
   };
@@ -143,17 +154,30 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
   const renderHistoryItem = ({ item }) => {
     const isExpanded = expandedId === item.timestamp;
     const date = new Date(item.timestamp);
+    const isFitnessAssessment = item.tier === 'Fitness Assessment';
     
     return (
       <View style={styles.historyCard}>
         <View style={styles.cardHeader}>
-          <Text style={styles.dateText}>
-            {date.toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })}
-          </Text>
+          <View>
+            <Text style={styles.dateText}>
+              {date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}
+            </Text>
+            {/* ✅ Show tier badge */}
+            <Text style={[
+              styles.tierBadge, 
+              isFitnessAssessment ? styles.fitnessBadge : 
+              item.tier === 1 ? styles.tier1Badge : styles.tier2Badge
+            ]}>
+              {item.tier === 'Fitness Assessment' ? '💪 Fitness' : 
+               item.tier === 1 ? '📝 Tier 1' : 
+               item.tier === 2 ? '🔥 Tier 2' : '📊 Assessment'}
+            </Text>
+          </View>
           <TouchableOpacity
             onPress={() => deleteEntry(item.timestamp)}
             style={styles.deleteButton}
@@ -170,23 +194,44 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
               {item.bioAge?.toFixed(1) || 'N/A'} years
             </Text>
           </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Oral Health:</Text>
-            <Text style={styles.value}>{item.oralScore || 'N/A'}%</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Systemic Health:</Text>
-            <Text style={styles.value}>{item.systemicScore || 'N/A'}%</Text>
-          </View>
-          {item.fitnessScore && (
-            <View style={styles.row}>
-              <Text style={styles.label}>Fitness:</Text>
-              <Text style={styles.value}>{item.fitnessScore}%</Text>
-            </View>
+          
+          {/* ✅ Show appropriate scores based on entry type */}
+          {isFitnessAssessment ? (
+            <>
+              <View style={styles.row}>
+                <Text style={styles.label}>Fitness Score:</Text>
+                <Text style={styles.value}>{item.fitnessScore || 'N/A'}%</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Aerobic:</Text>
+                <Text style={styles.value}>{item.aerobicScore || 'N/A'}/10</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Balance:</Text>
+                <Text style={styles.value}>{item.balanceScore || 'N/A'}/10</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.row}>
+                <Text style={styles.label}>Oral Health:</Text>
+                <Text style={styles.value}>{item.oralScore || 'N/A'}%</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Systemic Health:</Text>
+                <Text style={styles.value}>{item.systemicScore || 'N/A'}%</Text>
+              </View>
+              {item.fitnessScore && (
+                <View style={styles.row}>
+                  <Text style={styles.label}>Fitness:</Text>
+                  <Text style={styles.value}>{item.fitnessScore}%</Text>
+                </View>
+              )}
+            </>
           )}
         </View>
 
-        {/* ✅ NEW: View Details Button */}
+        {/* View Details Button */}
         <TouchableOpacity
           style={styles.detailsButton}
           onPress={() => toggleExpand(item.timestamp)}
@@ -201,70 +246,124 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
           />
         </TouchableOpacity>
 
-        {/* ✅ NEW: Expandable Details Section */}
+        {/* ✅ Expandable Details Section */}
         {isExpanded && (
           <View style={styles.expandedDetails}>
-            <View style={styles.detailsSection}>
-              <Text style={styles.sectionTitle}>🦷 Oral Health Biomarkers</Text>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Salivary pH:</Text>
-                <Text style={styles.detailValue}>{item.salivaryPH || 'N/A'}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Active MMP-8 (ng/mL):</Text>
-                <Text style={styles.detailValue}>{item.activeMMP8 || 'N/A'}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Salivary Flow (mL/min):</Text>
-                <Text style={styles.detailValue}>{item.salivaryFlowRate || 'N/A'}</Text>
-              </View>
-            </View>
-
-            <View style={styles.detailsSection}>
-              <Text style={styles.sectionTitle}>🩸 Systemic Health Biomarkers</Text>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>hs-CRP (mg/L):</Text>
-                <Text style={styles.detailValue}>{item.hsCRP || 'N/A'}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Omega-3 Index (%):</Text>
-                <Text style={styles.detailValue}>{item.omega3Index || 'N/A'}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>HbA1c (%):</Text>
-                <Text style={styles.detailValue}>{item.hbA1c || 'N/A'}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>GDF-15 (pg/mL):</Text>
-                <Text style={styles.detailValue}>{item.gdf15 || 'N/A'}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Vitamin D (ng/mL):</Text>
-                <Text style={styles.detailValue}>{item.vitaminD || 'N/A'}</Text>
-              </View>
-            </View>
-
-            <View style={styles.detailsSection}>
-              <Text style={styles.sectionTitle}>⌚ Wearable Data</Text>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Heart Rate (bpm):</Text>
-                <Text style={styles.detailValue}>{item.heartRate || 'N/A'}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Daily Steps:</Text>
-                <Text style={styles.detailValue}>{item.steps?.toLocaleString() || 'N/A'}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>SpO2 (%):</Text>
-                <Text style={styles.detailValue}>{item.spO2 || 'N/A'}</Text>
-              </View>
-              {item.hrv && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>HRV (ms):</Text>
-                  <Text style={styles.detailValue}>{item.hrv}</Text>
+            {isFitnessAssessment ? (
+              // Fitness Assessment Details
+              <>
+                <View style={styles.detailsSection}>
+                  <Text style={styles.sectionTitle}>💪 Fitness Scores</Text>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Aerobic Fitness:</Text>
+                    <Text style={styles.detailValue}>{item.aerobicScore}/10</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Flexibility & Posture:</Text>
+                    <Text style={styles.detailValue}>{item.flexibilityScore}/10</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Balance & Coordination:</Text>
+                    <Text style={styles.detailValue}>{item.balanceScore}/10</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Mind-Body Alignment:</Text>
+                    <Text style={styles.detailValue}>{item.mindBodyScore}/10</Text>
+                  </View>
                 </View>
-              )}
-            </View>
+                
+                {item.testDetails && (
+                  <View style={styles.detailsSection}>
+                    <Text style={styles.sectionTitle}>📊 Test Results</Text>
+                    {item.testDetails.aerobicTestType === 'stepTest' && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Step Test HR:</Text>
+                        <Text style={styles.detailValue}>{item.testDetails.recoveryHeartRate} bpm</Text>
+                      </View>
+                    )}
+                    {item.testDetails.aerobicTestType === '6mwt' && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>6MWT Distance:</Text>
+                        <Text style={styles.detailValue}>{item.testDetails.walkDistance} m</Text>
+                      </View>
+                    )}
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Sit-Reach:</Text>
+                      <Text style={styles.detailValue}>{item.testDetails.sitReachCm} cm</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>One-Leg Stand:</Text>
+                      <Text style={styles.detailValue}>{item.testDetails.oneLegStand} sec</Text>
+                    </View>
+                  </View>
+                )}
+              </>
+            ) : (
+              // Biomarker Assessment Details
+              <>
+                <View style={styles.detailsSection}>
+                  <Text style={styles.sectionTitle}>🦷 Oral Health Biomarkers</Text>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Salivary pH:</Text>
+                    <Text style={styles.detailValue}>{item.salivaryPH || 'N/A'}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Active MMP-8 (ng/mL):</Text>
+                    <Text style={styles.detailValue}>{item.activeMMP8 || 'N/A'}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Salivary Flow (mL/min):</Text>
+                    <Text style={styles.detailValue}>{item.salivaryFlowRate || 'N/A'}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.detailsSection}>
+                  <Text style={styles.sectionTitle}>🩸 Systemic Health Biomarkers</Text>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>hs-CRP (mg/L):</Text>
+                    <Text style={styles.detailValue}>{item.hsCRP || 'N/A'}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Omega-3 Index (%):</Text>
+                    <Text style={styles.detailValue}>{item.omega3Index || 'N/A'}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>HbA1c (%):</Text>
+                    <Text style={styles.detailValue}>{item.hbA1c || 'N/A'}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>GDF-15 (pg/mL):</Text>
+                    <Text style={styles.detailValue}>{item.gdf15 || 'N/A'}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Vitamin D (ng/mL):</Text>
+                    <Text style={styles.detailValue}>{item.vitaminD || 'N/A'}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.detailsSection}>
+                  <Text style={styles.sectionTitle}>⌚ Wearable Data</Text>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Heart Rate (bpm):</Text>
+                    <Text style={styles.detailValue}>{item.heartRate || 'N/A'}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Daily Steps:</Text>
+                    <Text style={styles.detailValue}>{item.steps?.toLocaleString() || 'N/A'}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>SpO2 (%):</Text>
+                    <Text style={styles.detailValue}>{item.spO2 || 'N/A'}</Text>
+                  </View>
+                  {item.hrv && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>HRV (ms):</Text>
+                      <Text style={styles.detailValue}>{item.hrv}</Text>
+                    </View>
+                  )}
+                </View>
+              </>
+            )}
           </View>
         )}
       </View>
@@ -353,13 +452,34 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 12,
   },
   dateText: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#00d4ff',
+  },
+  tierBadge: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  tier1Badge: {
+    backgroundColor: '#3b82f6',
+    color: '#fff',
+  },
+  tier2Badge: {
+    backgroundColor: '#f59e0b',
+    color: '#fff',
+  },
+  fitnessBadge: {
+    backgroundColor: '#10b981',
+    color: '#fff',
   },
   deleteButton: {
     padding: 8,

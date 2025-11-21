@@ -10,11 +10,11 @@ import {
 } from 'react-native';
 import { AppContext } from '../AppContext';
 import PraxiomAlgorithm from '../services/PraxiomAlgorithm';
-import StorageService from '../services/StorageService';
+import * as SecureStorage from '../services/SecureStorageService';
 import PraxiomBackground from '../components/PraxiomBackground';
 
 const FitnessAssessmentScreen = ({ navigation }) => {
-  const { state, updateState, updateFitnessAssessment } = useContext(AppContext);
+  const { state, updateState } = useContext(AppContext);
   const [assessmentType, setAssessmentType] = useState(null);
 
   // Aerobic Fitness
@@ -106,48 +106,55 @@ const FitnessAssessmentScreen = ({ navigation }) => {
         mindBodyScore
       );
 
-      // ✅ FIX #1: Pass fitness data as an object with proper structure
-      const fitnessData = {
+      // ✅ FIX #1: Update AppContext state FIRST (so Dashboard shows it immediately)
+      updateState({
         aerobicScore,
         flexibilityScore,
         balanceScore,
         mindBodyScore,
-        fitnessScore: compositeScore
-      };
+        fitnessScore: compositeScore,
+        fitnessAssessmentDate: new Date().toISOString(),
+      });
 
-      // Update AppContext state
-      if (updateFitnessAssessment) {
-        updateFitnessAssessment(fitnessData);
-      } else {
-        // Fallback: use updateState directly
-        updateState({
-          aerobicScore,
-          flexibilityScore,
-          balanceScore,
-          mindBodyScore,
-          fitnessScore: compositeScore,
-          fitnessAssessmentDate: new Date().toISOString(),
-        });
-      }
-
-      // ✅ FIX #2: Save to history using StorageService
+      // ✅ FIX #2: Save to encrypted storage history (separate key for fitness assessments)
       try {
-        await StorageService.saveBiomarkerEntry({
+        const fitnessEntry = {
           timestamp: new Date().toISOString(),
           age: state.chronologicalAge,
           bioAge: state.biologicalAge,
-          oralScore: state.oralHealthScore || 0,
-          systemicScore: state.systemicHealthScore || 0,
           fitnessScore: compositeScore,
-          tier: 'Fitness Assessment',
           aerobicScore,
           flexibilityScore,
           balanceScore,
           mindBodyScore,
-        });
-        console.log('✅ Fitness assessment saved to history');
+          tier: 'Fitness Assessment',
+          // Include test details for reference
+          testDetails: {
+            aerobicTestType,
+            recoveryHeartRate: aerobicTestType === 'stepTest' ? parseFloat(recoveryHeartRate) : null,
+            walkDistance: aerobicTestType === '6mwt' ? parseFloat(walkDistance) : null,
+            sitReachCm: parseFloat(sitReachCm),
+            postureRating: parseFloat(postureRating),
+            oneLegStand: parseFloat(oneLegStand),
+            yBalanceScore: yBalanceScore ? parseFloat(yBalanceScore) : null,
+            confidenceRating: parseFloat(confidenceRating),
+            awarenessRating: parseFloat(awarenessRating),
+          }
+        };
+
+        // Load existing fitness assessments
+        const existingData = await SecureStorage.getItem('fitnessAssessments');
+        const fitnessHistory = existingData ? (Array.isArray(existingData) ? existingData : [existingData]) : [];
+        
+        // Add new entry
+        fitnessHistory.push(fitnessEntry);
+        
+        // Save updated history
+        await SecureStorage.setItem('fitnessAssessments', fitnessHistory);
+        
+        console.log('✅ Fitness assessment saved to encrypted history');
       } catch (error) {
-        console.error('⚠️ Failed to save to history:', error);
+        console.error('⚠️ Failed to save fitness assessment to history:', error);
         // Don't block the user - they can still see their results
       }
 
@@ -253,7 +260,7 @@ const FitnessAssessmentScreen = ({ navigation }) => {
                 value={walkDistance}
                 onChangeText={setWalkDistance}
                 keyboardType="numeric"
-                placeholder="e.g., 550"
+                placeholder="e.g., 500"
                 placeholderTextColor="#666"
               />
               <Text style={styles.unit}>meters</Text>
@@ -268,14 +275,14 @@ const FitnessAssessmentScreen = ({ navigation }) => {
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Sit-and-Reach Test</Text>
             <Text style={styles.helpText}>
-              Distance reached beyond (positive) or before (negative) toes
+              Distance reached beyond toes (negative = cannot reach toes)
             </Text>
             <TextInput
               style={styles.input}
               value={sitReachCm}
               onChangeText={setSitReachCm}
               keyboardType="numeric"
-              placeholder="e.g., -5 or +8"
+              placeholder="e.g., -5 or +10"
               placeholderTextColor="#666"
             />
             <Text style={styles.unit}>cm</Text>
