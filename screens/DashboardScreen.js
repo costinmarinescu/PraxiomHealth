@@ -193,6 +193,14 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.actionButtonText}>🔥 Tier 2</Text>
             <Text style={styles.actionButtonText}>Advanced</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('FitnessAssessment')}
+          >
+            <Text style={styles.actionButtonText}>💪 Fitness</Text>
+            <Text style={styles.actionButtonText}>Assessment</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.quickActions}>

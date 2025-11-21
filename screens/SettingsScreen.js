@@ -346,10 +346,10 @@ export default function SettingsScreen({ navigation }) {
                 </Text>
               </View>
               <Switch
-                value={state.settings?.autoSyncEnabled || true}
+                value={state.settings?.autoSyncEnabled !== false}
                 onValueChange={handleToggleAutoSync}
                 trackColor={{ false: '#767577', true: '#00CED1' }}
-                thumbColor={state.settings?.autoSyncEnabled ? '#fff' : '#f4f3f4'}
+                thumbColor={state.settings?.autoSyncEnabled !== false ? '#fff' : '#f4f3f4'}
               />
             </View>
           </View>
