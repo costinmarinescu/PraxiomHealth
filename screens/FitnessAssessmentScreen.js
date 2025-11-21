@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { AppContext } from '../AppContext';
 import PraxiomAlgorithm from '../services/PraxiomAlgorithm';
+import StorageService from '../services/StorageService';
 import PraxiomBackground from '../components/PraxiomBackground';
 
 const FitnessAssessmentScreen = ({ navigation }) => {
@@ -33,7 +34,7 @@ const FitnessAssessmentScreen = ({ navigation }) => {
   const [confidenceRating, setConfidenceRating] = useState('5');
   const [awarenessRating, setAwarenessRating] = useState('5');
 
-  const calculateFitnessAssessment = () => {
+  const calculateFitnessAssessment = async () => {
     try {
       // Validate inputs
       if (!aerobicTestType || (!recoveryHeartRate && !walkDistance)) {
@@ -105,14 +106,18 @@ const FitnessAssessmentScreen = ({ navigation }) => {
         mindBodyScore
       );
 
-      // Save to state using updateFitnessAssessment function
+      // ✅ FIX #1: Pass fitness data as an object with proper structure
+      const fitnessData = {
+        aerobicScore,
+        flexibilityScore,
+        balanceScore,
+        mindBodyScore,
+        fitnessScore: compositeScore
+      };
+
+      // Update AppContext state
       if (updateFitnessAssessment) {
-        updateFitnessAssessment(
-          aerobicScore,
-          flexibilityScore,
-          balanceScore,
-          mindBodyScore
-        );
+        updateFitnessAssessment(fitnessData);
       } else {
         // Fallback: use updateState directly
         updateState({
@@ -125,6 +130,27 @@ const FitnessAssessmentScreen = ({ navigation }) => {
         });
       }
 
+      // ✅ FIX #2: Save to history using StorageService
+      try {
+        await StorageService.saveBiomarkerEntry({
+          timestamp: new Date().toISOString(),
+          age: state.chronologicalAge,
+          bioAge: state.biologicalAge,
+          oralScore: state.oralHealthScore || 0,
+          systemicScore: state.systemicHealthScore || 0,
+          fitnessScore: compositeScore,
+          tier: 'Fitness Assessment',
+          aerobicScore,
+          flexibilityScore,
+          balanceScore,
+          mindBodyScore,
+        });
+        console.log('✅ Fitness assessment saved to history');
+      } catch (error) {
+        console.error('⚠️ Failed to save to history:', error);
+        // Don't block the user - they can still see their results
+      }
+
       // Show results
       Alert.alert(
         'Fitness Assessment Complete',
@@ -133,7 +159,8 @@ const FitnessAssessmentScreen = ({ navigation }) => {
         `Flexibility: ${flexibilityScore}/10\n` +
         `Balance: ${balanceScore}/10\n` +
         `Mind-Body: ${mindBodyScore}/10\n\n` +
-        `${getScoreInterpretation(compositeScore)}`,
+        `${getScoreInterpretation(compositeScore)}\n\n` +
+        `✅ Saved to History`,
         [
           {
             text: 'View Dashboard',
