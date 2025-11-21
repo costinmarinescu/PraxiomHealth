@@ -343,7 +343,7 @@ export const AppContextProvider = ({ children }) => {
     }));
   };
 
-  const calculateBiologicalAge = () => {
+  const calculateBiologicalAge = async () => {
     try {
       // Validate chronological age first
       if (!state.chronologicalAge || state.chronologicalAge < 18 || state.chronologicalAge > 120) {
@@ -400,6 +400,18 @@ export const AppContextProvider = ({ children }) => {
         recommendations: result.recommendations,
         coefficients: result.coefficients
       });
+
+      // ✅ NEW: Sync to watch if connected and auto-sync enabled
+      if (state.watchConnected && state.settings?.autoSyncEnabled !== false) {
+        try {
+          await WearableService.sendBioAge(result.biologicalAge);
+          console.log('✅ Bio-age synced to watch:', result.biologicalAge);
+          updateState({ lastSync: new Date().toISOString() });
+        } catch (error) {
+          console.warn('⚠️ Watch sync failed (will retry next time):', error.message);
+          // Don't throw - sync failure shouldn't break calculation
+        }
+      }
 
       return result.biologicalAge;
     } catch (error) {
