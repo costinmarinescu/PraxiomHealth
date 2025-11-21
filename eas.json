@@ -1,64 +1,36 @@
 {
   "cli": {
-    "version": ">= 5.9.1",
+    "version": ">= 13.2.0",
     "appVersionSource": "remote"
   },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "android": {
-        "gradleCommand": ":app:assembleDebug",
-        "buildType": "apk"
-      },
       "ios": {
-        "simulator": true
-      },
-      "env": {
-        "ENVIRONMENT": "development"
+        "resourceClass": "m-medium"
       }
     },
     "preview": {
       "distribution": "internal",
       "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease"
+        "buildType": "apk"
       },
       "ios": {
-        "simulator": false
-      },
-      "env": {
-        "ENVIRONMENT": "preview"
-      },
-      "channel": "preview"
+        "resourceClass": "m-medium"
+      }
     },
     "production": {
       "android": {
-        "buildType": "aab",
-        "gradleCommand": ":app:bundleRelease"
+        "buildType": "app-bundle"
       },
       "ios": {
-        "simulator": false,
-        "distribution": "app-store"
-      },
-      "env": {
-        "ENVIRONMENT": "production"
-      },
-      "channel": "production",
-      "autoIncrement": true
+        "distribution": "store",
+        "resourceClass": "m-medium"
+      }
     }
   },
   "submit": {
-    "production": {
-      "android": {
-        "serviceAccountKeyPath": "./google-service-account-key.json",
-        "track": "production"
-      },
-      "ios": {
-        "appleId": "your-apple-id@example.com",
-        "ascAppId": "your-app-store-connect-app-id",
-        "appleTeamId": "your-apple-team-id"
-      }
-    }
+    "production": {}
   }
 }
