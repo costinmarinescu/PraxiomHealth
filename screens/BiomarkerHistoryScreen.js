@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStorage from '../services/SecureStorageService';
 import * as Sharing from 'expo-sharing';
 import { AppContext } from '../AppContext';
 import PraxiomBackground from '../components/PraxiomBackground';
@@ -25,21 +26,21 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
 
   const loadHistory = async () => {
     try {
-      // Load from multiple sources for backward compatibility
-      const tier1Data = await AsyncStorage.getItem('tier1Biomarkers');
-      const tier2Data = await AsyncStorage.getItem('tier2Biomarkers');
+      // ✅ Load from encrypted storage for medical data
+      const tier1Data = await SecureStorage.getItem('tier1Biomarkers');
+      const tier2Data = await SecureStorage.getItem('tier2Biomarkers');
       const legacyData = await AsyncStorage.getItem('@praxiom_biomarker_history');
       
       let allHistory = [];
       
       if (tier1Data) {
-        const tier1Array = JSON.parse(tier1Data);
+        const tier1Array = Array.isArray(tier1Data) ? tier1Data : JSON.parse(tier1Data);
         allHistory = [...allHistory, ...tier1Array];
         console.log('📋 Loaded Tier 1 history:', tier1Array.length, 'entries');
       }
       
       if (tier2Data) {
-        const tier2Array = JSON.parse(tier2Data);
+        const tier2Array = Array.isArray(tier2Data) ? tier2Data : JSON.parse(tier2Data);
         allHistory = [...allHistory, ...tier2Array];
         console.log('📋 Loaded Tier 2 history:', tier2Array.length, 'entries');
       }
@@ -97,20 +98,20 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
               const entryToDelete = history.find(h => h.timestamp === timestamp);
               
               if (entryToDelete) {
-                // Delete from the appropriate storage based on tier
+                // Delete from the appropriate encrypted storage based on tier
                 if (entryToDelete.tier === 1) {
-                  const tier1Data = await AsyncStorage.getItem('tier1Biomarkers');
+                  const tier1Data = await SecureStorage.getItem('tier1Biomarkers');
                   if (tier1Data) {
-                    const tier1Array = JSON.parse(tier1Data);
+                    const tier1Array = Array.isArray(tier1Data) ? tier1Data : JSON.parse(tier1Data);
                     const updated = tier1Array.filter(h => h.timestamp !== timestamp);
-                    await AsyncStorage.setItem('tier1Biomarkers', JSON.stringify(updated));
+                    await SecureStorage.setItem('tier1Biomarkers', updated);
                   }
                 } else if (entryToDelete.tier === 2) {
-                  const tier2Data = await AsyncStorage.getItem('tier2Biomarkers');
+                  const tier2Data = await SecureStorage.getItem('tier2Biomarkers');
                   if (tier2Data) {
-                    const tier2Array = JSON.parse(tier2Data);
+                    const tier2Array = Array.isArray(tier2Data) ? tier2Data : JSON.parse(tier2Data);
                     const updated = tier2Array.filter(h => h.timestamp !== timestamp);
-                    await AsyncStorage.setItem('tier2Biomarkers', JSON.stringify(updated));
+                    await SecureStorage.setItem('tier2Biomarkers', updated);
                   }
                 }
               }

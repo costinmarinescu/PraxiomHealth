@@ -12,6 +12,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStorage from '../services/SecureStorageService';
 import { AppContext } from '../AppContext';
 
 export default function Tier1BiomarkerInputScreen({ navigation }) {
@@ -26,7 +27,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
     );
   }
 
-  const { state, updateState, calculateScores } = context;
+  const { state, updateState, calculateBiologicalAge } = context;
   const [isCalculating, setIsCalculating] = useState(false);
   
   // ✅ FIX: Simple date inputs
@@ -169,11 +170,12 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
       };
 
       try {
-        const existingData = await AsyncStorage.getItem('tier1Biomarkers');
-        const tier1Array = existingData ? JSON.parse(existingData) : [];
+        // ✅ SECURITY FIX: Use encrypted storage for medical data
+        const existingData = await SecureStorage.getItem('tier1Biomarkers');
+        const tier1Array = existingData ? existingData : [];
         tier1Array.push(tier1Entry);
-        await AsyncStorage.setItem('tier1Biomarkers', JSON.stringify(tier1Array));
-        console.log('✅ Tier 1 data saved to history');
+        await SecureStorage.setItem('tier1Biomarkers', tier1Array);
+        console.log('✅ Tier 1 data saved to encrypted history');
       } catch (error) {
         console.error('Error saving to history:', error);
       }
@@ -202,10 +204,10 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
       
       let biologicalAge;
       try {
-        biologicalAge = calculateScores();
+        biologicalAge = calculateBiologicalAge();
       } catch (error) {
-        console.error('Error calculating scores:', error);
-        throw new Error('Failed to calculate scores');
+        console.error('Error calculating biological age:', error);
+        throw new Error('Failed to calculate biological age');
       }
       
       console.log('✅ Scores calculated, biological age:', biologicalAge);
