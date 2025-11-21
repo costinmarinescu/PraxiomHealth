@@ -22,6 +22,7 @@ import ProfileScreen from './screens/ProfileScreen';
 import TestScreen from './screens/TestScreen';
 // ✅ FIX: Import OuraRingScreen
 import OuraRingScreen from './screens/OuraRingScreen';
+import GarminWearableScreen from './screens/GarminWearableScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -70,6 +71,14 @@ function OuraRingStack() {
   );
 }
 
+function GarminWearableStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="GarminWearableHome" component={GarminWearableScreen} />
+    </Stack.Navigator>
+  );
+}
+
 function SettingsStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -107,6 +116,8 @@ export default function App() {
                   // ✅ FIX: Add Oura Ring icon
                   } else if (route.name === 'OuraRing') {
                     iconName = focused ? 'fitness' : 'fitness-outline';
+                  } else if (route.name === 'Garmin') {
+                    iconName = focused ? 'speedometer' : 'speedometer-outline';
                   } else if (route.name === 'Settings') {
                     iconName = focused ? 'settings' : 'settings-outline';
                   } else {
@@ -140,6 +151,11 @@ export default function App() {
                 name="OuraRing" 
                 component={OuraRingStack}
                 options={{ tabBarLabel: 'Oura' }}
+              />
+              <Tab.Screen 
+                name="Garmin" 
+                component={GarminWearableStack}
+                options={{ tabBarLabel: 'Garmin' }}
               />
               <Tab.Screen 
                 name="Settings" 
