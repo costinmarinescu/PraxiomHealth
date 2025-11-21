@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import {
   View,
   Text,
@@ -11,17 +11,17 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppContext } from '../AppContext';
+import { AppContext } from '../AppContext';
 
 const Tier2BiomarkerInputScreen = ({ navigation }) => {
-  // ✅ FIX: Use correct function name from AppContext
-  const { state, updateState, calculateTier2BioAge } = useAppContext();
+  // ✅ FIX: Get correct functions from AppContext
+  const { state, updateState, calculateScores, calculateBiologicalAge } = useContext(AppContext);
   
-  // ✅ FIX: Manual date inputs instead of DateTimePicker
-  const [entryYear, setEntryYear] = useState('');
-  const [entryMonth, setEntryMonth] = useState('');
-  const [entryDay, setEntryDay] = useState('');
+  // Date selection
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Inflammatory Cytokines
@@ -35,6 +35,21 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
 
   // Advanced Markers (optional)
   const [nadPlus, setNADPlus] = useState('');
+
+  const onDateChange = (event, date) => {
+    if (Platform.OS === 'android') {
+      if (event.type === 'set' && date) {
+        setSelectedDate(date);
+        setShowDatePicker(false);
+      } else if (event.type === 'dismissed') {
+        setShowDatePicker(false);
+      }
+    } else {
+      if (date) {
+        setSelectedDate(date);
+      }
+    }
+  };
 
   const validateInputs = () => {
     const requiredFields = [
@@ -153,18 +168,6 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
       console.log(`Tier 2 Adjustment: -${totalAdjustment.toFixed(1)} points`);
       console.log(`Adjusted Systemic Score: ${adjustedSystemicScore.toFixed(1)}%`);
 
-      // ✅ FIX: Create date from manual inputs
-      let assessmentDate;
-      if (entryYear && entryMonth && entryDay) {
-        assessmentDate = new Date(
-          parseInt(entryYear),
-          parseInt(entryMonth) - 1,
-          parseInt(entryDay)
-        );
-      } else {
-        assessmentDate = new Date(); // Use today if no date entered
-      }
-
       // Update state with adjusted scores
       await updateState({
         systemicHealthScore: Math.round(adjustedSystemicScore),
@@ -176,8 +179,8 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
           ohgd8: parseFloat(ohgd8),
           proteinCarbonyls: parseFloat(proteinCarbonyls),
           nadPlus: nadPlus ? parseFloat(nadPlus) : null,
-          timestamp: assessmentDate.toISOString(),
-          dateEntered: assessmentDate.toLocaleDateString(),
+          timestamp: selectedDate.toISOString(),
+          dateEntered: selectedDate.toLocaleDateString(),
           adjustment: totalAdjustment,
           tier: 2,
         }
@@ -186,15 +189,13 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
       // Small delay to ensure state update
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Recalculate biological age with Tier 2 data using correct function
-      const result = await calculateTier2BioAge();
-      const enhancedBioAge = result.bioAge;
+      // Recalculate biological age with adjusted scores
+      const enhancedBioAge = calculateBiologicalAge();
       
       console.log(`Enhanced Biological Age: ${enhancedBioAge.toFixed(1)} years`);
-      console.log('Tier 2 Calculation Result:', result);
 
       // Calculate improvement vs Tier 1
-      const tier1BioAge = state.userProfile?.biologicalAge || state.userProfile?.chronologicalAge;
+      const tier1BioAge = state.biologicalAge || state.chronologicalAge;
       const improvement = tier1BioAge - enhancedBioAge;
 
       const message = improvement > 0
@@ -204,7 +205,7 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
       Alert.alert(
         'Tier 2 Analysis Complete! 🔬',
         `Enhanced Biological Age: ${enhancedBioAge.toFixed(1)} years\n` +
-        `Chronological Age: ${state.userProfile?.chronologicalAge || '--'} years\n\n` +
+        `Chronological Age: ${state.chronologicalAge} years\n\n` +
         `Adjusted Systemic Score: ${adjustedSystemicScore.toFixed(1)}%\n` +
         `Tier 2 Impact: -${totalAdjustment.toFixed(1)} points\n\n` +
         message +
@@ -269,48 +270,27 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
           <Text style={styles.subtitle}>Personalized Profiling</Text>
         </View>
 
-        {/* ✅ FIXED: Manual Date Input (like Settings) */}
+        {/* Date Selection */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📅 Date of Assessment</Text>
-          <View style={styles.dateInputRow}>
-            <View style={styles.dateInputGroup}>
-              <Text style={styles.label}>Year</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={entryYear}
-                onChangeText={setEntryYear}
-                placeholder="YYYY"
-                placeholderTextColor="rgba(255,255,255,0.6)"
-                keyboardType="number-pad"
-                maxLength={4}
-              />
-            </View>
-            <View style={styles.dateInputGroup}>
-              <Text style={styles.label}>Month</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={entryMonth}
-                onChangeText={setEntryMonth}
-                placeholder="MM"
-                placeholderTextColor="rgba(255,255,255,0.6)"
-                keyboardType="number-pad"
-                maxLength={2}
-              />
-            </View>
-            <View style={styles.dateInputGroup}>
-              <Text style={styles.label}>Day</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={entryDay}
-                onChangeText={setEntryDay}
-                placeholder="DD"
-                placeholderTextColor="rgba(255,255,255,0.6)"
-                keyboardType="number-pad"
-                maxLength={2}
-              />
-            </View>
-          </View>
-          <Text style={styles.helperText}>Date when biomarkers were measured</Text>
+          <Text style={styles.sectionTitle}>Assessment Date</Text>
+          <TouchableOpacity
+            style={styles.dateButton}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Ionicons name="calendar-outline" size={20} color="#fff" />
+            <Text style={styles.dateText}>
+              {selectedDate.toLocaleDateString()}
+            </Text>
+          </TouchableOpacity>
+          {showDatePicker && (
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={onDateChange}
+              maximumDate={new Date()}
+            />
+          )}
         </View>
 
         {/* Inflammatory Cytokines */}
@@ -495,32 +475,6 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-  },
-  dateInputRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  dateInputGroup: {
-    flex: 1,
-    marginHorizontal: 5,
-  },
-  dateInput: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderRadius: 12,
-    padding: 15,
-    fontSize: 16,
-    color: '#fff',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  helperText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 5,
-    fontStyle: 'italic',
   },
   input: {
     backgroundColor: 'rgba(255, 255, 255, 0.25)',

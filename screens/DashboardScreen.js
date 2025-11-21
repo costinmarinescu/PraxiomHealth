@@ -1,566 +1,392 @@
-import React, { useContext, useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-  ActivityIndicator
-} from 'react-native';
+import React, { useContext, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AppContext } from '../AppContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const DashboardScreen = ({ navigation }) => {
-  const {
-    dateOfBirth,
-    chronologicalAge,
-    bioAge,
-    lastCalculated,
-    tier1Results,
-    tier2Results,
-    tier3Results,
-    watchConnected,
-    autoSync,
-    syncBioAgeToWatch,
-    getWatchInfo
-  } = useContext(AppContext);
+export default function DashboardScreen({ navigation }) {
+  const { state, updateState, calculateScores } = useContext(AppContext);
+  const [showWatchAlert, setShowWatchAlert] = React.useState(false);
 
-  const [syncing, setSyncing] = useState(false);
-  const [lastSyncStatus, setLastSyncStatus] = useState(null);
-
-  /**
-   * Check sync status on mount and when bio-age changes
-   */
   useEffect(() => {
-    checkSyncStatus();
-  }, [bioAge, watchConnected, autoSync]);
+    checkWatchConnection();
+    const interval = setInterval(checkWatchConnection, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
-  /**
-   * Check if data is synced
-   */
-  const checkSyncStatus = () => {
-    if (!bioAge) {
-      setLastSyncStatus(null);
-      return;
-    }
-
-    if (!watchConnected) {
-      setLastSyncStatus('not_connected');
-      return;
-    }
-
-    if (autoSync) {
-      setLastSyncStatus('auto_synced');
-    } else {
-      setLastSyncStatus('manual_sync_available');
-    }
-  };
-
-  /**
-   * Calculate bio-age deviation
-   */
-  const calculateDeviation = () => {
-    if (!bioAge || !chronologicalAge) return null;
-    return (bioAge - chronologicalAge).toFixed(1);
-  };
-
-  /**
-   * Get deviation color
-   */
-  const getDeviationColor = () => {
-    const deviation = calculateDeviation();
-    if (!deviation) return '#666';
-    
-    if (deviation < -5) return '#4CAF50'; // Excellent
-    if (deviation < 0) return '#8BC34A'; // Good
-    if (deviation < 5) return '#FFC107'; // Fair
-    return '#F44336'; // Needs improvement
-  };
-
-  /**
-   * Get current tier level
-   */
-  const getCurrentTier = () => {
-    if (tier3Results) return 3;
-    if (tier2Results) return 2;
-    if (tier1Results) return 1;
-    return 0;
-  };
-
-  /**
-   * Format date
-   */
-  const formatDate = (isoString) => {
-    if (!isoString) return 'Never';
-    const date = new Date(isoString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  /**
-   * Handle manual sync to watch
-   */
-  const handleManualSync = async () => {
-    if (!watchConnected) {
-      Alert.alert(
-        'Watch Not Connected',
-        'Please connect your PineTime watch in Settings first.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Go to Settings', onPress: () => navigation.navigate('Settings') }
-        ]
-      );
-      return;
-    }
-
-    if (!bioAge) {
-      Alert.alert('No Data', 'Please complete a bio-age assessment first.');
-      return;
-    }
-
-    setSyncing(true);
+  const checkWatchConnection = async () => {
     try {
-      await syncBioAgeToWatch();
-      setLastSyncStatus('manually_synced');
-      Alert.alert('Success', 'Bio-age synced to watch successfully!');
+      const watchStatus = await AsyncStorage.getItem('watchConnected');
+      updateState({ watchConnected: watchStatus === 'true' });
     } catch (error) {
-      Alert.alert('Sync Failed', error.message);
-    } finally {
-      setSyncing(false);
+      console.error('Error checking watch connection:', error);
     }
   };
 
-  /**
-   * Render sync status indicator
-   */
-  const renderSyncStatus = () => {
-    if (!bioAge) return null;
-
-    let statusText = '';
-    let statusColor = '#666';
-    let showSyncButton = false;
-
-    switch (lastSyncStatus) {
-      case 'not_connected':
-        statusText = '⚠️ Watch not connected';
-        statusColor = '#FFC107';
-        showSyncButton = false;
-        break;
-      case 'auto_synced':
-        statusText = '✓ Auto-synced to watch';
-        statusColor = '#4CAF50';
-        showSyncButton = false;
-        break;
-      case 'manual_sync_available':
-        statusText = '↻ Manual sync available';
-        statusColor = '#2196F3';
-        showSyncButton = true;
-        break;
-      case 'manually_synced':
-        statusText = '✓ Manually synced';
-        statusColor = '#4CAF50';
-        showSyncButton = true;
-        break;
-      default:
-        statusText = '— Sync status unknown';
-        statusColor = '#999';
-        showSyncButton = true;
+  const handleWatchButtonPress = () => {
+    if (!state.watchConnected) {
+      setShowWatchAlert(true);
+    } else {
+      navigation.getParent().navigate('Watch');
     }
-
-    return (
-      <View style={styles.syncStatusContainer}>
-        <Text style={[styles.syncStatusText, { color: statusColor }]}>
-          {statusText}
-        </Text>
-        {showSyncButton && watchConnected && (
-          <TouchableOpacity
-            style={[styles.syncButton, syncing && styles.syncButtonDisabled]}
-            onPress={handleManualSync}
-            disabled={syncing}
-          >
-            {syncing ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.syncButtonText}>Sync Now</Text>
-            )}
-          </TouchableOpacity>
-        )}
-      </View>
-    );
   };
 
-  /**
-   * Handle setting date of birth
-   */
-  const handleSetDOB = () => {
-    navigation.navigate('Profile');
+  const getScoreColor = (score) => {
+    if (score >= 85) return '#47C83E';
+    if (score >= 75) return '#FFB800';
+    return '#E74C3C';
   };
 
-  /**
-   * Navigate to assessment
-   */
-  const handleStartAssessment = () => {
-    if (!dateOfBirth) {
+  const getDeviationColor = (deviation) => {
+    if (Math.abs(deviation) <= 5) return '#47C83E';
+    if (Math.abs(deviation) <= 10) return '#FFB800';
+    return '#E74C3C';
+  };
+
+  const handleRecalculateAge = () => {
+    const newBioAge = calculateScores();
+    if (newBioAge && !isNaN(newBioAge)) {
       Alert.alert(
-        'Date of Birth Required',
-        'Please set your date of birth first to calculate your biological age.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Set DOB', onPress: handleSetDOB }
-        ]
+        '✅ Recalculated',
+        `Your Bio-Age has been recalculated based on your latest biomarkers.\n\nNew Bio-Age: ${newBioAge.toFixed(1)} years`
       );
-      return;
-    }
-
-    const currentTier = getCurrentTier();
-    if (currentTier === 0) {
-      navigation.navigate('Tier1BiomarkerInput');
     } else {
       Alert.alert(
-        'Choose Assessment',
-        'Which tier would you like to assess?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Tier 1 (Foundation)', onPress: () => navigation.navigate('Tier1BiomarkerInput') },
-          { text: 'Tier 2 (Personalized)', onPress: () => navigation.navigate('Tier2BiomarkerInput') },
-          { text: 'Tier 3 (Optimization)', onPress: () => navigation.navigate('Tier3BiomarkerInput') }
-        ]
+        'Unable to Calculate',
+        'Please enter your biomarkers first to calculate your biological age.'
       );
     }
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <LinearGradient
-        colors={['#FF6B35', '#F7931E', '#20B2AA']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <Text style={styles.headerTitle}>Your Vitality Dashboard</Text>
-        {dateOfBirth && (
-          <Text style={styles.headerSubtitle}>
-            Age {chronologicalAge} years
-          </Text>
-        )}
-      </LinearGradient>
-
-      <View style={styles.content}>
-        {/* Bio-Age Card */}
-        {bioAge ? (
-          <View style={styles.bioAgeCard}>
-            <Text style={styles.cardLabel}>Biological Age</Text>
-            <Text style={styles.bioAgeValue}>{bioAge.toFixed(1)} years</Text>
-            
-            {chronologicalAge && (
-              <>
-                <View style={styles.deviationContainer}>
-                  <Text style={styles.deviationLabel}>Deviation: </Text>
-                  <Text style={[styles.deviationValue, { color: getDeviationColor() }]}>
-                    {calculateDeviation() > 0 ? '+' : ''}{calculateDeviation()} years
-                  </Text>
-                </View>
-                
-                <Text style={styles.lastCalculated}>
-                  Calculated: {formatDate(lastCalculated)}
-                </Text>
-              </>
-            )}
-
-            {/* Sync Status */}
-            {renderSyncStatus()}
-
-            {/* Tier Badge */}
-            <View style={styles.tierBadge}>
-              <Text style={styles.tierBadgeText}>
-                Tier {getCurrentTier()} Assessment
-              </Text>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No Bio-Age Data Yet</Text>
-            <Text style={styles.emptyText}>
-              Complete your first assessment to see your biological age
-            </Text>
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={handleStartAssessment}
-            >
-              <Text style={styles.primaryButtonText}>Start Assessment</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Quick Actions */}
-        <View style={styles.actionsContainer}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={handleStartAssessment}
-          >
-            <Text style={styles.actionTitle}>📊 New Assessment</Text>
-            <Text style={styles.actionDescription}>
-              Calculate your current biological age
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => navigation.navigate('History')}
-          >
-            <Text style={styles.actionTitle}>📈 View History</Text>
-            <Text style={styles.actionDescription}>
-              Track your bio-age progress over time
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => navigation.navigate('Report')}
-          >
-            <Text style={styles.actionTitle}>📄 Generate Report</Text>
-            <Text style={styles.actionDescription}>
-              Get detailed insights and recommendations
-            </Text>
-          </TouchableOpacity>
-
-          {bioAge && (
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => navigation.navigate('ProtocolInfo')}
-            >
-              <Text style={styles.actionTitle}>📚 Protocol Guide</Text>
-              <Text style={styles.actionDescription}>
-                Learn about the Praxiom Bio-Age Protocol
-              </Text>
-            </TouchableOpacity>
-          )}
+    <LinearGradient colors={['#FF6B00', '#FFB800']} style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* ✨ NEW: Praxiom Health Header with Logo */}
+        <View style={styles.headerContainer}>
+          <Image 
+            source={require('../assets/praxiom-logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+          <Text style={styles.headerTitle}>Praxiom Health</Text>
+          <Text style={styles.headerSubtitle}>Precision Longevity Medicine</Text>
         </View>
 
-        {/* Watch Status */}
-        {watchConnected && (
-          <View style={styles.watchStatusCard}>
-            <Text style={styles.watchStatusTitle}>⌚ PineTime Connected</Text>
-            <Text style={styles.watchStatusText}>
-              Auto-Sync: {autoSync ? 'Enabled' : 'Disabled'}
+        <View style={styles.bioAgeCard}>
+          <View style={styles.bioAgeHeader}>
+            <Text style={styles.targetIcon}>🎯</Text>
+            <Text style={styles.bioAgeTitle}>Bio-Age Overview</Text>
+          </View>
+
+          <View style={styles.ageContainer}>
+            <View style={styles.ageBox}>
+              <Text style={styles.ageLabel}>Chronological Age</Text>
+              <Text style={styles.ageValue}>{state.chronologicalAge}</Text>
+              <Text style={styles.ageUnit}>years</Text>
+            </View>
+
+            <View style={styles.ageBox}>
+              <Text style={styles.ageLabel}>Praxiom Age</Text>
+              <Text style={[styles.ageValue, styles.bioAge]}>
+                {state.biologicalAge.toFixed(1)}
+              </Text>
+              <Text style={styles.ageUnit}>years</Text>
+            </View>
+          </View>
+
+          <View style={styles.deviationContainer}>
+            <Text style={styles.deviationLabel}>Bio-Age Deviation:</Text>
+            <Text style={[
+              styles.deviationValue,
+              { color: getDeviationColor(state.biologicalAge - state.chronologicalAge) }
+            ]}>
+              {state.biologicalAge > state.chronologicalAge ? '+' : ''}
+              {(state.biologicalAge - state.chronologicalAge).toFixed(1)} years
             </Text>
-            <TouchableOpacity
-              style={styles.settingsLink}
-              onPress={() => navigation.navigate('Settings')}
-            >
-              <Text style={styles.settingsLinkText}>Manage Watch Settings →</Text>
-            </TouchableOpacity>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.watchButton,
+            state.watchConnected ? styles.watchConnected : styles.watchDisconnected
+          ]}
+          onPress={handleWatchButtonPress}
+        >
+          <Text style={styles.watchButtonIcon}>
+            {state.watchConnected ? '⌚✓' : '⌚'}
+          </Text>
+          <View style={{ alignItems: 'center', flex: 1 }}>
+            <Text style={styles.watchButtonText}>
+              {state.watchConnected ? 'Watch Connected' : 'Connect Watch'}
+            </Text>
+            {state.watchConnected && state.lastSync && (
+              <Text style={styles.syncText}>
+                Last sync: {new Date(state.lastSync).toLocaleTimeString()}
+              </Text>
+            )}
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.scoreCardsContainer}>
+          <View style={styles.scoreCard}>
+            <Text style={styles.scoreTitle}>Oral Health</Text>
+            <Text style={[styles.scoreValue, { color: getScoreColor(state.oralHealthScore) }]}>
+              {state.oralHealthScore}%
+            </Text>
+            <Text style={styles.scoreTarget}>Target: &gt;85%</Text>
+            <View style={[
+              styles.scoreIndicator,
+              { backgroundColor: getScoreColor(state.oralHealthScore) }
+            ]} />
+          </View>
+
+          <View style={styles.scoreCard}>
+            <Text style={styles.scoreTitle}>Systemic Health</Text>
+            <Text style={[styles.scoreValue, { color: getScoreColor(state.systemicHealthScore) }]}>
+              {state.systemicHealthScore}%
+            </Text>
+            <Text style={styles.scoreTarget}>Target: &gt;85%</Text>
+            <View style={[
+              styles.scoreIndicator,
+              { backgroundColor: getScoreColor(state.systemicHealthScore) }
+            ]} />
+          </View>
+        </View>
+
+        <View style={styles.scoreCardsContainer}>
+          <View style={styles.scoreCard}>
+            <Text style={styles.scoreTitle}>Fitness Score</Text>
+            <Text style={[styles.scoreValue, { color: getScoreColor(state.fitnessScore) }]}>
+              {state.fitnessScore}%
+            </Text>
+            <Text style={styles.scoreTarget}>Target: &gt;85%</Text>
+            <View style={[
+              styles.scoreIndicator,
+              { backgroundColor: getScoreColor(state.fitnessScore) }
+            ]} />
+          </View>
+
+          <View style={styles.scoreCard}>
+            <Text style={styles.scoreTitle}>Wearable Data</Text>
+            <View style={styles.wearableData}>
+              <Text style={styles.wearableItem}>❤️ {state.heartRate || '--'} bpm</Text>
+              <Text style={styles.wearableItem}>👟 {state.steps || 0}</Text>
+              <Text style={styles.wearableItem}>📊 HRV: {state.hrv || '--'}</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.quickActions}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('Tier1BiomarkerInput')}
+          >
+            <Text style={styles.actionButtonText}>📝 Tier 1</Text>
+            <Text style={styles.actionButtonText}>Biomarkers</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('Tier2BiomarkerInput')}
+          >
+            <Text style={styles.actionButtonText}>🔥 Tier 2</Text>
+            <Text style={styles.actionButtonText}>Advanced</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.quickActions}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleRecalculateAge}
+          >
+            <Text style={styles.actionButtonText}>🔄 Recalculate</Text>
+            <Text style={styles.actionButtonText}>Age</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('HistoricalData')}
+          >
+            <Text style={styles.actionButtonText}>📈 History</Text>
+          </TouchableOpacity>
+        </View>
+
+        {(state.oralHealthScore < 75 || state.systemicHealthScore < 75) && (
+          <View style={styles.alertCard}>
+            <Text style={styles.alertTitle}>⚠️ Tier Upgrade Recommended</Text>
+            <Text style={styles.alertText}>
+              Your health scores indicate you may benefit from Tier 2 assessment for more personalized insights.
+            </Text>
           </View>
         )}
-      </View>
-    </ScrollView>
+
+        <Modal
+          visible={showWatchAlert}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowWatchAlert(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Watch Not Connected</Text>
+              <Text style={styles.modalText}>
+                Please go to the Watch tab and connect to your PineTime watch first.
+              </Text>
+
+              <TouchableOpacity
+                style={styles.modalButton}
+                onPress={() => {
+                  setShowWatchAlert(false);
+                  navigation.getParent().navigate('Watch');
+                }}
+              >
+                <Text style={styles.modalButtonText}>Go to Watch Tab</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => setShowWatchAlert(false)}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      </ScrollView>
+    </LinearGradient>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5'
+  container: { flex: 1 },
+  scrollContent: { padding: 20, paddingBottom: 100 },
+  // ✨ NEW: Header styles
+  headerContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingVertical: 15,
   },
-  header: {
-    padding: 30,
-    paddingTop: 50,
-    paddingBottom: 30
+  headerLogo: {
+    width: 60,
+    height: 60,
+    marginBottom: 8,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8
+    color: '#FFFFFF',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   headerSubtitle: {
-    fontSize: 16,
-    color: '#fff',
-    opacity: 0.9
-  },
-  content: {
-    padding: 20,
-    marginTop: -20
+    fontSize: 14,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginTop: 4,
+    opacity: 0.9,
   },
   bioAgeCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 20,
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5
-  },
-  cardLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 1
-  },
-  bioAgeValue: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#FF6B35',
-    marginBottom: 12
-  },
-  deviationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8
-  },
-  deviationLabel: {
-    fontSize: 16,
-    color: '#666'
-  },
-  deviationValue: {
-    fontSize: 20,
-    fontWeight: 'bold'
-  },
-  lastCalculated: {
-    fontSize: 13,
-    color: '#999',
-    marginBottom: 16
-  },
-  syncStatusContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    marginBottom: 12
-  },
-  syncStatusText: {
-    fontSize: 14,
-    fontWeight: '600'
-  },
-  syncButton: {
-    backgroundColor: '#2196F3',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6
-  },
-  syncButtonDisabled: {
-    opacity: 0.6
-  },
-  syncButtonText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600'
-  },
-  tierBadge: {
-    backgroundColor: '#e3f2fd',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    alignSelf: 'flex-start'
-  },
-  tierBadgeText: {
-    color: '#1976d2',
-    fontSize: 12,
-    fontWeight: '600'
-  },
-  emptyCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 32,
-    marginBottom: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 20
-  },
-  primaryButton: {
-    backgroundColor: '#FF6B35',
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 8
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600'
-  },
-  actionsContainer: {
-    marginBottom: 20
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 16
-  },
-  actionCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3
+    elevation: 5,
   },
-  actionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4
+  bioAgeHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  targetIcon: { fontSize: 24, marginRight: 10 },
+  bioAgeTitle: { fontSize: 24, fontWeight: 'bold', color: '#2C3E50' },
+  ageContainer: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 },
+  ageBox: { alignItems: 'center' },
+  ageLabel: { fontSize: 14, color: '#7F8C8D', marginBottom: 5 },
+  ageValue: { fontSize: 48, fontWeight: 'bold', color: '#2C3E50' },
+  bioAge: { color: '#FF6B00' },
+  ageUnit: { fontSize: 16, color: '#7F8C8D', marginTop: 5 },
+  deviationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
   },
-  actionDescription: {
-    fontSize: 13,
-    color: '#666'
+  deviationLabel: { fontSize: 16, color: '#7F8C8D', marginRight: 10 },
+  deviationValue: { fontSize: 18, fontWeight: 'bold' },
+  watchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  watchStatusCard: {
-    backgroundColor: '#e8f5e9',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20
+  watchConnected: { backgroundColor: '#47C83E' },
+  watchDisconnected: { backgroundColor: '#95A5A6' },
+  watchButtonIcon: { fontSize: 24, marginRight: 10, color: '#FFF' },
+  watchButtonText: { fontSize: 18, fontWeight: 'bold', color: '#FFF' },
+  syncText: { fontSize: 12, color: '#FFF', marginTop: 2 },
+  scoreCardsContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
+  scoreCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 15,
+    padding: 15,
+    width: '48%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  watchStatusTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2e7d32',
-    marginBottom: 8
+  scoreTitle: { fontSize: 14, color: '#7F8C8D', marginBottom: 10 },
+  scoreValue: { fontSize: 32, fontWeight: 'bold', marginBottom: 5 },
+  scoreTarget: { fontSize: 12, color: '#95A5A6', marginBottom: 10 },
+  scoreIndicator: { width: 50, height: 50, borderRadius: 25, marginTop: 10 },
+  wearableData: { alignItems: 'center', marginTop: 10 },
+  wearableItem: { fontSize: 14, color: '#2C3E50', marginVertical: 2 },
+  quickActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5, marginBottom: 10 },
+  actionButton: {
+    backgroundColor: '#0099DB',
+    borderRadius: 10,
+    padding: 15,
+    width: '48%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 60,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  watchStatusText: {
-    fontSize: 14,
-    color: '#4caf50',
-    marginBottom: 12
+  actionButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
+  alertCard: {
+    backgroundColor: '#FFF3CD',
+    borderRadius: 10,
+    padding: 15,
+    marginTop: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFB800',
   },
-  settingsLink: {
-    alignSelf: 'flex-start'
-  },
-  settingsLinkText: {
-    color: '#1b5e20',
-    fontSize: 14,
-    fontWeight: '600'
-  }
+  alertTitle: { fontSize: 16, fontWeight: 'bold', color: '#856404', marginBottom: 5 },
+  alertText: { fontSize: 14, color: '#856404' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#FFF', borderRadius: 15, padding: 20, width: '80%', alignItems: 'center' },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#2C3E50', marginBottom: 10 },
+  modalText: { fontSize: 16, color: '#7F8C8D', textAlign: 'center', marginBottom: 20 },
+  modalButton: { backgroundColor: '#0099DB', borderRadius: 10, padding: 15, width: '100%', alignItems: 'center', marginBottom: 10 },
+  modalButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  modalCancelButton: { backgroundColor: '#E0E0E0' },
+  modalCancelButtonText: { color: '#7F8C8D', fontSize: 16, fontWeight: 'bold' },
 });
-
-export default DashboardScreen;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useContext } from 'react';
 import {
   View,
   Text,
@@ -9,24 +9,24 @@ import {
   Alert,
   Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppContext } from '../AppContext';
-import * as PraxiomAlgorithm from '../services/PraxiomAlgorithm';
+import { AppContext } from '../AppContext';
+import PraxiomAlgorithm from '../services/PraxiomAlgorithm';
 import StorageService from '../services/StorageService';
 import WearableService from '../services/WearableService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function BiomarkerInputScreen({ navigation }) {
-  const { updateState } = useAppContext();
+  const { updateState } = useContext(AppContext);
   
   // ✅ Tier selection state
   const [selectedTier, setSelectedTier] = useState('tier1');
   
-  // ✅ FIXED: Date inputs (year/month/day) instead of DateTimePicker
-  const [assessmentYear, setAssessmentYear] = useState(new Date().getFullYear().toString());
-  const [assessmentMonth, setAssessmentMonth] = useState((new Date().getMonth() + 1).toString());
-  const [assessmentDay, setAssessmentDay] = useState(new Date().getDate().toString());
+  // ✅ FIXED: Date picker with proper state
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Patient Information
   const [age, setAge] = useState('');
@@ -78,6 +78,18 @@ export default function BiomarkerInputScreen({ navigation }) {
       }
     } catch (error) {
       console.error('Error loading age from profile:', error);
+    }
+  };
+
+  // ✅ FIXED: Proper date change handler that prevents jumping
+  const onDateChange = (event, date) => {
+    // Always close picker first to prevent re-triggers
+    setShowDatePicker(false);
+    
+    // Only update if user confirmed selection (not cancelled)
+    if (date && event.type !== 'dismissed') {
+      setSelectedDate(date);
+      console.log('✅ Assessment date selected:', date.toLocaleDateString());
     }
   };
 
@@ -282,51 +294,27 @@ export default function BiomarkerInputScreen({ navigation }) {
           </View>
         </View>
 
-        {/* ✅ Date Selection - FIXED: Using TextInput instead of buggy DateTimePicker */}
+        {/* ✅ Date Selection - FIXED */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Assessment Date</Text>
-          <Text style={styles.helpText}>Enter the date of this assessment</Text>
-          
-          <View style={styles.dateInputContainer}>
-            <View style={styles.dateFieldWrapper}>
-              <Text style={styles.dateFieldLabel}>Year</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={assessmentYear}
-                onChangeText={setAssessmentYear}
-                keyboardType="numeric"
-                placeholder="2025"
-                placeholderTextColor="#666"
-                maxLength={4}
-              />
-            </View>
-            <Text style={styles.dateSeparator}>/</Text>
-            <View style={styles.dateFieldWrapper}>
-              <Text style={styles.dateFieldLabel}>Month</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={assessmentMonth}
-                onChangeText={setAssessmentMonth}
-                keyboardType="numeric"
-                placeholder="11"
-                placeholderTextColor="#666"
-                maxLength={2}
-              />
-            </View>
-            <Text style={styles.dateSeparator}>/</Text>
-            <View style={styles.dateFieldWrapper}>
-              <Text style={styles.dateFieldLabel}>Day</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={assessmentDay}
-                onChangeText={setAssessmentDay}
-                keyboardType="numeric"
-                placeholder="21"
-                placeholderTextColor="#666"
-                maxLength={2}
-              />
-            </View>
-          </View>
+          <TouchableOpacity
+            style={styles.dateButton}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Ionicons name="calendar-outline" size={20} color="#FFB800" />
+            <Text style={styles.dateText}>
+              {selectedDate.toLocaleDateString()}
+            </Text>
+          </TouchableOpacity>
+          {showDatePicker && (
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display="default"
+              onChange={onDateChange}
+              maximumDate={new Date()}
+            />
+          )}
         </View>
 
         {/* Patient Age */}
@@ -700,45 +688,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#fff',
-  },
-  // Date input styles
-  dateInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-    paddingHorizontal: 20,
-  },
-  dateFieldWrapper: {
-    flex: 1,
-    marginHorizontal: 5,
-  },
-  dateFieldLabel: {
-    fontSize: 12,
-    color: '#8e8e93',
-    marginBottom: 5,
-    textAlign: 'center',
-  },
-  dateInput: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 8,
-    padding: 12,
-    color: '#ffffff',
-    fontSize: 16,
-    textAlign: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 184, 0, 0.3)',
-  },
-  dateSeparator: {
-    fontSize: 24,
-    color: '#FFB800',
-    marginHorizontal: 5,
-    marginTop: 20,
-  },
-  helpText: {
-    fontSize: 12,
-    color: '#8e8e93',
-    marginBottom: 8,
-    fontStyle: 'italic',
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,12 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { useAppContext } from '../AppContext';
-import * as PraxiomAlgorithm from '../services/PraxiomAlgorithm';
+import { AppContext } from '../AppContext';
+import PraxiomAlgorithm from '../services/PraxiomAlgorithm';
 import PraxiomBackground from '../components/PraxiomBackground';
 
 const FitnessAssessmentScreen = ({ navigation }) => {
-  const { state, updateState } = useAppContext();
+  const { healthData, setHealthData } = useContext(AppContext);
   const [assessmentType, setAssessmentType] = useState(null);
 
   // Aerobic Fitness
@@ -53,7 +53,7 @@ const FitnessAssessmentScreen = ({ navigation }) => {
         return;
       }
 
-      const age = state.userProfile?.chronologicalAge || 45;
+      const age = healthData.age || 45;
 
       // Calculate Aerobic Score
       let aerobicScore;
@@ -99,19 +99,18 @@ const FitnessAssessmentScreen = ({ navigation }) => {
         mindBodyScore
       );
 
-      // Save to fitness data
-      const fitnessData = {
-        aerobicFitness: aerobicScore,
-        flexibilityPosture: flexibilityScore,
-        coordinationBalance: balanceScore,
-        mentalPreparedness: mindBodyScore,
+      // Save to health data
+      const updatedHealthData = {
+        ...healthData,
+        aerobicScore,
+        flexibilityScore,
+        balanceScore,
+        mindBodyScore,
         fitnessScore: compositeScore,
-        assessmentDate: new Date().toISOString(),
+        fitnessAssessmentDate: new Date().toISOString(),
       };
 
-      updateState({
-        fitnessData: fitnessData
-      });
+      setHealthData(updatedHealthData);
 
       // Show results
       Alert.alert(

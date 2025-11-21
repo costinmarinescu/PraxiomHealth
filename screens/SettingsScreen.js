@@ -1,198 +1,180 @@
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import {
   View,
   Text,
+  ScrollView,
+  TouchableOpacity,
   StyleSheet,
   Switch,
-  TouchableOpacity,
-  ScrollView,
   Alert,
-  ActivityIndicator
+  TextInput
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppContext } from '../AppContext';
-import SecureStorageService from '../services/SecureStorageService';
 
-const SettingsScreen = ({ navigation }) => {
-  const {
-    autoSync,
-    toggleAutoSync,
-    notifications,
-    toggleNotifications,
-    dataSharing,
-    toggleDataSharing,
-    watchConnected,
-    connectToWatch,
-    disconnectFromWatch,
-    getWatchInfo
-  } = useContext(AppContext);
+export default function SettingsScreen({ navigation }) {
+  const { state, updateState, disconnectWatch } = useContext(AppContext);
+  
+  // ✅ FIX: Simple date inputs instead of DateTimePicker
+  const [birthYear, setBirthYear] = useState('');
+  const [birthMonth, setBirthMonth] = useState('');
+  const [birthDay, setBirthDay] = useState('');
+  
+  const isWatchConnected = state.watchConnected === true;
+  const connectedDeviceName = state.connectedDevice?.name || 'PineTime';
 
-  const [connecting, setConnecting] = useState(false);
-  const [securityStatus, setSecurityStatus] = useState(null);
-  const [localAutoSync, setLocalAutoSync] = useState(autoSync);
-
-  /**
-   * Load security status on mount
-   */
+  // Load existing birthdate
   useEffect(() => {
-    loadSecurityStatus();
-  }, []);
+    if (state.profile?.birthdate) {
+      const date = new Date(state.profile.birthdate);
+      setBirthYear(date.getFullYear().toString());
+      setBirthMonth((date.getMonth() + 1).toString());
+      setBirthDay(date.getDate().toString());
+    }
+  }, [state.profile?.birthdate]);
 
-  /**
-   * Sync local state with context
-   */
-  useEffect(() => {
-    setLocalAutoSync(autoSync);
-  }, [autoSync]);
+  // ✅ NEW: Calculate age from birthdate
+  const calculateAge = (birthdate) => {
+    const today = new Date();
+    const birthDate = new Date(birthdate);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age;
+  };
 
-  /**
-   * Load security status for debugging
-   */
-  const loadSecurityStatus = async () => {
+  // ✅ FIX: Calculate and save chronological age from birthdate
+  const handleSaveBirthdate = async () => {
+    const year = parseInt(birthYear);
+    const month = parseInt(birthMonth);
+    const day = parseInt(birthDay);
+
+    // Validation
+    if (!year || !month || !day) {
+      Alert.alert('Invalid Date', 'Please enter year, month, and day');
+      return;
+    }
+
+    if (year < 1900 || year > new Date().getFullYear()) {
+      Alert.alert('Invalid Year', 'Please enter a valid year');
+      return;
+    }
+
+    if (month < 1 || month > 12) {
+      Alert.alert('Invalid Month', 'Month must be between 1 and 12');
+      return;
+    }
+
+    if (day < 1 || day > 31) {
+      Alert.alert('Invalid Day', 'Day must be between 1 and 31');
+      return;
+    }
+
+    // Create date
+    const birthdate = new Date(year, month - 1, day);
+    
+    // ✅ NEW: Calculate chronological age
+    const chronologicalAge = calculateAge(birthdate);
+    
+    // Validate age is reasonable
+    if (chronologicalAge < 18 || chronologicalAge > 120) {
+      Alert.alert('Invalid Age', `Calculated age is ${chronologicalAge}. Please check your birthdate.`);
+      return;
+    }
+    
     try {
-      const status = await SecureStorageService.getSecurityStatus();
-      setSecurityStatus(status);
+      // Save chronological age to AsyncStorage
+      await AsyncStorage.setItem('chronologicalAge', chronologicalAge.toString());
+      console.log('✅ Chronological age saved:', chronologicalAge);
+      
+      // Update state with both birthdate AND chronological age
+      updateState({
+        profile: {
+          ...state.profile,
+          birthdate: birthdate.toISOString()
+        },
+        chronologicalAge: chronologicalAge
+      });
+      
+      Alert.alert(
+        'Success',
+        `Date of birth updated successfully!\n\nYour chronological age: ${chronologicalAge} years`
+      );
     } catch (error) {
-      console.error('Error loading security status:', error);
+      console.error('Error saving birthdate:', error);
+      Alert.alert('Error', 'Failed to save date of birth');
     }
   };
 
-  /**
-   * 🔥 FIX: Handle auto-sync toggle with proper state management
-   */
-  const handleAutoSyncToggle = async (value) => {
-    try {
-      console.log(`⚙️ User toggling auto-sync from ${localAutoSync} to ${value}`);
-      
-      // Optimistically update local UI immediately
-      setLocalAutoSync(value);
-      
-      // Then persist to storage and context
-      await toggleAutoSync(value);
-      
-      console.log('✅ Auto-sync toggle complete');
-      
-    } catch (error) {
-      console.error('❌ Error toggling auto-sync:', error);
-      
-      // Revert local state on error
-      setLocalAutoSync(!value);
-      
-      Alert.alert(
-        'Error',
-        'Failed to update auto-sync setting. Please try again.',
-        [{ text: 'OK' }]
-      );
-    }
-  };
-
-  /**
-   * Handle watch connection
-   */
-  const handleWatchConnection = async () => {
-    if (watchConnected) {
-      // Disconnect
-      Alert.alert(
-        'Disconnect Watch',
-        'Are you sure you want to disconnect from PineTime?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Disconnect',
-            style: 'destructive',
-            onPress: async () => {
-              await disconnectFromWatch();
-              Alert.alert('Success', 'Watch disconnected');
-            }
-          }
-        ]
-      );
-    } else {
-      // Connect
-      setConnecting(true);
-      try {
-        await connectToWatch();
-        Alert.alert('Success', 'Connected to PineTime watch');
-      } catch (error) {
-        Alert.alert('Connection Failed', error.message);
-      } finally {
-        setConnecting(false);
+  const handleToggleNotifications = (value) => {
+    updateState({
+      settings: {
+        ...state.settings,
+        notificationsEnabled: value
       }
-    }
+    });
   };
 
-  /**
-   * Handle notifications toggle
-   */
-  const handleNotificationsToggle = async (value) => {
-    try {
-      await toggleNotifications(value);
-    } catch (error) {
-      console.error('Error toggling notifications:', error);
-      Alert.alert('Error', 'Failed to update notifications setting');
-    }
-  };
-
-  /**
-   * Handle data sharing toggle
-   */
-  const handleDataSharingToggle = async (value) => {
-    if (value) {
-      // Show confirmation before enabling data sharing
-      Alert.alert(
-        'Enable Data Sharing',
-        'Do you want to share your anonymized health data to improve longevity research?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Enable',
-            onPress: async () => {
-              try {
-                await toggleDataSharing(true);
-              } catch (error) {
-                console.error('Error enabling data sharing:', error);
-              }
-            }
-          }
-        ]
-      );
-    } else {
-      try {
-        await toggleDataSharing(false);
-      } catch (error) {
-        console.error('Error disabling data sharing:', error);
+  const handleToggleAutoSync = (value) => {
+    updateState({
+      settings: {
+        ...state.settings,
+        autoSyncEnabled: value
       }
-    }
+    });
   };
 
-  /**
-   * Clear all data (with confirmation)
-   */
+  const handleExportData = () => {
+    Alert.alert(
+      'Export Health Data',
+      'Export your Praxiom Age history and biomarker data?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Export', 
+          onPress: () => {
+            Alert.alert('Coming Soon', 'Data export feature is under development');
+          }
+        }
+      ]
+    );
+  };
+
   const handleClearData = () => {
     Alert.alert(
       'Clear All Data',
-      'This will permanently delete all your biomarker data, calculations, and settings. This action cannot be undone.',
+      'This will delete ALL your health data, biomarker history, and Praxiom Age calculations. This action cannot be undone!',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete Everything',
+          text: 'Delete All',
           style: 'destructive',
           onPress: async () => {
             try {
-              await SecureStorageService.clear();
-              Alert.alert(
-                'Data Cleared',
-                'All data has been deleted. Please restart the app.',
-                [
-                  {
-                    text: 'OK',
-                    onPress: () => {
-                      // In a real app, you would restart or navigate to onboarding
-                    }
-                  }
-                ]
-              );
+              updateState({
+                biologicalAge: 0,
+                oralHealthScore: 50,
+                systemicHealthScore: 45,
+                vitalityIndex: 47.5,
+                fitnessScore: 65,
+                salivaryPH: null,
+                mmp8: null,
+                flowRate: null,
+                hsCRP: null,
+                omega3Index: null,
+                hba1c: null,
+                gdf15: null,
+                vitaminD: null,
+              });
+              Alert.alert('Success', 'All data has been cleared');
             } catch (error) {
-              Alert.alert('Error', 'Failed to clear data: ' + error.message);
+              Alert.alert('Error', 'Failed to clear data');
             }
           }
         }
@@ -200,314 +182,433 @@ const SettingsScreen = ({ navigation }) => {
     );
   };
 
-  /**
-   * Show watch info
-   */
-  const handleShowWatchInfo = () => {
-    const info = getWatchInfo();
-    Alert.alert(
-      'Watch Information',
-      `Status: ${info.connected ? 'Connected' : 'Disconnected'}\n` +
-      `Device: ${info.deviceName}\n` +
-      `Auto-Sync: ${info.autoSync ? 'Enabled' : 'Disabled'}`,
-      [{ text: 'OK' }]
-    );
+  const handleWatchPress = () => {
+    if (isWatchConnected) {
+      Alert.alert(
+        'Connected Device',
+        `${connectedDeviceName} is connected`,
+        [
+          { text: 'OK' },
+          {
+            text: 'Disconnect',
+            style: 'destructive',
+            onPress: disconnectWatch
+          }
+        ]
+      );
+    } else {
+      navigation.navigate('Watch');
+    }
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        {/* PineTime Watch Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>PineTime Watch</Text>
-          
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Watch Status</Text>
-              <Text style={styles.settingDescription}>
-                {watchConnected ? 'Connected' : 'Not connected'}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[
-                styles.button,
-                watchConnected && styles.buttonDanger,
-                connecting && styles.buttonDisabled
-              ]}
-              onPress={handleWatchConnection}
-              disabled={connecting}
-            >
-              {connecting ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>
-                  {watchConnected ? 'Disconnect' : 'Connect'}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
+    <LinearGradient
+      colors={['#FF6B35', '#F7931E', '#FDC830', '#00CED1']}
+      style={styles.container}
+    >
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={styles.subtitle}>Praxiom Health</Text>
 
-          {watchConnected && (
-            <>
-              <View style={styles.settingRow}>
-                <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Auto-Sync Bio-Age</Text>
-                  <Text style={styles.settingDescription}>
-                    Automatically sync bio-age to watch after calculations
-                  </Text>
-                </View>
-                <Switch
-                  value={localAutoSync}
-                  onValueChange={handleAutoSyncToggle}
-                  trackColor={{ false: '#ccc', true: '#FF6B35' }}
-                  thumbColor={localAutoSync ? '#fff' : '#f4f3f4'}
+        {/* Connected Device Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Connected Device</Text>
+          
+          <TouchableOpacity 
+            style={styles.deviceCard}
+            onPress={handleWatchPress}
+          >
+            <Ionicons 
+              name={isWatchConnected ? "watch" : "watch-outline"} 
+              size={40} 
+              color={isWatchConnected ? "#fff" : "rgba(255,255,255,0.5)"} 
+            />
+            <View style={styles.deviceInfo}>
+              <Text style={[
+                styles.deviceStatus,
+                { color: isWatchConnected ? '#fff' : 'rgba(255,255,255,0.7)' }
+              ]}>
+                {isWatchConnected ? 'Connected' : 'Not Connected'}
+              </Text>
+              {isWatchConnected && (
+                <Text style={styles.deviceName}>{connectedDeviceName}</Text>
+              )}
+              {!isWatchConnected && (
+                <Text style={styles.deviceHint}>Tap to connect</Text>
+              )}
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="rgba(255,255,255,0.5)" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Profile Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Profile Information</Text>
+          
+          <View style={styles.settingCard}>
+            <Text style={styles.settingLabel}>Date of Birth</Text>
+            
+            <View style={styles.dateInputContainer}>
+              <View style={styles.dateInputWrapper}>
+                <Text style={styles.dateInputLabel}>Year</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  value={birthYear}
+                  onChangeText={setBirthYear}
+                  placeholder="1990"
+                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  keyboardType="number-pad"
+                  maxLength={4}
                 />
               </View>
-
-              <TouchableOpacity
-                style={styles.infoButton}
-                onPress={handleShowWatchInfo}
-              >
-                <Text style={styles.infoButtonText}>View Watch Details</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-
-        {/* Notifications Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Notifications</Text>
-          
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Push Notifications</Text>
-              <Text style={styles.settingDescription}>
-                Receive reminders for biomarker assessments
-              </Text>
+              
+              <View style={styles.dateInputWrapper}>
+                <Text style={styles.dateInputLabel}>Month</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  value={birthMonth}
+                  onChangeText={setBirthMonth}
+                  placeholder="01"
+                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  keyboardType="number-pad"
+                  maxLength={2}
+                />
+              </View>
+              
+              <View style={styles.dateInputWrapper}>
+                <Text style={styles.dateInputLabel}>Day</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  value={birthDay}
+                  onChangeText={setBirthDay}
+                  placeholder="15"
+                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  keyboardType="number-pad"
+                  maxLength={2}
+                />
+              </View>
             </View>
-            <Switch
-              value={notifications}
-              onValueChange={handleNotificationsToggle}
-              trackColor={{ false: '#ccc', true: '#FF6B35' }}
-              thumbColor={notifications ? '#fff' : '#f4f3f4'}
-            />
+            
+            {state.profile?.birthdate && (
+              <Text style={styles.currentValue}>
+                Current: {new Date(state.profile.birthdate).toLocaleDateString()}
+              </Text>
+            )}
+            {!state.profile?.birthdate && (
+              <Text style={styles.noValue}>
+                Not set - Required for Praxiom Age calculation
+              </Text>
+            )}
+            
+            {/* ✅ NEW: Show calculated chronological age */}
+            {state.chronologicalAge > 0 && (
+              <Text style={styles.ageDisplay}>
+                Your age: {state.chronologicalAge} years
+              </Text>
+            )}
+            
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleSaveBirthdate}
+            >
+              <Text style={styles.saveButtonText}>Save Date of Birth</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Privacy Section */}
+        {/* App Settings Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Privacy</Text>
+          <Text style={styles.sectionTitle}>App Settings</Text>
           
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Data Sharing</Text>
-              <Text style={styles.settingDescription}>
-                Share anonymized data for longevity research
-              </Text>
+          <View style={styles.settingCard}>
+            <View style={styles.settingRow}>
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.settingTitle}>Notifications</Text>
+                <Text style={styles.settingDescription}>
+                  Receive alerts for Praxiom Age updates
+                </Text>
+              </View>
+              <Switch
+                value={state.settings?.notificationsEnabled || false}
+                onValueChange={handleToggleNotifications}
+                trackColor={{ false: '#767577', true: '#00CED1' }}
+                thumbColor={state.settings?.notificationsEnabled ? '#fff' : '#f4f3f4'}
+              />
             </View>
-            <Switch
-              value={dataSharing}
-              onValueChange={handleDataSharingToggle}
-              trackColor={{ false: '#ccc', true: '#FF6B35' }}
-              thumbColor={dataSharing ? '#fff' : '#f4f3f4'}
-            />
           </View>
 
-          {/* Security Status (Debug Info) */}
-          {securityStatus && (
-            <View style={styles.securityInfo}>
-              <Text style={styles.securityLabel}>Security Status</Text>
-              <Text style={styles.securityValue}>
-                {securityStatus.securityLevel}
-              </Text>
-              <Text style={styles.securityDetail}>
-                {securityStatus.encryptedKeys} encrypted keys
-              </Text>
+          <View style={styles.settingCard}>
+            <View style={styles.settingRow}>
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.settingTitle}>Auto-Sync</Text>
+                <Text style={styles.settingDescription}>
+                  Automatically sync with connected devices
+                </Text>
+              </View>
+              <Switch
+                value={state.settings?.autoSyncEnabled || true}
+                onValueChange={handleToggleAutoSync}
+                trackColor={{ false: '#767577', true: '#00CED1' }}
+                thumbColor={state.settings?.autoSyncEnabled ? '#fff' : '#f4f3f4'}
+              />
             </View>
-          )}
+          </View>
+        </View>
+
+        {/* Data Management Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Data Management</Text>
+          
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={handleExportData}
+          >
+            <Ionicons name="download-outline" size={24} color="#fff" />
+            <Text style={styles.actionButtonText}>Export Health Data</Text>
+            <Ionicons name="chevron-forward" size={24} color="rgba(255,255,255,0.5)" />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.dangerButton]}
+            onPress={handleClearData}
+          >
+            <Ionicons name="trash-outline" size={24} color="#fff" />
+            <Text style={styles.actionButtonText}>Clear All Data</Text>
+            <Ionicons name="chevron-forward" size={24} color="rgba(255,255,255,0.5)" />
+          </TouchableOpacity>
         </View>
 
         {/* About Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>About</Text>
           
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate('ProtocolInfo')}
-          >
-            <Text style={styles.menuItemText}>Praxiom Protocol Info</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => Alert.alert('Privacy Policy', 'Privacy policy details...')}
-          >
-            <Text style={styles.menuItemText}>Privacy Policy</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => Alert.alert('Terms of Service', 'Terms of service details...')}
-          >
-            <Text style={styles.menuItemText}>Terms of Service</Text>
-          </TouchableOpacity>
-
-          <View style={styles.versionInfo}>
-            <Text style={styles.versionText}>Version 1.0.0</Text>
-            <Text style={styles.versionText}>© 2025 Praxiom Health</Text>
+          <View style={styles.aboutCard}>
+            <Text style={styles.aboutTitle}>Praxiom Health</Text>
+            <Text style={styles.aboutVersion}>Version 1.0.0</Text>
+            <Text style={styles.aboutDescription}>
+              Precision Longevity Medicine Platform
+            </Text>
+            <Text style={styles.aboutCopyright}>
+              © 2025 Praxiom Health. All rights reserved.
+            </Text>
           </View>
         </View>
 
-        {/* Danger Zone */}
-        <View style={[styles.section, styles.dangerSection]}>
-          <Text style={[styles.sectionTitle, styles.dangerTitle]}>Danger Zone</Text>
-          
-          <TouchableOpacity
-            style={styles.dangerButton}
-            onPress={handleClearData}
-          >
-            <Text style={styles.dangerButtonText}>Clear All Data</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </ScrollView>
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </LinearGradient>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5'
   },
-  content: {
-    padding: 20
+  scrollContent: {
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  headerTitle: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 5,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#fff',
+    opacity: 0.9,
+    marginBottom: 30,
   },
   section: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3
+    marginBottom: 30,
   },
   sectionTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 15,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  deviceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  deviceInfo: {
+    flex: 1,
+    marginLeft: 15,
+  },
+  deviceStatus: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 16
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  deviceName: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  deviceHint: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontStyle: 'italic',
+  },
+  settingCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   settingRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0'
+    justifyContent: 'space-between',
   },
-  settingInfo: {
+  settingTextContainer: {
     flex: 1,
-    marginRight: 16
+    marginRight: 15,
+  },
+  settingTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  settingDescription: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
   settingLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 4
-  },
-  settingDescription: {
-    fontSize: 13,
-    color: '#666'
-  },
-  button: {
-    backgroundColor: '#FF6B35',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8
-  },
-  buttonDanger: {
-    backgroundColor: '#dc3545'
-  },
-  buttonDisabled: {
-    opacity: 0.6
-  },
-  buttonText: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '600'
+    marginBottom: 15,
   },
-  infoButton: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    alignItems: 'center'
+  dateInputContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 15,
   },
-  infoButtonText: {
-    color: '#FF6B35',
-    fontSize: 14,
-    fontWeight: '600'
+  dateInputWrapper: {
+    flex: 1,
   },
-  securityInfo: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: '#e8f5e9',
-    borderRadius: 8
-  },
-  securityLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#2e7d32',
-    marginBottom: 4
-  },
-  securityValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1b5e20',
-    marginBottom: 2
-  },
-  securityDetail: {
+  dateInputLabel: {
     fontSize: 12,
-    color: '#4caf50'
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginBottom: 6,
+    textAlign: 'center',
   },
-  menuItem: {
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0'
-  },
-  menuItemText: {
+  dateInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 12,
+    padding: 12,
     fontSize: 16,
-    color: '#333'
+    color: '#fff',
+    textAlign: 'center',
+    fontWeight: '600',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
   },
-  versionInfo: {
-    marginTop: 16,
-    alignItems: 'center'
+  currentValue: {
+    fontSize: 14,
+    color: '#fff',
+    marginBottom: 12,
+    textAlign: 'center',
+    fontWeight: '500',
   },
-  versionText: {
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 4
+  noValue: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginBottom: 12,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
-  dangerSection: {
-    borderColor: '#dc3545',
-    borderWidth: 1
+  ageDisplay: {
+    fontSize: 16,
+    color: '#fff',
+    marginBottom: 12,
+    textAlign: 'center',
+    fontWeight: '700',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  dangerTitle: {
-    color: '#dc3545'
+  saveButton: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF6B35',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   dangerButton: {
-    backgroundColor: '#dc3545',
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center'
+    backgroundColor: 'rgba(231, 76, 60, 0.3)',
+    borderColor: 'rgba(231, 76, 60, 0.5)',
   },
-  dangerButtonText: {
-    color: '#fff',
+  actionButtonText: {
+    flex: 1,
     fontSize: 16,
-    fontWeight: '600'
-  }
+    fontWeight: '600',
+    color: '#fff',
+    marginLeft: 12,
+  },
+  aboutCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  aboutTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  aboutVersion: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginBottom: 16,
+  },
+  aboutDescription: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  aboutCopyright: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
+  },
 });
-
-export default SettingsScreen;

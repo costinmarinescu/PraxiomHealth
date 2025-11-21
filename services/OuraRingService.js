@@ -3,8 +3,6 @@
  * 
  * Handles OAuth authentication and data retrieval from Oura Cloud API
  * Documentation: https://cloud.ouraring.com/docs/
- * 
- * ✅ UPDATED: Added credential management for user-configurable API keys
  */
 
 import * as AuthSession from 'expo-auth-session';
@@ -16,8 +14,8 @@ WebBrowser.maybeCompleteAuthSession();
 
 // Oura API Configuration
 const OURA_CONFIG = {
-  clientId: '',  // ✅ Will be loaded from user input
-  clientSecret: '',  // ✅ Will be loaded from user input
+  clientId: '18a798fd-289f-45d4-99b6-ade377b3ba15',  // Oura API Client ID
+  clientSecret: '07SgBRP_w7zSdetMcidQNtv3gKsUmKQokpq0_0HUw',  // Oura API Client Secret
   redirectUri: AuthSession.makeRedirectUri({
     scheme: 'praxiomhealth',
     path: 'oura-callback'
@@ -36,63 +34,10 @@ class OuraRingService {
   }
 
   /**
-   * ✅ NEW: Set user's Oura API credentials
-   * @param {string} clientId - Oura Client ID from cloud.ouraring.com
-   * @param {string} clientSecret - Oura Client Secret from cloud.ouraring.com
-   */
-  async setCredentials(clientId, clientSecret) {
-    try {
-      console.log('💾 Saving Oura API credentials...');
-      
-      // Update config
-      OURA_CONFIG.clientId = clientId;
-      OURA_CONFIG.clientSecret = clientSecret;
-      
-      // Save securely to AsyncStorage
-      await AsyncStorage.setItem('oura_client_id', clientId);
-      await AsyncStorage.setItem('oura_client_secret', clientSecret);
-      
-      console.log('✅ Oura credentials saved successfully');
-      return true;
-    } catch (error) {
-      console.error('❌ Error saving Oura credentials:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * ✅ NEW: Load saved credentials from storage
-   * @returns {boolean} True if credentials were loaded
-   */
-  async loadCredentials() {
-    try {
-      const clientId = await AsyncStorage.getItem('oura_client_id');
-      const clientSecret = await AsyncStorage.getItem('oura_client_secret');
-      
-      if (clientId && clientSecret) {
-        OURA_CONFIG.clientId = clientId;
-        OURA_CONFIG.clientSecret = clientSecret;
-        console.log('✅ Oura credentials loaded from storage');
-        return true;
-      }
-      
-      console.log('ℹ️ No Oura credentials found in storage');
-      return false;
-    } catch (error) {
-      console.error('❌ Error loading Oura credentials:', error);
-      return false;
-    }
-  }
-
-  /**
-   * ✅ UPDATED: Initialize service, restore tokens AND credentials
+   * Initialize service and restore saved tokens
    */
   async init() {
     try {
-      // ✅ Load credentials first
-      await this.loadCredentials();
-      
-      // Then load tokens
       const savedToken = await AsyncStorage.getItem('oura_access_token');
       const savedRefresh = await AsyncStorage.getItem('oura_refresh_token');
       const savedExpiry = await AsyncStorage.getItem('oura_token_expiry');
@@ -121,16 +66,6 @@ class OuraRingService {
    */
   async authenticate() {
     try {
-      // ✅ Check if credentials are configured
-      if (!OURA_CONFIG.clientId || !OURA_CONFIG.clientSecret) {
-        return {
-          success: false,
-          message: 'Oura API credentials not configured. Please configure in settings.'
-        };
-      }
-      
-      console.log('🔐 Starting Oura OAuth flow...');
-      
       // Create authorization request
       const request = new AuthSession.AuthRequest({
         clientId: OURA_CONFIG.clientId,
@@ -198,8 +133,6 @@ class OuraRingService {
       });
 
       if (!response.ok) {
-        const errorData = await response.text();
-        console.error('Token exchange error response:', errorData);
         throw new Error('Failed to exchange code for token');
       }
 
@@ -214,7 +147,6 @@ class OuraRingService {
       await AsyncStorage.setItem('oura_refresh_token', this.refreshToken);
       await AsyncStorage.setItem('oura_token_expiry', this.tokenExpiry.toString());
 
-      console.log('✅ Access token obtained and saved');
       return true;
     } catch (error) {
       console.error('Token exchange error:', error);
@@ -261,7 +193,6 @@ class OuraRingService {
       }
       await AsyncStorage.setItem('oura_token_expiry', this.tokenExpiry.toString());
 
-      console.log('✅ Access token refreshed');
       return true;
     } catch (error) {
       console.error('Token refresh error:', error);
@@ -452,31 +383,20 @@ class OuraRingService {
   }
 
   /**
-   * ✅ UPDATED: Disconnect and clear tokens AND credentials (optional)
-   * @param {boolean} clearCredentials - Whether to also clear saved API credentials
+   * Disconnect and clear tokens
    */
-  async disconnect(clearCredentials = false) {
+  async disconnect() {
     try {
       this.accessToken = null;
       this.refreshToken = null;
       this.tokenExpiry = null;
 
-      const itemsToRemove = [
+      await AsyncStorage.multiRemove([
         'oura_access_token',
         'oura_refresh_token',
         'oura_token_expiry'
-      ];
-      
-      // ✅ Optionally clear credentials too
-      if (clearCredentials) {
-        itemsToRemove.push('oura_client_id', 'oura_client_secret');
-        OURA_CONFIG.clientId = '';
-        OURA_CONFIG.clientSecret = '';
-      }
+      ]);
 
-      await AsyncStorage.multiRemove(itemsToRemove);
-
-      console.log('✅ Disconnected from Oura Ring');
       return true;
     } catch (error) {
       console.error('Error disconnecting:', error);

@@ -1,648 +1,574 @@
-/**
- * AppContext.js - CORRECTED VERSION
- * Version: 2.0.0
- * Date: November 20, 2025
- * 
- * CRITICAL FIX: This context now properly uses the complete PraxiomAlgorithm
- * instead of simplified calculations that were causing 5-12 year errors
- */
-
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Crypto from 'expo-crypto';
-import * as Notifications from 'expo-notifications';
-import * as SecureStore from 'expo-secure-store';
-import { BleManager } from 'react-native-ble-plx';
-
-// CRITICAL: Import the COMPLETE algorithm implementation
+import WearableService from './services/WearableService';
 import PraxiomAlgorithm from './services/PraxiomAlgorithm';
 
-// Create context
-const AppContext = createContext();
+// ✅ CRITICAL FIX: Wrap Oura import in try-catch to prevent crash if module has issues
+let OuraRingService = null;
+try {
+  OuraRingService = require('./services/OuraRingService').default;
+  console.log('✅ OuraRingService loaded successfully');
+} catch (error) {
+  console.error('⚠️ OuraRingService failed to load, disabling Oura features:', error);
+}
 
-// BLE UUIDs for PineTime and Oura
-const BLE_UUIDS = {
-  pineTime: {
-    service: '00001805-0000-1000-8000-00805f9b34fb',
-    bioAge: '00002a39-0000-1000-8000-00805f9b34fb',
-    heartRate: '00002a37-0000-1000-8000-00805f9b34fb'
-  },
-  oura: {
-    service: '0000181a-0000-1000-8000-00805f9b34fb',
-    hrv: 'custom-hrv-uuid',
-    sleep: 'custom-sleep-uuid'
-  }
-};
+export const AppContext = createContext();
 
-// Encryption configuration (HIPAA compliant)
-const ENCRYPTION_CONFIG = {
-  algorithm: 'aes-256-gcm',
-  keyLength: 32,
-  ivLength: 16,
-  tagLength: 16,
-  saltRounds: 10000
-};
-
-export const AppProvider = ({ children }) => {
-  // ====================================
-  // STATE MANAGEMENT
-  // ====================================
-  
-  const [userData, setUserData] = useState(null);
-  const [currentAssessment, setCurrentAssessment] = useState(null);
-  const [assessmentHistory, setAssessmentHistory] = useState([]);
-  const [currentTier, setCurrentTier] = useState(1);
-  const [isCalculating, setIsCalculating] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-  
-  // BLE State
-  const [bleManager] = useState(new BleManager());
-  const [connectedDevices, setConnectedDevices] = useState({
-    pineTime: null,
-    oura: null
+export const AppContextProvider = ({ children }) => {
+  const [state, setState] = useState({
+    chronologicalAge: 0,
+    userName: '',
+    biologicalAge: 70.1,
+    oralHealthScore: 50,
+    systemicHealthScore: 45,
+    vitalityIndex: 47.5,
+    fitnessScore: 65,
+    watchConnected: false,
+    ouraConnected: false,
+    lastSync: null,
+    lastOuraSync: null,
+    
+    // Tier 1 Biomarkers
+    salivaryPH: null,
+    mmp8: null,
+    flowRate: null,
+    hsCRP: null,
+    omega3Index: null,
+    hba1c: null,
+    gdf15: null,
+    vitaminD: null,
+    
+    // Fitness Assessment Data
+    aerobicScore: null,
+    flexibilityScore: null,
+    balanceScore: null,
+    mindBodyScore: null,
+    fitnessAssessmentDate: null,
+    
+    // Wearable Data (PineTime)
+    heartRate: null,
+    steps: 0,
+    hrv: null,
+    
+    // Oura Ring Data
+    ouraHeartRate: null,
+    ouraHRV: null,
+    ouraSteps: null,
+    ouraSleepEfficiency: null,
+    ouraReadinessScore: null,
   });
-  const [bleStatus, setBleStatus] = useState('disconnected');
-  
-  // Notification State
-  const [notificationSettings, setNotificationSettings] = useState({
-    tierUpgrade: true,
-    assessmentReminder: true,
-    deviceSync: true
-  });
 
-  // ====================================
-  // ALGORITHM INSTANCE (CRITICAL)
-  // ====================================
-  
-  const praxiomAlgorithm = new PraxiomAlgorithm();
-
-  // ====================================
-  // INITIALIZATION
-  // ====================================
-  
+  // ✅ CRITICAL FIX: Wrap all initialization in error handlers
   useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        await loadSavedData();
+      } catch (error) {
+        console.error('Error loading saved data:', error);
+      }
+      
+      try {
+        await loadUserProfile();
+      } catch (error) {
+        console.error('Error loading user profile:', error);
+      }
+      
+      try {
+        await initializeWearables();
+      } catch (error) {
+        console.error('Error initializing wearables:', error);
+      }
+    };
+    
     initializeApp();
   }, []);
 
-  const initializeApp = async () => {
-    setIsLoading(true);
-    try {
-      // Load user data
-      await loadUserData();
-      
-      // Load assessment history
-      await loadAssessmentHistory();
-      
-      // Initialize notifications
-      await initializeNotifications();
-      
-      // Initialize BLE
-      await initializeBLE();
-      
-      // Check encryption keys
-      await initializeEncryption();
-      
-    } catch (error) {
-      console.error('App initialization error:', error);
-      setError('Failed to initialize app');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ====================================
-  // BIO-AGE CALCULATION (USING REAL ALGORITHM)
-  // ====================================
-  
-  const calculateBioAge = async (biomarkers, tier = currentTier) => {
-    setIsCalculating(true);
-    setError(null);
-    
-    try {
-      // Validate biomarkers first
-      const validation = praxiomAlgorithm.validateBiomarkers(biomarkers);
-      if (!validation.valid) {
-        throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
-      }
-      
-      // Log warnings if any
-      if (validation.warnings.length > 0) {
-        console.warn('Biomarker warnings:', validation.warnings);
-      }
-      
-      // Prepare data for calculation
-      const calculationData = {
-        chronologicalAge: userData?.age || 45, // Default if not set
-        biomarkers,
-        tier
-      };
-      
-      // CRITICAL: Use the actual PraxiomAlgorithm for calculation
-      const result = praxiomAlgorithm.calculateBioAge(calculationData);
-      
-      // Add metadata
-      result.calculationId = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        JSON.stringify(calculationData) + Date.now()
-      );
-      result.timestamp = new Date().toISOString();
-      result.deviceId = userData?.deviceId;
-      
-      // Save assessment
-      await saveAssessment(result);
-      
-      // Update current assessment
-      setCurrentAssessment(result);
-      
-      // Check for tier upgrade
-      if (result.recommendation?.tierUpgrade) {
-        await handleTierUpgrade(result);
-      }
-      
-      // Sync with connected devices
-      await syncWithDevices(result);
-      
-      return result;
-      
-    } catch (error) {
-      console.error('Bio-age calculation error:', error);
-      setError(error.message);
-      throw error;
-    } finally {
-      setIsCalculating(false);
-    }
-  };
-
-  // ====================================
-  // DATA ENCRYPTION & STORAGE
-  // ====================================
-  
-  const encryptData = async (data) => {
-    try {
-      // Generate encryption key from secure store
-      let encryptionKey = await SecureStore.getItemAsync('encryptionKey');
-      if (!encryptionKey) {
-        // Generate new key if not exists
-        const keyBuffer = await Crypto.getRandomBytesAsync(ENCRYPTION_CONFIG.keyLength);
-        encryptionKey = Buffer.from(keyBuffer).toString('base64');
-        await SecureStore.setItemAsync('encryptionKey', encryptionKey);
-      }
-      
-      // Generate IV for this encryption
-      const ivBuffer = await Crypto.getRandomBytesAsync(ENCRYPTION_CONFIG.ivLength);
-      const iv = Buffer.from(ivBuffer).toString('base64');
-      
-      // Encrypt data
-      const jsonData = JSON.stringify(data);
-      const encrypted = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        jsonData + encryptionKey + iv
-      );
-      
-      return {
-        encrypted,
-        iv,
-        timestamp: Date.now(),
-        checksum: await Crypto.digestStringAsync(
-          Crypto.CryptoDigestAlgorithm.MD5,
-          jsonData
-        )
-      };
-    } catch (error) {
-      console.error('Encryption error:', error);
-      throw new Error('Failed to encrypt data');
-    }
-  };
-
-  const decryptData = async (encryptedData) => {
-    try {
-      // In production, implement proper AES-256-GCM decryption
-      // This is a placeholder for the structure
-      return encryptedData;
-    } catch (error) {
-      console.error('Decryption error:', error);
-      throw new Error('Failed to decrypt data');
-    }
-  };
-
-  // ====================================
-  // ASSESSMENT MANAGEMENT
-  // ====================================
-  
-  const saveAssessment = async (assessment) => {
-    try {
-      // Encrypt assessment data
-      const encryptedAssessment = await encryptData(assessment);
-      
-      // Add to history
-      const newHistory = [encryptedAssessment, ...assessmentHistory];
-      
-      // Keep only last 100 assessments
-      if (newHistory.length > 100) {
-        newHistory.splice(100);
-      }
-      
-      // Save to AsyncStorage
-      await AsyncStorage.setItem(
-        'assessmentHistory',
-        JSON.stringify(newHistory)
-      );
-      
-      // Update state
-      setAssessmentHistory(newHistory);
-      
-      // Schedule next assessment reminder
-      await scheduleAssessmentReminder();
-      
-    } catch (error) {
-      console.error('Save assessment error:', error);
-      throw new Error('Failed to save assessment');
-    }
-  };
-
-  const loadAssessmentHistory = async () => {
-    try {
-      const stored = await AsyncStorage.getItem('assessmentHistory');
-      if (stored) {
-        const history = JSON.parse(stored);
-        setAssessmentHistory(history);
-        
-        // Set current assessment to most recent
-        if (history.length > 0) {
-          const decrypted = await decryptData(history[0]);
-          setCurrentAssessment(decrypted);
-        }
-      }
-    } catch (error) {
-      console.error('Load history error:', error);
-    }
-  };
-
-  const compareAssessments = (assessments) => {
-    if (!assessments || assessments.length < 2) {
-      return null;
-    }
-    
-    // Calculate trends
-    const first = assessments[0];
-    const last = assessments[assessments.length - 1];
-    
-    return {
-      bioAgeTrend: last.bioAge - first.bioAge,
-      ohsTrend: last.scores?.ohs - first.scores?.ohs,
-      shsTrend: last.scores?.shs - first.scores?.shs,
-      hrvTrend: last.scores?.hrv - first.scores?.hrv,
-      timespan: new Date(last.timestamp) - new Date(first.timestamp),
-      averageBioAge: assessments.reduce((sum, a) => sum + a.bioAge, 0) / assessments.length
-    };
-  };
-
-  // ====================================
-  // BLE CONNECTIVITY
-  // ====================================
-  
-  const initializeBLE = async () => {
-    try {
-      const state = await bleManager.state();
-      if (state !== 'PoweredOn') {
-        console.log('BLE not available');
-        setBleStatus('unavailable');
-        return;
-      }
-      
-      setBleStatus('ready');
-      
-      // Start scanning for devices
-      bleManager.startDeviceScan(
-        null,
-        { allowDuplicates: false },
-        (error, device) => {
-          if (error) {
-            console.error('BLE scan error:', error);
-            return;
-          }
-          
-          // Check for PineTime or Oura
-          if (device.name === 'PineTime' || device.name === 'InfiniTime') {
-            connectToPineTime(device);
-          } else if (device.name?.includes('Oura')) {
-            connectToOura(device);
-          }
-        }
-      );
-      
-      // Stop scanning after 10 seconds
-      setTimeout(() => {
-        bleManager.stopDeviceScan();
-      }, 10000);
-      
-    } catch (error) {
-      console.error('BLE initialization error:', error);
-      setBleStatus('error');
-    }
-  };
-
-  const connectToPineTime = async (device) => {
-    try {
-      const connected = await device.connect();
-      const services = await connected.discoverAllServicesAndCharacteristics();
-      
-      setConnectedDevices(prev => ({ ...prev, pineTime: connected }));
-      setBleStatus('connected');
-      
-      // Send notification
-      await sendNotification({
-        title: 'PineTime Connected',
-        body: 'Your PineTime watch is now synced',
-        priority: 'low'
-      });
-      
-    } catch (error) {
-      console.error('PineTime connection error:', error);
-    }
-  };
-
-  const connectToOura = async (device) => {
-    try {
-      const connected = await device.connect();
-      const services = await connected.discoverAllServicesAndCharacteristics();
-      
-      setConnectedDevices(prev => ({ ...prev, oura: connected }));
-      
-      // Subscribe to HRV updates
-      await connected.monitorCharacteristicForService(
-        BLE_UUIDS.oura.service,
-        BLE_UUIDS.oura.hrv,
-        (error, characteristic) => {
-          if (!error && characteristic) {
-            const hrvValue = Buffer.from(characteristic.value, 'base64').readUInt8(0);
-            console.log('Oura HRV:', hrvValue);
-          }
-        }
-      );
-      
-    } catch (error) {
-      console.error('Oura connection error:', error);
-    }
-  };
-
-  const syncWithDevices = async (assessment) => {
-    // Send bio-age to PineTime
-    if (connectedDevices.pineTime) {
-      try {
-        const bioAgeData = {
-          bioAge: Math.round(assessment.bioAge),
-          chronoAge: assessment.chronologicalAge,
-          deviation: Math.round(assessment.deviations.bioAge),
-          timestamp: Date.now()
-        };
-        
-        // Encode for BLE (max 20 bytes)
-        const encoded = Buffer.from(JSON.stringify(bioAgeData)).toString('base64');
-        
-        await connectedDevices.pineTime.writeCharacteristicWithResponseForService(
-          BLE_UUIDS.pineTime.service,
-          BLE_UUIDS.pineTime.bioAge,
-          encoded
-        );
-        
-        console.log('Bio-age sent to PineTime');
-      } catch (error) {
-        console.error('PineTime sync error:', error);
-      }
-    }
-  };
-
-  // ====================================
-  // NOTIFICATIONS
-  // ====================================
-  
-  const initializeNotifications = async () => {
-    // Request permissions
-    const { status } = await Notifications.requestPermissionsAsync();
-    if (status !== 'granted') {
-      console.log('Notification permissions not granted');
+  // ✅ CRITICAL FIX: Fully defensive initialization
+  const initializeWearables = async () => {
+    // Skip if Oura service didn't load
+    if (!OuraRingService) {
+      console.log('⚠️ Oura Ring features disabled (module not loaded)');
       return;
     }
     
-    // Configure channels for Android
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('tier-upgrade', {
-        name: 'Tier Upgrades',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF6B35'
-      });
-      
-      await Notifications.setNotificationChannelAsync('assessment', {
-        name: 'Assessment Reminders',
-        importance: Notifications.AndroidImportance.DEFAULT,
-        lightColor: '#4ECDC4'
-      });
-    }
-    
-    // Set notification handler
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true
-      })
-    });
-  };
-
-  const sendNotification = async (notification) => {
     try {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: notification.title,
-          body: notification.body,
-          data: notification.data || {},
-          categoryIdentifier: notification.category
-        },
-        trigger: notification.trigger || null // null = immediate
-      });
-    } catch (error) {
-      console.error('Send notification error:', error);
-    }
-  };
-
-  const handleTierUpgrade = async (assessment) => {
-    const currentTier = userData?.tier || 1;
-    const recommendedTier = assessment.recommendation.tierUpgrade ? currentTier + 1 : currentTier;
-    
-    if (recommendedTier > currentTier) {
-      await sendNotification({
-        title: 'Tier Upgrade Recommended',
-        body: `Your health scores indicate you should upgrade to Tier ${recommendedTier}`,
-        priority: 'high',
-        data: {
-          currentTier,
-          recommendedTier,
-          reasons: assessment.recommendation.recommendations
+      await OuraRingService.initialize();
+      const ouraStatus = OuraRingService.getConnectionStatus();
+      
+      if (ouraStatus && ouraStatus.isConnected) {
+        updateState({
+          ouraConnected: true,
+          lastOuraSync: ouraStatus.lastSyncTime,
+        });
+        
+        // Try to sync, but don't let it crash the app
+        try {
+          await syncOuraData();
+        } catch (syncError) {
+          console.error('Oura sync failed, but app continues:', syncError);
         }
+      }
+    } catch (error) {
+      console.error('Oura initialization failed, but app continues:', error);
+    }
+  };
+
+  // ✅ CRITICAL FIX: Fully defensive sync
+  const syncOuraData = async () => {
+    if (!OuraRingService) {
+      return;
+    }
+    
+    try {
+      const result = await OuraRingService.autoSync();
+      
+      // Handle boolean return value
+      if (result === false || result === null || result === undefined) {
+        console.log('⏭️ Oura Ring: Sync not needed or not connected');
+        return;
+      }
+      
+      // Handle object return value
+      if (typeof result === 'object' && result.success === true) {
+        try {
+          const metrics = OuraRingService.getLatestMetrics();
+          
+          if (metrics) {
+            updateState({
+              ouraHeartRate: metrics.heartRate,
+              ouraHRV: metrics.hrv,
+              ouraSteps: metrics.steps,
+              ouraSleepEfficiency: metrics.sleepEfficiency,
+              ouraReadinessScore: metrics.readinessScore,
+              lastOuraSync: metrics.syncTime,
+              ouraConnected: true,
+            });
+            
+            console.log('✅ Oura data synced:', metrics);
+          }
+        } catch (metricsError) {
+          console.error('Failed to get Oura metrics, but app continues:', metricsError);
+        }
+      }
+    } catch (error) {
+      console.error('Oura sync error, but app continues:', error);
+    }
+  };
+
+  // ✅ CRITICAL FIX: Only set up periodic sync if Oura is available
+  useEffect(() => {
+    if (!OuraRingService) {
+      return;
+    }
+    
+    const ouraInterval = setInterval(() => {
+      syncOuraData().catch(error => {
+        console.error('Periodic Oura sync failed:', error);
       });
-      
-      // Update user tier
-      setCurrentTier(recommendedTier);
-      await updateUserData({ tier: recommendedTier });
-    }
-  };
+    }, 60 * 60 * 1000); // 1 hour
 
-  const scheduleAssessmentReminder = async () => {
-    const reminderDate = new Date();
-    reminderDate.setDate(reminderDate.getDate() + 30); // 30 days from now
-    
-    await sendNotification({
-      title: 'Time for Your Assessment',
-      body: 'It\'s been 30 days since your last bio-age assessment',
-      trigger: { date: reminderDate },
-      category: 'assessment'
+    // Initial sync
+    syncOuraData().catch(error => {
+      console.error('Initial Oura sync failed:', error);
     });
-  };
 
-  // ====================================
-  // DATA EXPORT
-  // ====================================
-  
-  const exportData = async (format = 'json') => {
+    return () => clearInterval(ouraInterval);
+  }, []);
+
+  const loadUserProfile = async () => {
     try {
-      const data = {
-        userData,
-        currentAssessment,
-        history: assessmentHistory.slice(0, 10), // Last 10 assessments
-        exportDate: new Date().toISOString(),
-        version: '2.0.0'
-      };
+      const savedAge = await AsyncStorage.getItem('chronologicalAge');
+      const savedName = await AsyncStorage.getItem('userName');
       
-      if (format === 'json') {
-        return JSON.stringify(data, null, 2);
-      } else if (format === 'csv') {
-        return convertToCSV(data);
-      } else if (format === 'pdf') {
-        // Requires react-native-html-to-pdf
-        throw new Error('PDF export not yet implemented');
+      if (savedAge) {
+        const age = parseInt(savedAge);
+        if (age >= 18 && age <= 120) {
+          updateState({ chronologicalAge: age });
+          console.log('✅ Loaded user age from profile:', age);
+        }
+      }
+      
+      if (savedName) {
+        updateState({ userName: savedName });
+        console.log('✅ Loaded user name from profile:', savedName);
       }
     } catch (error) {
-      console.error('Export error:', error);
-      throw error;
+      console.error('Error loading user profile:', error);
     }
   };
 
-  const convertToCSV = (data) => {
-    if (!data.currentAssessment) return '';
-    
-    const assessment = data.currentAssessment;
-    const headers = ['Date', 'Chrono Age', 'Bio Age', 'OHS', 'SHS', 'HRV'];
-    const values = [
-      assessment.timestamp,
-      assessment.chronologicalAge,
-      assessment.bioAge,
-      assessment.scores?.ohs || '',
-      assessment.scores?.shs || '',
-      assessment.scores?.hrv || ''
-    ];
-    
-    return headers.join(',') + '\n' + values.join(',');
-  };
+  // Save critical data when it changes
+  useEffect(() => {
+    saveData().catch(error => {
+      console.error('Error saving data:', error);
+    });
+  }, [state.biologicalAge, state.oralHealthScore, state.systemicHealthScore, state.fitnessScore]);
 
-  // ====================================
-  // USER DATA MANAGEMENT
-  // ====================================
-  
-  const loadUserData = async () => {
+  // Auto-push Bio-Age to watch when it changes and watch is connected
+  useEffect(() => {
+    const pushBioAgeToWatch = async () => {
+      if (state.watchConnected && state.biologicalAge) {
+        try {
+          await WearableService.sendBioAge(state.biologicalAge);
+          
+          const now = new Date().toISOString();
+          await AsyncStorage.setItem('lastBioAgeSync', now);
+          updateState({ lastSync: now });
+          
+          console.log('✅ Bio-Age automatically pushed to watch:', state.biologicalAge);
+        } catch (error) {
+          console.error('❌ Auto-push Bio-Age failed:', error);
+        }
+      }
+    };
+    
+    pushBioAgeToWatch();
+  }, [state.biologicalAge, state.watchConnected]);
+
+  // Subscribe to PineTime wearable data updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      try {
+        const connectionStatus = WearableService.getConnectionStatus();
+        
+        if (connectionStatus.isConnected) {
+          try {
+            const wearableData = WearableService.getLatestData();
+            
+            updateState({
+              heartRate: wearableData.heartRate || null,
+              steps: wearableData.steps !== undefined ? wearableData.steps : 0,
+              hrv: wearableData.hrv || null,
+              watchConnected: true,
+            });
+            
+            console.log('📊 PineTime data updated:', {
+              hr: wearableData.heartRate,
+              steps: wearableData.steps,
+              hrv: wearableData.hrv
+            });
+          } catch (error) {
+            console.error('Error fetching wearable data:', error);
+          }
+        } else {
+          updateState({
+            watchConnected: false,
+            heartRate: null,
+            steps: 0,
+            hrv: null,
+          });
+        }
+      } catch (error) {
+        console.error('Error checking wearable connection:', error);
+      }
+    }, 10000); // Poll every 10 seconds
+
+    const connectionInterval = setInterval(async () => {
+      try {
+        const watchStatus = await AsyncStorage.getItem('watchConnected');
+        const connectionStatus = WearableService.getConnectionStatus();
+        const isConnected = watchStatus === 'true' && connectionStatus.isConnected;
+        
+        updateState({ watchConnected: isConnected });
+      } catch (error) {
+        console.error('Error checking watch connection:', error);
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(connectionInterval);
+    };
+  }, []);
+
+  const loadSavedData = async () => {
     try {
-      const stored = await AsyncStorage.getItem('userData');
-      if (stored) {
-        const data = JSON.parse(stored);
-        setUserData(data);
-        setCurrentTier(data.tier || 1);
+      const savedData = await AsyncStorage.getItem('praxiomHealthData');
+      const watchStatus = await AsyncStorage.getItem('watchConnected');
+      const lastBioAgeSync = await AsyncStorage.getItem('lastBioAgeSync');
+      
+      if (savedData) {
+        const parsedData = JSON.parse(savedData);
+        setState(prevState => ({
+          ...prevState,
+          ...parsedData,
+          watchConnected: watchStatus === 'true',
+          lastSync: lastBioAgeSync
+        }));
       }
     } catch (error) {
-      console.error('Load user data error:', error);
+      console.error('Error loading saved data:', error);
     }
   };
 
-  const updateUserData = async (updates) => {
+  const saveData = async () => {
     try {
-      const newUserData = { ...userData, ...updates };
-      await AsyncStorage.setItem('userData', JSON.stringify(newUserData));
-      setUserData(newUserData);
+      const dataToSave = {
+        chronologicalAge: state.chronologicalAge,
+        biologicalAge: state.biologicalAge,
+        oralHealthScore: state.oralHealthScore,
+        systemicHealthScore: state.systemicHealthScore,
+        vitalityIndex: state.vitalityIndex,
+        fitnessScore: state.fitnessScore,
+        aerobicScore: state.aerobicScore,
+        flexibilityScore: state.flexibilityScore,
+        balanceScore: state.balanceScore,
+        mindBodyScore: state.mindBodyScore,
+        fitnessAssessmentDate: state.fitnessAssessmentDate,
+        salivaryPH: state.salivaryPH,
+        mmp8: state.mmp8,
+        flowRate: state.flowRate,
+        hsCRP: state.hsCRP,
+        omega3Index: state.omega3Index,
+        hba1c: state.hba1c,
+        gdf15: state.gdf15,
+        vitaminD: state.vitaminD,
+        ouraHeartRate: state.ouraHeartRate,
+        ouraHRV: state.ouraHRV,
+        ouraSteps: state.ouraSteps,
+        ouraSleepEfficiency: state.ouraSleepEfficiency,
+        ouraReadinessScore: state.ouraReadinessScore,
+        lastOuraSync: state.lastOuraSync,
+      };
+      await AsyncStorage.setItem('praxiomHealthData', JSON.stringify(dataToSave));
     } catch (error) {
-      console.error('Update user data error:', error);
+      console.error('Error saving data:', error);
     }
   };
 
-  const initializeEncryption = async () => {
+  const updateState = (updates) => {
+    setState(prevState => ({
+      ...prevState,
+      ...updates
+    }));
+  };
+
+  const calculateBiologicalAge = () => {
     try {
-      // Check if encryption keys exist
-      const key = await SecureStore.getItemAsync('encryptionKey');
-      if (!key) {
-        // Generate new encryption key
-        const keyBuffer = await Crypto.getRandomBytesAsync(32);
-        const newKey = Buffer.from(keyBuffer).toString('base64');
-        await SecureStore.setItemAsync('encryptionKey', newKey);
-        console.log('Encryption key generated');
+      // Validate chronological age first
+      if (!state.chronologicalAge || state.chronologicalAge < 18 || state.chronologicalAge > 120) {
+        console.warn('Invalid chronological age, using current value');
+        return state.biologicalAge || state.chronologicalAge;
       }
+
+      // Prepare biomarkers object
+      const biomarkers = {
+        salivaryPH: state.salivaryPH ? parseFloat(state.salivaryPH) : null,
+        activeMMP8: state.mmp8 ? parseFloat(state.mmp8) : null,
+        salivaryFlow: state.flowRate ? parseFloat(state.flowRate) : null,
+        hsCRP: state.hsCRP ? parseFloat(state.hsCRP) : null,
+        omega3Index: state.omega3Index ? parseFloat(state.omega3Index) : null,
+        hba1c: state.hba1c ? parseFloat(state.hba1c) : null,
+        gdf15: state.gdf15 ? parseFloat(state.gdf15) : null,
+        vitaminD: state.vitaminD ? parseFloat(state.vitaminD) : null,
+      };
+
+      // Prepare fitness data if available
+      const fitnessData = (state.aerobicScore || state.flexibilityScore || state.balanceScore || state.mindBodyScore) ? {
+        aerobicFitness: state.aerobicScore ? parseFloat(state.aerobicScore) : null,
+        flexibilityPosture: state.flexibilityScore ? parseFloat(state.flexibilityScore) : null,
+        coordinationBalance: state.balanceScore ? parseFloat(state.balanceScore) : null,
+        mentalPreparedness: state.mindBodyScore ? parseFloat(state.mindBodyScore) : null,
+      } : null;
+
+      // Get HRV value from either PineTime or Oura
+      const hrvValue = state.hrv ? parseFloat(state.hrv) : (state.ouraHRV ? parseFloat(state.ouraHRV) : null);
+
+      // Call the validated PraxiomAlgorithm
+      const result = PraxiomAlgorithm.calculateBiologicalAge({
+        chronologicalAge: parseInt(state.chronologicalAge),
+        biomarkers,
+        fitnessData,
+        hrvValue
+      });
+
+      console.log('✅ PRAXIOM ALGORITHM RESULTS:', {
+        biologicalAge: result.biologicalAge,
+        deviation: result.deviation,
+        scores: result.scores,
+        tier: result.tier
+      });
+
+      // Update state with comprehensive results
+      updateState({
+        biologicalAge: result.biologicalAge,
+        oralHealthScore: result.scores.oralHealth,
+        systemicHealthScore: result.scores.systemicHealth,
+        fitnessScore: result.scores.fitnessScore || state.fitnessScore,
+        vitalityIndex: result.scores.vitalityIndex,
+        currentTier: result.tier,
+        recommendations: result.recommendations,
+        coefficients: result.coefficients
+      });
+
+      return result.biologicalAge;
     } catch (error) {
-      console.error('Encryption initialization error:', error);
+      console.error('❌ Error calculating biological age with Praxiom Algorithm:', error);
+      // Fallback to chronological age if algorithm fails
+      return state.chronologicalAge;
     }
   };
 
-  // ====================================
-  // CONTEXT VALUE
-  // ====================================
-  
-  const value = {
-    // State
-    userData,
-    currentAssessment,
-    assessmentHistory,
-    currentTier,
-    isCalculating,
-    isLoading,
-    error,
-    connectedDevices,
-    bleStatus,
-    notificationSettings,
-    
-    // Methods
-    calculateBioAge,
-    saveAssessment,
-    loadAssessmentHistory,
-    compareAssessments,
-    exportData,
-    updateUserData,
-    
-    // BLE Methods
-    initializeBLE,
-    connectToPineTime,
-    connectToOura,
-    syncWithDevices,
-    
-    // Notification Methods
-    sendNotification,
-    scheduleAssessmentReminder,
-    
-    // Algorithm Instance (for direct access if needed)
-    praxiomAlgorithm
+  const calculateWearableScore = () => {
+    try {
+      let score = 50;
+      let count = 0;
+
+      const heartRate = state.ouraHeartRate || state.heartRate;
+      const hrv = state.ouraHRV || state.hrv;
+      const steps = state.ouraSteps || state.steps;
+
+      if (hrv !== null && hrv > 0) {
+        if (hrv >= 70) score += 100;
+        else if (hrv >= 50) score += 75;
+        else if (hrv >= 30) score += 50;
+        else score += 25;
+        count++;
+      }
+
+      if (steps > 0) {
+        if (steps >= 8000) score += 100;
+        else if (steps >= 5000) score += 75;
+        else if (steps >= 3000) score += 50;
+        else score += 25;
+        count++;
+      }
+
+      if (heartRate !== null && heartRate > 0) {
+        if (heartRate >= 50 && heartRate <= 70) score += 100;
+        else if (heartRate >= 45 && heartRate <= 75) score += 75;
+        else if (heartRate >= 40 && heartRate <= 80) score += 50;
+        else score += 25;
+        count++;
+      }
+
+      if (state.ouraReadinessScore !== null) {
+        score += state.ouraReadinessScore;
+        count++;
+      }
+
+      if (count > 0) {
+        score = (score - 50) / count;
+      } else {
+        score = 50;
+      }
+
+      updateState({ fitnessScore: Math.round(score) });
+      return Math.round(score);
+    } catch (error) {
+      console.error('Error calculating wearable score:', error);
+      return 50;
+    }
+  };
+
+  const calculateScores = () => {
+    try {
+      // Prepare biomarkers object for algorithm
+      const biomarkers = {
+        salivaryPH: state.salivaryPH ? parseFloat(state.salivaryPH) : null,
+        activeMMP8: state.mmp8 ? parseFloat(state.mmp8) : null,
+        salivaryFlow: state.flowRate ? parseFloat(state.flowRate) : null,
+        hsCRP: state.hsCRP ? parseFloat(state.hsCRP) : null,
+        omega3Index: state.omega3Index ? parseFloat(state.omega3Index) : null,
+        hba1c: state.hba1c ? parseFloat(state.hba1c) : null,
+        gdf15: state.gdf15 ? parseFloat(state.gdf15) : null,
+        vitaminD: state.vitaminD ? parseFloat(state.vitaminD) : null,
+      };
+
+      // Calculate Oral Health Score using algorithm
+      const oralHealthScore = PraxiomAlgorithm.calculateOralHealthScore(biomarkers);
+      
+      // Calculate Systemic Health Score using algorithm
+      const systemicHealthScore = PraxiomAlgorithm.calculateSystemicHealthScore(biomarkers);
+
+      // Calculate Fitness Score if data available
+      let fitnessScore = null;
+      if (state.aerobicScore || state.flexibilityScore || state.balanceScore || state.mindBodyScore) {
+        const fitnessData = {
+          aerobicFitness: state.aerobicScore ? parseFloat(state.aerobicScore) : null,
+          flexibilityPosture: state.flexibilityScore ? parseFloat(state.flexibilityScore) : null,
+          coordinationBalance: state.balanceScore ? parseFloat(state.balanceScore) : null,
+          mentalPreparedness: state.mindBodyScore ? parseFloat(state.mindBodyScore) : null,
+        };
+        fitnessScore = PraxiomAlgorithm.calculateFitnessScore(fitnessData);
+      }
+
+      // Calculate HRV Score if available
+      let hrvScore = null;
+      const hrvValue = state.hrv ? parseFloat(state.hrv) : (state.ouraHRV ? parseFloat(state.ouraHRV) : null);
+      if (hrvValue && state.chronologicalAge) {
+        hrvScore = PraxiomAlgorithm.calculateHRVScore(hrvValue, parseInt(state.chronologicalAge));
+      }
+
+      // Calculate Vitality Index (average of all available scores)
+      const scores = [oralHealthScore, systemicHealthScore];
+      if (fitnessScore !== null) scores.push(fitnessScore);
+      if (hrvScore !== null) scores.push(hrvScore);
+      const vitalityIndex = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+
+      console.log('✅ SCORES CALCULATED WITH ALGORITHM:', {
+        oralHealth: oralHealthScore,
+        systemicHealth: systemicHealthScore,
+        fitness: fitnessScore,
+        hrv: hrvScore,
+        vitality: vitalityIndex
+      });
+
+      // Update state with calculated scores
+      updateState({
+        oralHealthScore: Math.round(oralHealthScore * 10) / 10,
+        systemicHealthScore: Math.round(systemicHealthScore * 10) / 10,
+        fitnessScore: fitnessScore !== null ? Math.round(fitnessScore * 10) / 10 : state.fitnessScore,
+        vitalityIndex: Math.round(vitalityIndex * 10) / 10
+      });
+
+      return {
+        oralHealthScore,
+        systemicHealthScore,
+        fitnessScore,
+        hrvScore,
+        vitalityIndex
+      };
+    } catch (error) {
+      console.error('❌ Error calculating scores with Praxiom Algorithm:', error);
+      return {
+        oralHealthScore: 50,
+        systemicHealthScore: 50,
+        fitnessScore: null,
+        hrvScore: null,
+        vitalityIndex: 50
+      };
+    }
+  };
+
+  const updateFitnessAssessment = (fitnessData) => {
+    try {
+      updateState({
+        aerobicScore: fitnessData.aerobicScore,
+        flexibilityScore: fitnessData.flexibilityScore,
+        balanceScore: fitnessData.balanceScore,
+        mindBodyScore: fitnessData.mindBodyScore,
+        fitnessScore: fitnessData.fitnessScore,
+        fitnessAssessmentDate: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('Error updating fitness assessment:', error);
+    }
   };
 
   return (
-    <AppContext.Provider value={value}>
+    <AppContext.Provider value={{
+      state,
+      updateState,
+      calculateBiologicalAge,
+      calculateScores,
+      calculateWearableScore,
+      updateFitnessAssessment,
+      syncOuraData,
+      saveData,
+      loadSavedData
+    }}>
       {children}
     </AppContext.Provider>
   );
 };
-
-// Custom hook to use the app context
-export const useApp = () => {
-  const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within AppProvider');
-  }
-  return context;
-};
-
-export default AppContext;

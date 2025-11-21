@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,15 +9,15 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppContext } from '../AppContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Sharing from 'expo-sharing';
+import { AppContext } from '../AppContext';
 import PraxiomBackground from '../components/PraxiomBackground';
-import SecureStorageService from '../services/SecureStorageService';
 
 const BiomarkerHistoryScreen = ({ navigation }) => {
-  const { state } = useAppContext();
+  const { state } = useContext(AppContext);
   const [history, setHistory] = useState([]);
-  const [expandedId, setExpandedId] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState(null); // ✅ NEW: Track which entry is expanded
 
   useEffect(() => {
     loadHistory();
@@ -25,30 +25,31 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
 
   const loadHistory = async () => {
     try {
-      setIsLoading(true);
-      // ✅ NEW: Load from encrypted storage
-      const historyData = await SecureStorageService.getBiomarkerHistory();
-      console.log('📋 🔐 Loaded encrypted history entries:', historyData.length);
-      setHistory(historyData);
+      const historyData = await AsyncStorage.getItem('@praxiom_biomarker_history');
+      if (historyData) {
+        const parsed = JSON.parse(historyData);
+        console.log('📋 Loaded history entries:', parsed.length);
+        setHistory(parsed);
+      }
     } catch (error) {
       console.error('Error loading history:', error);
-      Alert.alert('Error', 'Failed to load biomarker history');
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const exportData = async () => {
     try {
-      const result = await SecureStorageService.exportToFile();
+      const dataToExport = JSON.stringify(history, null, 2);
       
-      if (result.success) {
-        Alert.alert(
-          'Export Successful',
-          `Data exported to:\n${result.filename}\n\n🔐 Data is encrypted for security`
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(
+          dataToExport,
+          {
+            mimeType: 'application/json',
+            dialogTitle: 'Export Biomarker History'
+          }
         );
       } else {
-        Alert.alert('Export Failed', result.error || 'Unknown error');
+        Alert.alert('Info', 'Data exported: ' + dataToExport);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to export data: ' + error.message);
@@ -67,14 +68,10 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
         {
           text: 'Delete',
           onPress: async () => {
-            try {
-              await SecureStorageService.deleteBiomarkerEntry(timestamp);
-              await loadHistory(); // Reload list
-              console.log('🗑️ Entry deleted securely');
-              Alert.alert('Success', 'Entry deleted');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete entry');
-            }
+            const updated = history.filter(h => h.timestamp !== timestamp);
+            setHistory(updated);
+            await AsyncStorage.setItem('@praxiom_biomarker_history', JSON.stringify(updated));
+            console.log('🗑️ Entry deleted');
           },
           style: 'destructive',
         },
@@ -82,6 +79,7 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
     );
   };
 
+  // ✅ NEW: Toggle expansion of entry details
   const toggleExpand = (timestamp) => {
     setExpandedId(expandedId === timestamp ? null : timestamp);
   };
@@ -92,23 +90,14 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
     
     return (
       <View style={styles.historyCard}>
-        {/* Security Indicator */}
-        <View style={styles.securityBadge}>
-          <Ionicons name="shield-checkmark" size={14} color="#47C83E" />
-          <Text style={styles.securityText}>Encrypted</Text>
-        </View>
-
         <View style={styles.cardHeader}>
-          <View>
-            <Text style={styles.dateText}>
-              {date.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })}
-            </Text>
-            <Text style={styles.tierBadge}>Tier {item.tier || 1}</Text>
-          </View>
+          <Text style={styles.dateText}>
+            {date.toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}
+          </Text>
           <TouchableOpacity
             onPress={() => deleteEntry(item.timestamp)}
             style={styles.deleteButton}
@@ -126,15 +115,6 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
             </Text>
           </View>
           <View style={styles.row}>
-            <Text style={styles.label}>Deviation:</Text>
-            <Text style={[
-              styles.value,
-              { color: item.deviation < 0 ? '#47C83E' : item.deviation > 5 ? '#ff4444' : '#FFB800' }
-            ]}>
-              {item.deviation > 0 ? '+' : ''}{item.deviation?.toFixed(1) || 'N/A'} years
-            </Text>
-          </View>
-          <View style={styles.row}>
             <Text style={styles.label}>Oral Health:</Text>
             <Text style={styles.value}>{item.oralScore || 'N/A'}%</Text>
           </View>
@@ -148,15 +128,9 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
               <Text style={styles.value}>{item.fitnessScore}%</Text>
             </View>
           )}
-          {item.vitalityIndex && (
-            <View style={styles.row}>
-              <Text style={styles.label}>Vitality Index:</Text>
-              <Text style={styles.value}>{item.vitalityIndex}%</Text>
-            </View>
-          )}
         </View>
 
-        {/* View Details Button */}
+        {/* ✅ NEW: View Details Button */}
         <TouchableOpacity
           style={styles.detailsButton}
           onPress={() => toggleExpand(item.timestamp)}
@@ -171,7 +145,7 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
           />
         </TouchableOpacity>
 
-        {/* Expandable Details Section */}
+        {/* ✅ NEW: Expandable Details Section */}
         {isExpanded && (
           <View style={styles.expandedDetails}>
             <View style={styles.detailsSection}>
@@ -186,7 +160,7 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Salivary Flow (mL/min):</Text>
-                <Text style={styles.detailValue}>{item.salivaryFlowRate || item.salivaryFlow || 'N/A'}</Text>
+                <Text style={styles.detailValue}>{item.salivaryFlowRate || 'N/A'}</Text>
               </View>
             </View>
 
@@ -202,7 +176,7 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>HbA1c (%):</Text>
-                <Text style={styles.detailValue}>{item.hba1c || 'N/A'}</Text>
+                <Text style={styles.detailValue}>{item.hbA1c || 'N/A'}</Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>GDF-15 (pg/mL):</Text>
@@ -235,14 +209,6 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
                 </View>
               )}
             </View>
-
-            {/* Security Info */}
-            <View style={styles.securityInfo}>
-              <Ionicons name="lock-closed" size={16} color="#47C83E" />
-              <Text style={styles.securityInfoText}>
-                Data encrypted with AES-256
-              </Text>
-            </View>
           </View>
         )}
       </View>
@@ -268,19 +234,7 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Security Status Banner */}
-        <View style={styles.securityBanner}>
-          <Ionicons name="shield-checkmark" size={20} color="#47C83E" />
-          <Text style={styles.securityBannerText}>
-            All data is encrypted and secure
-          </Text>
-        </View>
-
-        {isLoading ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>Loading encrypted data...</Text>
-          </View>
-        ) : history.length === 0 ? (
+        {history.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="document-outline" size={48} color="#666" />
             <Text style={styles.emptyText}>No history yet</Text>
@@ -329,26 +283,6 @@ const styles = StyleSheet.create({
   exportButton: {
     padding: 8,
   },
-  securityBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(71, 200, 62, 0.2)',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    marginHorizontal: 15,
-    marginTop: 15,
-    marginBottom: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(71, 200, 62, 0.3)',
-  },
-  securityBannerText: {
-    color: '#47C83E',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
   listContent: {
     padding: 15,
   },
@@ -360,22 +294,6 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#00d4ff',
   },
-  securityBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(71, 200, 62, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    marginBottom: 8,
-  },
-  securityText: {
-    color: '#47C83E',
-    fontSize: 11,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -386,11 +304,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#00d4ff',
-    marginBottom: 4,
-  },
-  tierBadge: {
-    fontSize: 12,
-    color: '#aaa',
   },
   deleteButton: {
     padding: 8,
@@ -460,20 +373,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
     color: '#ffffff',
-  },
-  securityInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 10,
-    marginTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#2a2a3e',
-  },
-  securityInfoText: {
-    color: '#47C83E',
-    fontSize: 12,
-    marginLeft: 6,
   },
   emptyState: {
     flex: 1,
