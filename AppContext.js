@@ -225,6 +225,42 @@ export const AppContextProvider = ({ children }) => {
     pushBioAgeToWatch();
   }, [state.biologicalAge, state.watchConnected]);
 
+  // Periodic Bio-Age sync to watch (every 2 minutes when auto-sync enabled)
+  useEffect(() => {
+    if (!state.settings?.autoSyncEnabled && state.settings?.autoSyncEnabled !== undefined) {
+      console.log('⏸️ Auto-sync disabled - periodic sync stopped');
+      return;
+    }
+    
+    if (!state.watchConnected || !state.biologicalAge) {
+      return;
+    }
+
+    console.log('🔄 Starting periodic watch sync (every 2 minutes)...');
+
+    const syncInterval = setInterval(async () => {
+      if (state.watchConnected && state.biologicalAge) {
+        try {
+          await WearableService.sendBioAge(state.biologicalAge);
+          
+          const now = new Date().toISOString();
+          await AsyncStorage.setItem('lastBioAgeSync', now);
+          updateState({ lastSync: now });
+          
+          console.log('✅ [PERIODIC] Bio-age synced to watch:', state.biologicalAge, 'at', new Date().toLocaleTimeString());
+        } catch (error) {
+          console.warn('⚠️ [PERIODIC] Watch sync failed:', error.message);
+        }
+      }
+    }, 120000); // 120000ms = 2 minutes
+
+    // Cleanup interval on unmount or dependency change
+    return () => {
+      console.log('🛑 Stopping periodic watch sync');
+      clearInterval(syncInterval);
+    };
+  }, [state.watchConnected, state.biologicalAge, state.settings?.autoSyncEnabled]);
+
   // Subscribe to PineTime wearable data updates
   useEffect(() => {
     const interval = setInterval(() => {
@@ -345,11 +381,24 @@ export const AppContextProvider = ({ children }) => {
 
   const calculateBiologicalAge = async () => {
     try {
+      console.log('🔵 [CALC] Starting calculation...');
+      console.log('🔵 [CALC] Chronological age:', state.chronologicalAge);
+      
       // Validate chronological age first
       if (!state.chronologicalAge || state.chronologicalAge < 18 || state.chronologicalAge > 120) {
-        console.warn('Invalid chronological age, using current value');
-        return state.biologicalAge || state.chronologicalAge;
+        const errorMsg = `Invalid chronological age: ${state.chronologicalAge}`;
+        console.error('❌ [CALC]', errorMsg);
+        throw new Error(errorMsg);
       }
+
+      // Verify PraxiomAlgorithm is available
+      if (!PraxiomAlgorithm) {
+        throw new Error('PraxiomAlgorithm module not loaded');
+      }
+      if (typeof PraxiomAlgorithm.calculateBiologicalAge !== 'function') {
+        throw new Error('PraxiomAlgorithm.calculateBiologicalAge is not a function');
+      }
+      console.log('✅ [CALC] PraxiomAlgorithm loaded correctly');
 
       // Prepare biomarkers object
       const biomarkers = {
@@ -362,6 +411,7 @@ export const AppContextProvider = ({ children }) => {
         gdf15: state.gdf15 ? parseFloat(state.gdf15) : null,
         vitaminD: state.vitaminD ? parseFloat(state.vitaminD) : null,
       };
+      console.log('✅ [CALC] Biomarkers prepared:', biomarkers);
 
       // Prepare fitness data if available
       const fitnessData = (state.aerobicScore || state.flexibilityScore || state.balanceScore || state.mindBodyScore) ? {
@@ -373,6 +423,8 @@ export const AppContextProvider = ({ children }) => {
 
       // Get HRV value from either PineTime or Oura
       const hrvValue = state.hrv ? parseFloat(state.hrv) : (state.ouraHRV ? parseFloat(state.ouraHRV) : null);
+      
+      console.log('🔵 [CALC] Calling PraxiomAlgorithm.calculateBiologicalAge...');
 
       // Call the validated PraxiomAlgorithm
       const result = PraxiomAlgorithm.calculateBiologicalAge({
@@ -415,9 +467,15 @@ export const AppContextProvider = ({ children }) => {
 
       return result.biologicalAge;
     } catch (error) {
-      console.error('❌ Error calculating biological age with Praxiom Algorithm:', error);
-      // Fallback to chronological age if algorithm fails
-      return state.chronologicalAge;
+      console.error('❌ [CALC] CALCULATION ERROR:', error);
+      console.error('❌ [CALC] Error name:', error.name);
+      console.error('❌ [CALC] Error message:', error.message);
+      console.error('❌ [CALC] Error stack:', error.stack);
+      
+      // Create user-friendly error message
+      const userMessage = `Calculation failed: ${error.message}\n\nPlease check:\n• Date of birth is set in Settings\n• All biomarker values are valid numbers\n• App is updated to latest version`;
+      
+      throw new Error(userMessage);
     }
   };
 
