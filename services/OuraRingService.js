@@ -12,10 +12,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Configure WebBrowser for OAuth
 WebBrowser.maybeCompleteAuthSession();
 
-// Oura API Configuration
+// Oura API Configuration (loaded dynamically from storage)
 const OURA_CONFIG = {
-  clientId: '18a798fd-289f-45d4-99b6-ade377b3ba15',  // Oura API Client ID
-  clientSecret: '07SgBRP_w7zSdetMcidQNtv3gKsUmKQokpq0_0HUw',  // Oura API Client Secret
+  clientId: null,  // Loaded from storage
+  clientSecret: null,  // Loaded from storage
   redirectUri: AuthSession.makeRedirectUri({
     scheme: 'praxiomhealth',
     path: 'oura-callback'
@@ -34,10 +34,28 @@ class OuraRingService {
   }
 
   /**
-   * Initialize service and restore saved tokens
+   * Initialize service with credentials and restore saved tokens
+   * @param {string} clientId - Optional: Oura API Client ID (if not provided, loads from storage)
+   * @param {string} clientSecret - Optional: Oura API Client Secret
    */
-  async init() {
+  async init(clientId = null, clientSecret = null) {
     try {
+      // Load credentials from parameters or storage
+      if (clientId && clientSecret) {
+        OURA_CONFIG.clientId = clientId;
+        OURA_CONFIG.clientSecret = clientSecret;
+      } else {
+        // Load from secure storage
+        OURA_CONFIG.clientId = await AsyncStorage.getItem('oura_client_id');
+        OURA_CONFIG.clientSecret = await AsyncStorage.getItem('oura_client_secret');
+      }
+
+      if (!OURA_CONFIG.clientId || !OURA_CONFIG.clientSecret) {
+        console.warn('⚠️ Oura credentials not configured');
+        return false;
+      }
+
+      // Restore saved tokens
       const savedToken = await AsyncStorage.getItem('oura_access_token');
       const savedRefresh = await AsyncStorage.getItem('oura_refresh_token');
       const savedExpiry = await AsyncStorage.getItem('oura_token_expiry');
@@ -66,6 +84,14 @@ class OuraRingService {
    */
   async authenticate() {
     try {
+      // Check if credentials are configured
+      if (!OURA_CONFIG.clientId || !OURA_CONFIG.clientSecret) {
+        return {
+          success: false,
+          message: 'Oura API credentials not configured. Please enter your credentials in Settings.'
+        };
+      }
+
       // Create authorization request
       const request = new AuthSession.AuthRequest({
         clientId: OURA_CONFIG.clientId,

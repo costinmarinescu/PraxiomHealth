@@ -23,7 +23,9 @@ const SECURE_KEYS = [
   'tier3Biomarkers',
   'fitnessAssessment',
   'dateOfBirth',
-  'userProfile'
+  'userProfile',
+  'oura_client_id',      // Oura API credentials
+  'oura_client_secret'   // Oura API credentials
 ];
 
 /**
