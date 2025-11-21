@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import PraxiomBackground from '../components/PraxiomBackground';
-import StorageService from '../services/StorageService';
+import * as SecureStorage from '../services/SecureStorageService';
 
 const { width } = Dimensions.get('window');
 
@@ -23,12 +23,22 @@ const ComparisonScreen = ({ navigation }) => {
 
   const loadHistory = async () => {
     try {
-      const data = await StorageService.getBiomarkerHistory();
-      setHistory(data);
+      // Load from all encrypted storage locations
+      const tier1Data = await SecureStorage.getItem('tier1Biomarkers') || [];
+      const tier2Data = await SecureStorage.getItem('tier2Biomarkers') || [];
+      const tier3Data = await SecureStorage.getItem('tier3Biomarkers') || [];
+      
+      // Combine all assessments
+      const allData = [...tier1Data, ...tier2Data, ...tier3Data];
+      
+      // Sort by timestamp (most recent first)
+      allData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      
+      setHistory(allData);
       
       // Auto-select last two entries for comparison
-      if (data.length >= 2) {
-        setSelectedEntries([data[0], data[1]]);
+      if (allData.length >= 2) {
+        setSelectedEntries([allData[0], allData[1]]);
       }
     } catch (error) {
       console.error('Error loading history:', error);
