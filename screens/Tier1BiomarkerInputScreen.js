@@ -204,7 +204,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
       
       let biologicalAge;
       try {
-        biologicalAge = calculateBiologicalAge();
+        biologicalAge = await calculateBiologicalAge();
       } catch (error) {
         console.error('Error calculating biological age:', error);
         throw new Error('Failed to calculate biological age');
