@@ -13,7 +13,7 @@ import PraxiomAlgorithm from '../services/PraxiomAlgorithm';
 import PraxiomBackground from '../components/PraxiomBackground';
 
 const FitnessAssessmentScreen = ({ navigation }) => {
-  const { healthData, setHealthData } = useContext(AppContext);
+  const { state, updateState, updateFitnessAssessment } = useContext(AppContext);
   const [assessmentType, setAssessmentType] = useState(null);
 
   // Aerobic Fitness
@@ -53,7 +53,13 @@ const FitnessAssessmentScreen = ({ navigation }) => {
         return;
       }
 
-      const age = healthData.age || 45;
+      // Get chronological age from state
+      const age = state.chronologicalAge || 45;
+      
+      if (!age || age < 18 || age > 120) {
+        Alert.alert('Error', 'Please set your date of birth in Settings first');
+        return;
+      }
 
       // Calculate Aerobic Score
       let aerobicScore;
@@ -99,18 +105,25 @@ const FitnessAssessmentScreen = ({ navigation }) => {
         mindBodyScore
       );
 
-      // Save to health data
-      const updatedHealthData = {
-        ...healthData,
-        aerobicScore,
-        flexibilityScore,
-        balanceScore,
-        mindBodyScore,
-        fitnessScore: compositeScore,
-        fitnessAssessmentDate: new Date().toISOString(),
-      };
-
-      setHealthData(updatedHealthData);
+      // Save to state using updateFitnessAssessment function
+      if (updateFitnessAssessment) {
+        updateFitnessAssessment(
+          aerobicScore,
+          flexibilityScore,
+          balanceScore,
+          mindBodyScore
+        );
+      } else {
+        // Fallback: use updateState directly
+        updateState({
+          aerobicScore,
+          flexibilityScore,
+          balanceScore,
+          mindBodyScore,
+          fitnessScore: compositeScore,
+          fitnessAssessmentDate: new Date().toISOString(),
+        });
+      }
 
       // Show results
       Alert.alert(

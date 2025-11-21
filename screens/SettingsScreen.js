@@ -121,13 +121,27 @@ export default function SettingsScreen({ navigation }) {
     });
   };
 
-  const handleToggleAutoSync = (value) => {
+  const handleToggleAutoSync = async (value) => {
+    // Update settings
     updateState({
       settings: {
         ...state.settings,
         autoSyncEnabled: value
       }
     });
+    
+    // If turning ON and watch is connected, trigger immediate sync
+    if (value && state.watchConnected && state.biologicalAge) {
+      try {
+        const WearableService = require('../services/WearableService').default;
+        await WearableService.sendBioAge(state.biologicalAge);
+        console.log('✅ Immediate sync triggered:', state.biologicalAge);
+        Alert.alert('Auto-Sync Enabled', 'Bio-age synced to watch immediately');
+      } catch (error) {
+        console.warn('⚠️ Immediate sync failed:', error);
+        // Don't show error - periodic sync will retry
+      }
+    }
   };
 
   const handleExportData = () => {
