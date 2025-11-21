@@ -177,6 +177,7 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
+        {/* Row 1: Tier 1 and Tier 2 */}
         <View style={styles.quickActions}>
           <TouchableOpacity
             style={styles.actionButton}
@@ -193,7 +194,10 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.actionButtonText}>🔥 Tier 2</Text>
             <Text style={styles.actionButtonText}>Advanced</Text>
           </TouchableOpacity>
+        </View>
 
+        {/* Row 2: Fitness Assessment and History */}
+        <View style={styles.quickActions}>
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => navigation.navigate('FitnessAssessment')}
@@ -201,8 +205,16 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.actionButtonText}>💪 Fitness</Text>
             <Text style={styles.actionButtonText}>Assessment</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('HistoricalData')}
+          >
+            <Text style={styles.actionButtonText}>📈 History</Text>
+          </TouchableOpacity>
         </View>
 
+        {/* Row 3: Recalculate Age (alone) */}
         <View style={styles.quickActions}>
           <TouchableOpacity
             style={styles.actionButton}
@@ -210,13 +222,6 @@ export default function DashboardScreen({ navigation }) {
           >
             <Text style={styles.actionButtonText}>🔄 Recalculate</Text>
             <Text style={styles.actionButtonText}>Age</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('HistoricalData')}
-          >
-            <Text style={styles.actionButtonText}>📈 History</Text>
           </TouchableOpacity>
         </View>
 
