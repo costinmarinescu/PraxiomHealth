@@ -190,9 +190,14 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // Recalculate biological age with adjusted scores
-      const enhancedBioAge = calculateBiologicalAge();
-      
-      console.log(`Enhanced Biological Age: ${enhancedBioAge.toFixed(1)} years`);
+      let enhancedBioAge;
+      try {
+        enhancedBioAge = await calculateBiologicalAge();
+        console.log(`✅ Enhanced Biological Age: ${enhancedBioAge.toFixed(1)} years`);
+      } catch (calcError) {
+        console.error('❌ Bio-age calculation error:', calcError);
+        throw new Error(`Calculation failed: ${calcError.message}`);
+      }
 
       // Calculate improvement vs Tier 1
       const tier1BioAge = state.biologicalAge || state.chronologicalAge;

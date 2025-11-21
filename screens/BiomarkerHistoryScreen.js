@@ -34,18 +34,21 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
       let allHistory = [];
       
       if (tier1Data) {
-        const tier1Array = Array.isArray(tier1Data) ? tier1Data : JSON.parse(tier1Data);
+        // SecureStorage.getItem already returns parsed data
+        const tier1Array = Array.isArray(tier1Data) ? tier1Data : [tier1Data];
         allHistory = [...allHistory, ...tier1Array];
         console.log('📋 Loaded Tier 1 history:', tier1Array.length, 'entries');
       }
       
       if (tier2Data) {
-        const tier2Array = Array.isArray(tier2Data) ? tier2Data : JSON.parse(tier2Data);
+        // SecureStorage.getItem already returns parsed data
+        const tier2Array = Array.isArray(tier2Data) ? tier2Data : [tier2Data];
         allHistory = [...allHistory, ...tier2Array];
         console.log('📋 Loaded Tier 2 history:', tier2Array.length, 'entries');
       }
       
       if (legacyData) {
+        // Legacy data needs to be parsed
         const legacyArray = JSON.parse(legacyData);
         allHistory = [...allHistory, ...legacyArray];
         console.log('📋 Loaded legacy history:', legacyArray.length, 'entries');
