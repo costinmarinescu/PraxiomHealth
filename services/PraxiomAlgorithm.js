@@ -305,18 +305,34 @@ function calculateSystemicHealthScore(biomarkers) {
  * Each domain scored 0-10, weighted to produce FS 0-100
  * 
  * Based on Tier_1_Optional_Fitness_Evaluation_ModuleGPT.pdf
+ * 
+ * Can be called in two ways:
+ * 1. calculateFitnessScore(fitnessDataObject) - object with keys
+ * 2. calculateFitnessScore(aerobic, flexibility, balance, mindBody) - 4 separate scores
  */
-function calculateFitnessScore(fitnessData) {
-  if (!fitnessData || Object.keys(fitnessData).length === 0) {
-    return null; // Fitness assessment is optional
-  }
+function calculateFitnessScore(arg1, arg2, arg3, arg4) {
+  // Handle both calling conventions
+  let aerobicFitness, flexibilityPosture, coordinationBalance, mentalPreparedness;
   
-  const {
-    aerobicFitness = 5,      // Default to average if not provided
-    flexibilityPosture = 5,
-    coordinationBalance = 5,
-    mentalPreparedness = 5
-  } = fitnessData;
+  if (typeof arg1 === 'object' && arg1 !== null) {
+    // Object format: calculateFitnessScore({ aerobicFitness: 8, ... })
+    if (Object.keys(arg1).length === 0) {
+      return null; // Empty object, fitness assessment not done
+    }
+    aerobicFitness = arg1.aerobicFitness || 5;
+    flexibilityPosture = arg1.flexibilityPosture || 5;
+    coordinationBalance = arg1.coordinationBalance || 5;
+    mentalPreparedness = arg1.mentalPreparedness || 5;
+  } else if (typeof arg1 === 'number') {
+    // Individual parameters: calculateFitnessScore(8, 7, 6, 9)
+    aerobicFitness = arg1;
+    flexibilityPosture = arg2;
+    coordinationBalance = arg3;
+    mentalPreparedness = arg4;
+  } else {
+    // No data provided
+    return null;
+  }
   
   // Validate scores are in 0-10 range
   const scores = [aerobicFitness, flexibilityPosture, coordinationBalance, mentalPreparedness];
@@ -337,6 +353,197 @@ function calculateFitnessScore(fitnessData) {
   const fitnessScore = (weightedSum / 10) * 100;
   
   return Math.round(fitnessScore * 100) / 100;
+}
+
+// ============================================================================
+// FITNESS ASSESSMENT HELPER FUNCTIONS - Individual Domain Calculations
+// ============================================================================
+
+/**
+ * Calculate Aerobic Fitness Score (0-10 scale)
+ * Based on Step Test or 6-Minute Walk Test
+ * 
+ * @param {string} testType - 'stepTest' or '6mwt'
+ * @param {number} value - Recovery HR (bpm) for step test OR distance (meters) for 6MWT
+ * @param {number} age - Chronological age
+ * @param {string} sex - 'male' or 'female' (optional, defaults to 'unknown')
+ */
+function calculateAerobicScore(testType, value, age, sex = 'unknown') {
+  if (!value || value <= 0) return 5; // Default to average if no data
+  
+  if (testType === 'stepTest') {
+    // Step Test: Lower recovery HR = better fitness
+    // Age-adjusted norms (approximate)
+    let excellentThreshold, averageThreshold, poorThreshold;
+    
+    if (age < 30) {
+      excellentThreshold = 85;
+      averageThreshold = 100;
+      poorThreshold = 115;
+    } else if (age < 40) {
+      excellentThreshold = 90;
+      averageThreshold = 105;
+      poorThreshold = 120;
+    } else if (age < 50) {
+      excellentThreshold = 95;
+      averageThreshold = 110;
+      poorThreshold = 125;
+    } else if (age < 60) {
+      excellentThreshold = 100;
+      averageThreshold = 115;
+      poorThreshold = 130;
+    } else {
+      excellentThreshold = 105;
+      averageThreshold = 120;
+      poorThreshold = 135;
+    }
+    
+    // Score calculation
+    if (value <= excellentThreshold) return 10;
+    if (value <= averageThreshold) {
+      return 5 + ((averageThreshold - value) / (averageThreshold - excellentThreshold)) * 5;
+    }
+    if (value <= poorThreshold) {
+      return 2 + ((poorThreshold - value) / (poorThreshold - averageThreshold)) * 3;
+    }
+    return Math.max(0, 2 - ((value - poorThreshold) / 20)); // Very poor
+    
+  } else if (testType === '6mwt') {
+    // 6-Minute Walk Test: Longer distance = better fitness
+    // Age-adjusted norms (meters)
+    let excellentThreshold, averageThreshold, poorThreshold;
+    
+    if (age < 30) {
+      excellentThreshold = 650;
+      averageThreshold = 550;
+      poorThreshold = 450;
+    } else if (age < 40) {
+      excellentThreshold = 620;
+      averageThreshold = 530;
+      poorThreshold = 440;
+    } else if (age < 50) {
+      excellentThreshold = 600;
+      averageThreshold = 510;
+      poorThreshold = 420;
+    } else if (age < 60) {
+      excellentThreshold = 570;
+      averageThreshold = 490;
+      poorThreshold = 400;
+    } else if (age < 70) {
+      excellentThreshold = 540;
+      averageThreshold = 460;
+      poorThreshold = 380;
+    } else {
+      excellentThreshold = 500;
+      averageThreshold = 430;
+      poorThreshold = 350;
+    }
+    
+    // Score calculation
+    if (value >= excellentThreshold) return 10;
+    if (value >= averageThreshold) {
+      return 5 + ((value - averageThreshold) / (excellentThreshold - averageThreshold)) * 5;
+    }
+    if (value >= poorThreshold) {
+      return 2 + ((value - poorThreshold) / (averageThreshold - poorThreshold)) * 3;
+    }
+    return Math.max(0, (value / poorThreshold) * 2); // Very poor
+  }
+  
+  return 5; // Default
+}
+
+/**
+ * Calculate Flexibility & Posture Score (0-10 scale)
+ * Combines sit-and-reach test with posture assessment
+ * 
+ * @param {number} sitReachCm - Distance reached in cm (positive = beyond toes, negative = can't reach)
+ * @param {number} postureRating - Visual posture rating (0-10)
+ */
+function calculateFlexibilityScore(sitReachCm, postureRating) {
+  if (sitReachCm === null || sitReachCm === undefined) return 5;
+  if (postureRating === null || postureRating === undefined) return 5;
+  
+  // Sit-and-Reach Score (50% weight)
+  let flexScore;
+  if (sitReachCm >= 5) {
+    flexScore = 10; // Excellent: +5cm or more beyond toes
+  } else if (sitReachCm >= 0) {
+    flexScore = 7 + (sitReachCm / 5) * 3; // Good: Can reach toes
+  } else if (sitReachCm >= -10) {
+    flexScore = 4 + ((sitReachCm + 10) / 10) * 3; // Fair: Within 10cm of toes
+  } else {
+    flexScore = Math.max(0, 4 + (sitReachCm + 10) / 10); // Poor: More than 10cm short
+  }
+  
+  // Posture Score (50% weight) - already on 0-10 scale
+  const postureScore = Math.min(10, Math.max(0, parseFloat(postureRating)));
+  
+  // Combined score
+  return Math.round(((flexScore * 0.5) + (postureScore * 0.5)) * 10) / 10;
+}
+
+/**
+ * Calculate Balance & Coordination Score (0-10 scale)
+ * Based on one-leg stance test and optional Y-Balance test
+ * 
+ * @param {number} oneLegStand - Time in seconds (best of 3 attempts)
+ * @param {number} yBalanceScore - Optional Y-Balance composite score (percentage of leg length)
+ */
+function calculateBalanceScore(oneLegStand, yBalanceScore = null) {
+  if (!oneLegStand || oneLegStand < 0) return 5;
+  
+  // One-Leg Stance Score (primary metric)
+  let balanceScore;
+  if (oneLegStand >= 30) {
+    balanceScore = 10; // Excellent: 30+ seconds
+  } else if (oneLegStand >= 15) {
+    balanceScore = 7 + ((oneLegStand - 15) / 15) * 3; // Good: 15-30 seconds
+  } else if (oneLegStand >= 10) {
+    balanceScore = 5 + ((oneLegStand - 10) / 5) * 2; // Fair: 10-15 seconds
+  } else if (oneLegStand >= 5) {
+    balanceScore = 3 + ((oneLegStand - 5) / 5) * 2; // Below average: 5-10 seconds
+  } else {
+    balanceScore = (oneLegStand / 5) * 3; // Poor: <5 seconds
+  }
+  
+  // If Y-Balance data available, factor it in (20% weight)
+  if (yBalanceScore && yBalanceScore > 0) {
+    let yScore;
+    if (yBalanceScore >= 100) {
+      yScore = 10;
+    } else if (yBalanceScore >= 90) {
+      yScore = 7 + ((yBalanceScore - 90) / 10) * 3;
+    } else if (yBalanceScore >= 80) {
+      yScore = 5 + ((yBalanceScore - 80) / 10) * 2;
+    } else {
+      yScore = (yBalanceScore / 80) * 5;
+    }
+    balanceScore = (balanceScore * 0.8) + (yScore * 0.2);
+  }
+  
+  return Math.round(balanceScore * 10) / 10;
+}
+
+/**
+ * Calculate Mind-Body Score (0-10 scale)
+ * Based on exercise confidence and body awareness ratings
+ * 
+ * @param {number} confidenceRating - Self-reported confidence in physical activity (0-10)
+ * @param {number} awarenessRating - Self-reported body awareness (0-10)
+ */
+function calculateMindBodyScore(confidenceRating, awarenessRating) {
+  if (confidenceRating === null || confidenceRating === undefined) return 5;
+  if (awarenessRating === null || awarenessRating === undefined) return 5;
+  
+  // Validate inputs
+  const confidence = Math.min(10, Math.max(0, parseFloat(confidenceRating)));
+  const awareness = Math.min(10, Math.max(0, parseFloat(awarenessRating)));
+  
+  // Equal weighting: 50% confidence, 50% body awareness
+  const mindBodyScore = (confidence * 0.5) + (awareness * 0.5);
+  
+  return Math.round(mindBodyScore * 10) / 10;
 }
 
 // ============================================================================
@@ -642,6 +849,12 @@ export default {
   calculateSystemicHealthScore,
   calculateFitnessScore,
   calculateHRVScore,
+  // Fitness Assessment Helper Functions
+  calculateAerobicScore,
+  calculateFlexibilityScore,
+  calculateBalanceScore,
+  calculateMindBodyScore,
+  // Constants
   BIOMARKER_RANGES,
   AGE_COEFFICIENTS,
   HRV_NORMS
