@@ -11,7 +11,7 @@ import CryptoJS from 'crypto-js';
 // Generate a device-specific encryption key (in production, use more sophisticated key management)
 const ENCRYPTION_KEY = 'PRAXIOM_SECURE_KEY_V1_2025'; // In production: use react-native-keychain
 
-// Keys that require encryption (medical/personal data)
+// ✅ FIXED: Keys that require encryption (medical/personal data)
 const SECURE_KEYS = [
   'bioAge',
   'tier1Results',
@@ -21,7 +21,8 @@ const SECURE_KEYS = [
   'tier1Biomarkers',
   'tier2Biomarkers',
   'tier3Biomarkers',
-  'fitnessAssessment',
+  'fitnessAssessment',    // ✅ ORIGINAL singular form
+  'fitnessAssessments',   // ✅ ADDED: plural form for compatibility
   'dateOfBirth',
   'userProfile',
   'oura_client_id',      // Oura API credentials
