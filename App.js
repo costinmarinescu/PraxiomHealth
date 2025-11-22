@@ -20,9 +20,9 @@ import BiomarkerHistoryScreen from './screens/BiomarkerHistoryScreen';
 import ComparisonScreen from './screens/ComparisonScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import TestScreen from './screens/TestScreen';
-// ✅ FIX: Import OuraRingScreen
 import OuraRingScreen from './screens/OuraRingScreen';
 import GarminWearableScreen from './screens/GarminWearableScreen';
+import DebugTestScreen from './screens/DebugTestScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -84,6 +84,7 @@ function SettingsStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="SettingsHome" component={SettingsScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="DebugTest" component={DebugTestScreen} />
     </Stack.Navigator>
   );
 }
