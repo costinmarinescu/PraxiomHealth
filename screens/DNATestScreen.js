@@ -11,6 +11,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import StorageService from '../services/StorageService'; // ✅ NEW: Import StorageService
 
 export default function DNATestScreen({ navigation }) {
   const [dunedinPACE, setDunedinPACE] = useState('');
@@ -52,6 +53,27 @@ export default function DNATestScreen({ navigation }) {
         finalAge = (biomarkerAge * 0.6) + (epigeneticAge * 0.4);
       }
       
+      // ✅ NEW: Create Tier 3 biomarker entry for history
+      const tier3Entry = {
+        tier: 3,
+        timestamp: new Date().toISOString(),
+        dunedinPACE: pace,
+        elovl2Age: elovl2,
+        intrinsicCapacity: ic,
+        epigeneticAge: parseFloat(epigeneticAge.toFixed(1)),
+        adjustedBioAge: parseFloat(finalAge.toFixed(1)),
+        paceStatus: pace > 1.2 ? 'Accelerated' : pace < 0.9 ? 'Decelerated' : 'Normal',
+        chronologicalAge: age,
+        paceAdjustment: parseFloat(paceAdjustment.toFixed(2)),
+        elovl2Deviation: parseFloat(elovl2Deviation.toFixed(2)),
+        icAdjustment: parseFloat(icAdjustment.toFixed(2)),
+      };
+      
+      // ✅ Save to encrypted biomarker history
+      await StorageService.saveBiomarkerEntry(tier3Entry);
+      console.log('✅ Tier 3 entry saved to encrypted history:', tier3Entry);
+      
+      // ✅ Also update current values for quick access (optional)
       await AsyncStorage.setItem('praxiomAge', finalAge.toFixed(1));
       await AsyncStorage.setItem('epigeneticAge', epigeneticAge.toFixed(1));
       await AsyncStorage.setItem('dunedinPACE', pace.toFixed(2));
@@ -65,8 +87,13 @@ export default function DNATestScreen({ navigation }) {
         'DNA Methylation Results',
         `Epigenetic Age: ${epigeneticAge.toFixed(1)} years\n` +
         `Pace Status: ${paceStatus}\n` +
-        `Updated Praxiom Age: ${finalAge.toFixed(1)} years`,
+        `Updated Praxiom Age: ${finalAge.toFixed(1)} years\n\n` +
+        `✅ Saved to History`,
         [
+          {
+            text: 'View History',
+            onPress: () => navigation.navigate('BiomarkerHistory')
+          },
           {
             text: 'OK',
             onPress: () => navigation.goBack()
@@ -74,7 +101,8 @@ export default function DNATestScreen({ navigation }) {
         ]
       );
     } catch (error) {
-      Alert.alert('Error', 'Failed to calculate epigenetic age');
+      console.error('Error calculating epigenetic age:', error);
+      Alert.alert('Error', 'Failed to calculate epigenetic age: ' + error.message);
     }
   };
   
