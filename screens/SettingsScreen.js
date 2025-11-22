@@ -383,6 +383,15 @@ export default function SettingsScreen({ navigation }) {
           </TouchableOpacity>
 
           <TouchableOpacity 
+            style={[styles.actionButton, styles.debugButton]}
+            onPress={() => navigation.navigate('DebugTest')}
+          >
+            <Ionicons name="bug" size={24} color="#f59e0b" />
+            <Text style={styles.actionButtonText}>🔧 Debug Tests</Text>
+            <Ionicons name="chevron-forward" size={24} color="rgba(255,255,255,0.5)" />
+          </TouchableOpacity>
+              
+          <TouchableOpacity 
             style={[styles.actionButton, styles.dangerButton]}
             onPress={handleClearData}
           >
@@ -580,6 +589,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  debugButton: {  // ← ADD THESE 4 LINES
+  backgroundColor: 'rgba(245, 158, 11, 0.2)',
+  borderColor: 'rgba(245, 158, 11, 0.4)',
   },
   dangerButton: {
     backgroundColor: 'rgba(231, 76, 60, 0.3)',
