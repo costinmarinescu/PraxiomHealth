@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import CryptoJS from 'crypto-js';
+import * as CryptoJS from 'crypto-js';
 
 /**
  * SecureStorageService - HIPAA-Compliant Encrypted Storage
