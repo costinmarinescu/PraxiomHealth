@@ -30,7 +30,7 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
       // ✅ Load from encrypted storage for medical data
       const tier1Data = await SecureStorage.getItem('tier1Biomarkers');
       const tier2Data = await SecureStorage.getItem('tier2Biomarkers');
-      const fitnessData = await SecureStorage.getItem('fitnessAssessments'); // ✅ NEW: Load fitness assessments
+      const fitnessData = await SecureStorage.getItem('fitnessAssessments');
       const legacyData = await AsyncStorage.getItem('@praxiom_biomarker_history');
       
       let allHistory = [];
@@ -47,7 +47,6 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
         console.log('📋 Loaded Tier 2 history:', tier2Array.length, 'entries');
       }
       
-      // ✅ NEW: Load fitness assessments
       if (fitnessData) {
         const fitnessArray = Array.isArray(fitnessData) ? fitnessData : [fitnessData];
         allHistory = [...allHistory, ...fitnessArray];
@@ -60,11 +59,37 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
         console.log('📋 Loaded legacy history:', legacyArray.length, 'entries');
       }
       
-      // Sort by timestamp, newest first
-      allHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      // ✅ FIX: Filter out invalid entries
+      const validHistory = allHistory.filter(entry => {
+        // Must have timestamp
+        if (!entry.timestamp) {
+          console.warn('⚠️ Filtered out entry with no timestamp');
+          return false;
+        }
+        
+        // Timestamp must be valid date
+        const date = new Date(entry.timestamp);
+        if (isNaN(date.getTime())) {
+          console.warn('⚠️ Filtered out entry with invalid timestamp:', entry.timestamp);
+          return false;
+        }
+        
+        // Must have bioAge data
+        if (entry.bioAge == null || isNaN(entry.bioAge)) {
+          console.warn('⚠️ Filtered out entry with no bioAge data');
+          return false;
+        }
+        
+        return true;
+      });
       
-      console.log('📋 Total history entries:', allHistory.length);
-      setHistory(allHistory);
+      console.log(`📋 Filtered ${allHistory.length - validHistory.length} invalid entries`);
+      
+      // Sort by timestamp, newest first
+      validHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      
+      console.log('📋 Total valid history entries:', validHistory.length);
+      setHistory(validHistory);
     } catch (error) {
       console.error('Error loading history:', error);
     }
@@ -165,27 +190,124 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
     setExpandedId(expandedId === timestamp ? null : timestamp);
   };
 
+  // ✅ NEW: Clean up invalid data from storage
+  const cleanupInvalidData = async () => {
+    Alert.alert(
+      'Clean Up Invalid Data',
+      'This will permanently remove all entries with invalid dates or missing data from storage. This cannot be undone.\n\nContinue?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Clean Up',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              let cleanedCount = 0;
+              
+              // Clean Tier 1
+              const tier1Data = await SecureStorage.getItem('tier1Biomarkers');
+              if (tier1Data) {
+                const tier1Array = Array.isArray(tier1Data) ? tier1Data : [tier1Data];
+                const validTier1 = tier1Array.filter(entry => {
+                  const isValid = entry.timestamp && 
+                                !isNaN(new Date(entry.timestamp).getTime()) && 
+                                entry.bioAge != null && 
+                                !isNaN(entry.bioAge);
+                  if (!isValid) cleanedCount++;
+                  return isValid;
+                });
+                if (validTier1.length !== tier1Array.length) {
+                  await SecureStorage.setItem('tier1Biomarkers', validTier1);
+                }
+              }
+              
+              // Clean Tier 2
+              const tier2Data = await SecureStorage.getItem('tier2Biomarkers');
+              if (tier2Data) {
+                const tier2Array = Array.isArray(tier2Data) ? tier2Data : [tier2Data];
+                const validTier2 = tier2Array.filter(entry => {
+                  const isValid = entry.timestamp && 
+                                !isNaN(new Date(entry.timestamp).getTime()) && 
+                                entry.bioAge != null && 
+                                !isNaN(entry.bioAge);
+                  if (!isValid) cleanedCount++;
+                  return isValid;
+                });
+                if (validTier2.length !== tier2Array.length) {
+                  await SecureStorage.setItem('tier2Biomarkers', validTier2);
+                }
+              }
+              
+              // Clean Fitness
+              const fitnessData = await SecureStorage.getItem('fitnessAssessments');
+              if (fitnessData) {
+                const fitnessArray = Array.isArray(fitnessData) ? fitnessData : [fitnessData];
+                const validFitness = fitnessArray.filter(entry => {
+                  const isValid = entry.timestamp && 
+                                !isNaN(new Date(entry.timestamp).getTime()) && 
+                                entry.fitnessScore != null && 
+                                !isNaN(entry.fitnessScore);
+                  if (!isValid) cleanedCount++;
+                  return isValid;
+                });
+                if (validFitness.length !== fitnessArray.length) {
+                  await SecureStorage.setItem('fitnessAssessments', validFitness);
+                }
+              }
+              
+              // Clear legacy data if it exists
+              const legacyData = await AsyncStorage.getItem('@praxiom_biomarker_history');
+              if (legacyData) {
+                await AsyncStorage.removeItem('@praxiom_biomarker_history');
+                console.log('🗑️ Cleared legacy data');
+              }
+              
+              // Reload history
+              await loadHistory();
+              
+              Alert.alert(
+                'Cleanup Complete',
+                `Removed ${cleanedCount} invalid ${cleanedCount === 1 ? 'entry' : 'entries'}.`
+              );
+            } catch (error) {
+              console.error('Error cleaning up data:', error);
+              Alert.alert('Error', 'Failed to clean up data: ' + error.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const renderHistoryItem = ({ item }) => {
     const isExpanded = expandedId === item.timestamp;
     const date = new Date(item.timestamp);
     const isFitnessAssessment = item.tier === 'Fitness Assessment';
     
+    // ✅ FIX: Safe date formatting
+    const isValidDate = !isNaN(date.getTime());
+    const formattedDate = isValidDate 
+      ? date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        })
+      : 'Invalid Date';
+    
     return (
       <View style={styles.historyCard}>
         <View style={styles.cardHeader}>
           <View>
-            <Text style={styles.dateText}>
-              {date.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })}
-            </Text>
+            <Text style={styles.dateText}>{formattedDate}</Text>
             {/* ✅ Show tier badge */}
             <Text style={[
               styles.tierBadge, 
               isFitnessAssessment ? styles.fitnessBadge : 
-              item.tier === 1 ? styles.tier1Badge : styles.tier2Badge
+              item.tier === 1 ? styles.tier1Badge : 
+              item.tier === 2 ? styles.tier2Badge : styles.defaultBadge
             ]}>
               {item.tier === 'Fitness Assessment' ? '💪 Fitness' : 
                item.tier === 1 ? '📝 Tier 1' : 
@@ -408,6 +530,12 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
             >
               <Ionicons name="share-social-outline" size={24} color="#00d4ff" />
             </TouchableOpacity>
+            <TouchableOpacity
+              onPress={cleanupInvalidData}
+              style={styles.cleanupButton}
+            >
+              <Ionicons name="trash-bin-outline" size={24} color="#ef4444" />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -467,6 +595,9 @@ const styles = StyleSheet.create({
   exportButton: {
     padding: 8,
   },
+  cleanupButton: {
+    padding: 8,
+  },
   listContent: {
     padding: 15,
   },
@@ -508,6 +639,10 @@ const styles = StyleSheet.create({
   },
   fitnessBadge: {
     backgroundColor: '#10b981',
+    color: '#fff',
+  },
+  defaultBadge: {
+    backgroundColor: '#6b7280',
     color: '#fff',
   },
   deleteButton: {

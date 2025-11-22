@@ -26,19 +26,38 @@ const ComparisonScreen = ({ navigation }) => {
       // Load from all encrypted storage locations
       const tier1Data = await SecureStorage.getItem('tier1Biomarkers') || [];
       const tier2Data = await SecureStorage.getItem('tier2Biomarkers') || [];
-      const tier3Data = await SecureStorage.getItem('tier3Biomarkers') || [];
+      const fitnessData = await SecureStorage.getItem('fitnessAssessments') || [];
       
       // Combine all assessments
-      const allData = [...tier1Data, ...tier2Data, ...tier3Data];
+      const allData = [...tier1Data, ...tier2Data, ...fitnessData];
+      
+      // ✅ FIX: Filter out invalid entries
+      const validData = allData.filter(entry => {
+        // Must have timestamp
+        if (!entry.timestamp) return false;
+        
+        // Timestamp must be valid date
+        const date = new Date(entry.timestamp);
+        if (isNaN(date.getTime())) return false;
+        
+        // Must have bioAge data
+        if (entry.bioAge == null || isNaN(entry.bioAge)) return false;
+        
+        return true;
+      });
+      
+      console.log(`📊 Comparison: Filtered ${allData.length - validData.length} invalid entries`);
       
       // Sort by timestamp (most recent first)
-      allData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      validData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       
-      setHistory(allData);
+      setHistory(validData);
       
       // Auto-select last two entries for comparison
-      if (allData.length >= 2) {
-        setSelectedEntries([allData[0], allData[1]]);
+      if (validData.length >= 2) {
+        setSelectedEntries([validData[0], validData[1]]);
+      } else if (validData.length === 1) {
+        setSelectedEntries([validData[0]]);
       }
     } catch (error) {
       console.error('Error loading history:', error);
@@ -46,7 +65,10 @@ const ComparisonScreen = ({ navigation }) => {
   };
 
   const formatDate = (timestamp) => {
+    if (!timestamp) return 'Invalid Date';
     const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
