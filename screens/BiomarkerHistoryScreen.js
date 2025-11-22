@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStorage from '../services/SecureStorageService';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system'; // ✅ ADDED: For export functionality
 import { AppContext } from '../AppContext';
 import PraxiomBackground from '../components/PraxiomBackground';
 
@@ -71,20 +72,33 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
 
   const exportData = async () => {
     try {
+      // ✅ FIXED: Create temporary file first, then share file URI
       const dataToExport = JSON.stringify(history, null, 2);
       
+      // Create file in app's document directory
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const fileName = `praxiom_history_${timestamp}.json`;
+      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+      
+      // Write data to file
+      await FileSystem.writeAsStringAsync(fileUri, dataToExport);
+      console.log('✅ Export file created:', fileUri);
+      
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(
-          dataToExport,
-          {
-            mimeType: 'application/json',
-            dialogTitle: 'Export Biomarker History'
-          }
-        );
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/json',
+          dialogTitle: 'Export Biomarker History',
+          UTI: 'public.json'
+        });
+        console.log('✅ File shared successfully');
       } else {
-        Alert.alert('Info', 'Data exported: ' + dataToExport);
+        Alert.alert(
+          'Export Successful', 
+          `Data saved to:\n${fileUri}\n\nYou can access this file through your file manager.`
+        );
       }
     } catch (error) {
+      console.error('❌ Export error:', error);
       Alert.alert('Error', 'Failed to export data: ' + error.message);
     }
   };
