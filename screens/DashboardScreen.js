@@ -181,8 +181,16 @@ export default function DashboardScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Row 2: Fitness Assessment and History */}
+        {/* Row 2: Tier 3 DNA Test and Fitness Assessment - ✅ NEW! */}
         <View style={styles.quickActions}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.tier3Button]}
+            onPress={() => navigation.navigate('DNATest')}
+          >
+            <Text style={styles.actionButtonText}>🧬 Tier 3</Text>
+            <Text style={styles.actionButtonText}>DNA Test</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => navigation.navigate('FitnessAssessment')}
@@ -190,12 +198,24 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.actionButtonText}>💪 Fitness</Text>
             <Text style={styles.actionButtonText}>Assessment</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Row 3: History Screens */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('BiomarkerHistory')}
+          >
+            <Text style={styles.actionButtonText}>📋 Biomarker</Text>
+            <Text style={styles.actionButtonText}>History</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => navigation.navigate('HistoricalData')}
           >
-            <Text style={styles.actionButtonText}>📈 History</Text>
+            <Text style={styles.actionButtonText}>📈 Historical</Text>
+            <Text style={styles.actionButtonText}>Data</Text>
           </TouchableOpacity>
         </View>
 
@@ -356,6 +376,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 5,
+  },
+  tier3Button: {
+    backgroundColor: '#9D4EDD',  // ✅ NEW: Purple for Tier 3 DNA Test
   },
   actionButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
   alertCard: {
