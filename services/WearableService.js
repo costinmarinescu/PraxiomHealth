@@ -4,7 +4,7 @@
  */
 
 import { BleManager } from 'react-native-ble-plx';
-import { Platform, PermissionsAndroid } from 'react-native';
+import { Platform, PermissionsAndroid, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // BLE SERVICE & CHARACTERISTIC UUIDs
@@ -58,6 +58,13 @@ class WearableService {
       motion: false,
       timeSync: false
     };
+    
+    // ✅ NEW: Auto-reconnect on app foreground
+    this.appStateSubscription = null;
+    this.shouldAutoReconnect = true;
+    
+    // Initialize app state listener
+    this.initializeAppStateListener();
   }
 
   // ===================================
@@ -90,6 +97,21 @@ class WearableService {
 
   async init() {
     return this.initialize();
+  }
+
+  // ✅ NEW: Initialize app state listener for auto-reconnect
+  initializeAppStateListener() {
+    this.appStateSubscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (nextAppState === 'active') {
+        this.log('📱 App came to foreground');
+        
+        // Only auto-reconnect if enabled and not already connected
+        if (this.shouldAutoReconnect && !this.isConnected) {
+          this.log('🔄 Attempting auto-reconnect...');
+          await this.tryAutoReconnect();
+        }
+      }
+    });
   }
 
   async requestAndroidPermissions() {
@@ -228,6 +250,7 @@ class WearableService {
 
       this.isConnected = true;
       await AsyncStorage.setItem('lastConnectedDevice', deviceId);
+      this.shouldAutoReconnect = true; // ✅ NEW: Enable auto-reconnect
       await this.startMonitoring();
       this.startPeriodicTimeSync();
 
@@ -248,7 +271,12 @@ class WearableService {
         await this.device.cancelConnection();
         this.device = null;
         this.isConnected = false;
-        this.log('✅ Disconnected successfully');
+        
+        // ✅ NEW: Disable auto-reconnect on manual disconnect
+        this.shouldAutoReconnect = false;
+        await AsyncStorage.removeItem('lastConnectedDevice');
+        
+        this.log('✅ Disconnected successfully (auto-reconnect disabled)');
       }
     } catch (error) {
       this.log(`⚠️ Disconnect error: ${error.message}`);
@@ -256,6 +284,8 @@ class WearableService {
   }
 
   handleDisconnection() {
+    // ✅ NOTE: Does NOT disable auto-reconnect - this is for unexpected disconnections
+    // The watch will auto-reconnect when app comes to foreground (if shouldAutoReconnect is true)
     this.device = null;
     this.isConnected = false;
     this.stopMonitoring();
@@ -846,6 +876,12 @@ class WearableService {
   // ===================================
 
   async destroy() {
+    // ✅ NEW: Remove app state listener
+    if (this.appStateSubscription) {
+      this.appStateSubscription.remove();
+      this.appStateSubscription = null;
+    }
+    
     await this.disconnect();
     this.manager.destroy();
     this.log('🗑️ Service destroyed');
