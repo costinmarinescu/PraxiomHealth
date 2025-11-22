@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { AppContext } from '../AppContext';
+import * as SecureStorage from '../services/SecureStorageService';
 
 const Tier2BiomarkerInputScreen = ({ navigation }) => {
   // ✅ FIX: Get correct functions from AppContext
@@ -199,6 +200,52 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
         throw new Error(`Calculation failed: ${calcError.message}`);
       }
 
+      // ✅ FIX #2: Save Tier 2 entry to encrypted history
+      try {
+        const tier2Entry = {
+          // Biomarker values
+          il6: parseFloat(il6),
+          il1b: parseFloat(il1b),
+          tnfa: parseFloat(tnfa),
+          ohgd8: parseFloat(ohgd8),
+          proteinCarbonyls: parseFloat(proteinCarbonyls),
+          nadPlus: nadPlus ? parseFloat(nadPlus) : null,
+          
+          // Calculated values
+          bioAge: parseFloat(enhancedBioAge.toFixed(1)),
+          oralScore: Math.round(currentOralScore),
+          systemicScore: Math.round(adjustedSystemicScore),
+          vitalityIndex: Math.round((currentOralScore + adjustedSystemicScore) / 2),
+          chronologicalAge: state.chronologicalAge,
+          deviation: parseFloat((enhancedBioAge - state.chronologicalAge).toFixed(1)),
+          tier2Adjustment: totalAdjustment,
+          
+          // Metadata
+          timestamp: selectedDate.toISOString(),
+          dateEntered: selectedDate.toLocaleDateString(),
+          tier: 2,
+        };
+
+        // Load existing Tier 2 history
+        const existingData = await SecureStorage.getItem('tier2Biomarkers');
+        const tier2Array = Array.isArray(existingData) ? existingData : (existingData ? [existingData] : []);
+        tier2Array.push(tier2Entry);
+        
+        // Sort by timestamp (newest first)
+        tier2Array.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        await SecureStorage.setItem('tier2Biomarkers', tier2Array);
+        console.log('✅ Tier 2 COMPLETE entry saved to encrypted history:', {
+          bioAge: tier2Entry.bioAge,
+          oralScore: tier2Entry.oralScore,
+          systemicScore: tier2Entry.systemicScore,
+          timestamp: tier2Entry.timestamp
+        });
+      } catch (error) {
+        console.error('⚠️ Failed to save Tier 2 to history:', error);
+        // Don't block user - calculation was successful
+      }
+
       // Calculate improvement vs Tier 1
       const tier1BioAge = state.biologicalAge || state.chronologicalAge;
       const improvement = tier1BioAge - enhancedBioAge;
@@ -256,23 +303,28 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
     } else {
       return '📈 Focus on foundational health:\n' +
              '• Review Tier 1 biomarkers\n' +
-             '• Address underlying factors';
+             '• Address inflammatory markers\n' +
+             '• Consider lifestyle modifications';
     }
   };
 
   return (
     <LinearGradient
-      colors={['#FF6B35', '#F7931E', '#FDC830', '#00CED1']}
+      colors={['#FF6B35', '#F7931E', '#00D4FF']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
       style={styles.container}
     >
       <ScrollView style={styles.scrollView}>
-        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={28} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.title}>Tier 2 Advanced Assessment</Text>
-          <Text style={styles.subtitle}>Personalized Profiling</Text>
+          <Text style={styles.title}>Tier 2 Assessment</Text>
+          <Text style={styles.subtitle}>Advanced Biomarker Profiling</Text>
         </View>
 
         {/* Date Selection */}

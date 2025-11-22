@@ -146,12 +146,39 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
       
       console.log('✅ Starting Tier 1 calculation...');
       
-      // Create assessment date
-      const assessmentDate = new Date(
-        parseInt(year),
-        parseInt(month) - 1,
-        parseInt(day)
-      );
+      // ✅ FIX #1: Validate date inputs BEFORE creating Date object
+      if (!year || !month || !day) {
+        Alert.alert('Missing Date', 'Please enter a valid assessment date');
+        setIsCalculating(false);
+        return;
+      }
+
+      // Validate date values are reasonable
+      const yearNum = parseInt(year);
+      const monthNum = parseInt(month);
+      const dayNum = parseInt(day);
+
+      if (isNaN(yearNum) || isNaN(monthNum) || isNaN(dayNum)) {
+        Alert.alert('Invalid Date', 'Please enter numeric values for date');
+        setIsCalculating(false);
+        return;
+      }
+
+      if (yearNum < 2020 || yearNum > 2030 || monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) {
+        Alert.alert('Invalid Date', 'Please check your date values (Year: 2020-2030, Month: 1-12, Day: 1-31)');
+        setIsCalculating(false);
+        return;
+      }
+
+      // Now create assessment date (this will be valid)
+      const assessmentDate = new Date(yearNum, monthNum - 1, dayNum);
+
+      // Final check: make sure date is valid
+      if (isNaN(assessmentDate.getTime())) {
+        Alert.alert('Invalid Date', 'The date you entered is not valid');
+        setIsCalculating(false);
+        return;
+      }
       
       // ✅ STEP 1: Update state with biomarkers FIRST
       try {
@@ -201,7 +228,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
         // Biomarker values
         salivaryPH: parseFloat(formData.salivaryPH),
         activeMMP8: parseFloat(formData.activeMMP8),
-        salivaryFlow: parseFloat(formData.salivaryFlow),
+        salivaryFlowRate: parseFloat(formData.salivaryFlow),
         hsCRP: parseFloat(formData.hsCRP),
         omega3Index: parseFloat(formData.omega3Index),
         hba1c: parseFloat(formData.hba1c),
@@ -257,42 +284,17 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
         [
           { 
             text: 'View Dashboard', 
-            onPress: () => {
-              try {
-                navigation.navigate('DashboardHome');
-              } catch (e) {
-                navigation.navigate('Dashboard');
-              }
-            }
+            onPress: () => navigation.navigate('DashboardHome') 
           },
           { 
-            text: 'OK',
-            style: 'cancel'
+            text: 'OK', 
+            style: 'cancel' 
           }
         ]
       );
-      
-      console.log('✅ Tier 1 calculation complete!');
-      
-      // Clear form
-      setFormData({
-        salivaryPH: '',
-        activeMMP8: '',
-        salivaryFlow: '',
-        hsCRP: '',
-        omega3Index: '',
-        hba1c: '',
-        gdf15: '',
-        vitaminD: '',
-        hrvValue: state?.wearableData?.hrv ? String(state.wearableData.hrv) : ''
-      });
-      
     } catch (error) {
       console.error('❌ Calculation error:', error);
-      Alert.alert(
-        'Calculation Error',
-        `Failed to complete calculation.\n\nError: ${error.message}\n\nPlease check all values and try again.`
-      );
+      Alert.alert('Error', 'Failed to calculate Praxiom Age. Please check your inputs and try again.');
     } finally {
       setIsCalculating(false);
     }
@@ -300,29 +302,34 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
 
   const getRecommendation = (oralScore, systemicScore) => {
     if (oralScore < 75 || systemicScore < 75) {
-      return '⚠️ Some scores are below target. Consider upgrading to Tier 2 for personalized interventions.';
+      return '⚠️ Some scores are below optimal. Consider upgrading to Tier 2 for advanced assessment.';
+    } else if (oralScore >= 85 && systemicScore >= 85) {
+      return '✅ Excellent health metrics! Keep up the great work.';
+    } else {
+      return '📊 Good health metrics. Continue monitoring your biomarkers.';
     }
-    if (oralScore >= 85 && systemicScore >= 85) {
-      return '✅ Excellent scores! Continue current protocol and monitor regularly.';
-    }
-    return '📊 Good progress. Continue lifestyle optimizations to reach target scores.';
   };
 
   return (
-    <LinearGradient colors={['#FF6B00', '#00CFC1']} style={styles.container}>
+    <LinearGradient
+      colors={['#FF6B35', '#F7931E', '#00D4FF']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
       <ScrollView style={styles.scrollView}>
         <View style={styles.header}>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backButton}
           >
             <Ionicons name="arrow-back" size={28} color="#fff" />
           </TouchableOpacity>
-          
-          <Text style={styles.title}>Tier 1: Foundation</Text>
-          <Text style={styles.subtitle}>Core Biomarker Assessment</Text>
+          <Text style={styles.title}>Tier 1 Assessment</Text>
+          <Text style={styles.subtitle}>Foundation Biomarkers</Text>
         </View>
 
+        {/* Date Input Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📅 Assessment Date</Text>
           <View style={styles.dateInputContainer}>
@@ -357,7 +364,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
                 value={day}
                 onChangeText={setDay}
                 keyboardType="number-pad"
-                placeholder="18"
+                placeholder="22"
                 placeholderTextColor="rgba(255,255,255,0.5)"
                 maxLength={2}
               />
@@ -375,7 +382,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
               value={formData.salivaryPH}
               onChangeText={(value) => updateField('salivaryPH', value)}
               keyboardType="decimal-pad"
-              placeholder="7.0"
+              placeholder="6.8"
               placeholderTextColor="rgba(255,255,255,0.5)"
             />
           </View>
@@ -387,7 +394,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
               value={formData.activeMMP8}
               onChangeText={(value) => updateField('activeMMP8', value)}
               keyboardType="decimal-pad"
-              placeholder="50"
+              placeholder="45"
               placeholderTextColor="rgba(255,255,255,0.5)"
             />
           </View>

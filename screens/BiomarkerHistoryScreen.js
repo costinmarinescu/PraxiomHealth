@@ -395,12 +395,20 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
             <Ionicons name="arrow-back" size={24} color="#00d4ff" />
           </TouchableOpacity>
           <Text style={styles.title}>Biomarker History</Text>
-          <TouchableOpacity
-            onPress={exportData}
-            style={styles.exportButton}
-          >
-            <Ionicons name="share-social-outline" size={24} color="#00d4ff" />
-          </TouchableOpacity>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('ComparisonScreen')}
+              style={styles.compareButton}
+            >
+              <Ionicons name="analytics-outline" size={24} color="#00d4ff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={exportData}
+              style={styles.exportButton}
+            >
+              <Ionicons name="share-social-outline" size={24} color="#00d4ff" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {history.length === 0 ? (
@@ -448,6 +456,13 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     flex: 1,
     textAlign: 'center',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  compareButton: {
+    padding: 8,
   },
   exportButton: {
     padding: 8,

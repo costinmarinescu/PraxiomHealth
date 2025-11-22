@@ -54,11 +54,23 @@ const ComparisonScreen = ({ navigation }) => {
     });
   };
 
-  const calculateDifference = (value1, value2) => {
+  // ✅ FIX: Correct comparison logic - lower is better for bio-age, higher is better for scores
+  const calculateDifference = (value1, value2, lowerIsBetter = true) => {
+    // Handle null/undefined values
+    if (value1 == null || value2 == null) {
+      return {
+        value: 'N/A',
+        positive: false,
+        arrow: 'remove',
+      };
+    }
+
     const diff = value1 - value2;
+    const isPositive = lowerIsBetter ? (diff < 0) : (diff > 0);
+    
     return {
       value: Math.abs(diff).toFixed(1),
-      positive: diff < 0, // Lower bio-age is positive
+      positive: isPositive,
       arrow: diff < 0 ? 'arrow-down' : diff > 0 ? 'arrow-up' : 'remove',
     };
   };
@@ -79,10 +91,12 @@ const ComparisonScreen = ({ navigation }) => {
     }
 
     const [entry1, entry2] = selectedEntries;
-    const bioAgeDiff = calculateDifference(entry1.bioAge, entry2.bioAge);
-    const oralDiff = calculateDifference(entry1.oralScore, entry2.oralScore);
-    const systemicDiff = calculateDifference(entry1.systemicScore, entry2.systemicScore);
-    const fitnessDiff = calculateDifference(entry1.fitnessScore, entry2.fitnessScore);
+    
+    // ✅ FIX: Lower bio-age is better, higher scores are better
+    const bioAgeDiff = calculateDifference(entry1.bioAge, entry2.bioAge, true);
+    const oralDiff = calculateDifference(entry1.oralScore, entry2.oralScore, false);
+    const systemicDiff = calculateDifference(entry1.systemicScore, entry2.systemicScore, false);
+    const fitnessDiff = calculateDifference(entry1.fitnessScore, entry2.fitnessScore, false);
 
     return (
       <View style={styles.comparisonContainer}>
@@ -103,15 +117,17 @@ const ComparisonScreen = ({ navigation }) => {
         <View style={styles.comparisonCard}>
           <Text style={styles.cardTitle}>Bio-Age</Text>
           <View style={styles.comparisonRow}>
-            <Text style={styles.valueText}>{entry1.bioAge}</Text>
-            <View style={[
-              styles.diffBadge,
-              { backgroundColor: bioAgeDiff.positive ? '#4ade80' : '#ef4444' }
-            ]}>
-              <Ionicons name={bioAgeDiff.arrow} size={16} color="#fff" />
-              <Text style={styles.diffText}>{bioAgeDiff.value}</Text>
-            </View>
-            <Text style={styles.valueText}>{entry2.bioAge}</Text>
+            <Text style={styles.valueText}>{entry1.bioAge?.toFixed(1) || 'N/A'}</Text>
+            {bioAgeDiff.value !== 'N/A' && (
+              <View style={[
+                styles.diffBadge,
+                { backgroundColor: bioAgeDiff.positive ? '#4ade80' : '#ef4444' }
+              ]}>
+                <Ionicons name={bioAgeDiff.arrow} size={16} color="#fff" />
+                <Text style={styles.diffText}>{bioAgeDiff.value}</Text>
+              </View>
+            )}
+            <Text style={styles.valueText}>{entry2.bioAge?.toFixed(1) || 'N/A'}</Text>
           </View>
         </View>
 
@@ -122,56 +138,67 @@ const ComparisonScreen = ({ navigation }) => {
           <View style={styles.scoreComparison}>
             <Text style={styles.scoreLabel}>Oral Health</Text>
             <View style={styles.comparisonRow}>
-              <Text style={styles.valueText}>{entry1.oralScore}</Text>
-              <View style={[
-                styles.diffBadge,
-                { backgroundColor: oralDiff.positive ? '#4ade80' : '#ef4444' }
-              ]}>
-                <Ionicons name={oralDiff.arrow} size={16} color="#fff" />
-                <Text style={styles.diffText}>{oralDiff.value}</Text>
-              </View>
-              <Text style={styles.valueText}>{entry2.oralScore}</Text>
+              <Text style={styles.valueText}>{entry1.oralScore || 'N/A'}</Text>
+              {oralDiff.value !== 'N/A' && (
+                <View style={[
+                  styles.diffBadge,
+                  { backgroundColor: oralDiff.positive ? '#4ade80' : '#ef4444' }
+                ]}>
+                  <Ionicons name={oralDiff.arrow} size={16} color="#fff" />
+                  <Text style={styles.diffText}>{oralDiff.value}</Text>
+                </View>
+              )}
+              <Text style={styles.valueText}>{entry2.oralScore || 'N/A'}</Text>
             </View>
           </View>
 
           <View style={styles.scoreComparison}>
             <Text style={styles.scoreLabel}>Systemic Health</Text>
             <View style={styles.comparisonRow}>
-              <Text style={styles.valueText}>{entry1.systemicScore}</Text>
-              <View style={[
-                styles.diffBadge,
-                { backgroundColor: systemicDiff.positive ? '#4ade80' : '#ef4444' }
-              ]}>
-                <Ionicons name={systemicDiff.arrow} size={16} color="#fff" />
-                <Text style={styles.diffText}>{systemicDiff.value}</Text>
-              </View>
-              <Text style={styles.valueText}>{entry2.systemicScore}</Text>
+              <Text style={styles.valueText}>{entry1.systemicScore || 'N/A'}</Text>
+              {systemicDiff.value !== 'N/A' && (
+                <View style={[
+                  styles.diffBadge,
+                  { backgroundColor: systemicDiff.positive ? '#4ade80' : '#ef4444' }
+                ]}>
+                  <Ionicons name={systemicDiff.arrow} size={16} color="#fff" />
+                  <Text style={styles.diffText}>{systemicDiff.value}</Text>
+                </View>
+              )}
+              <Text style={styles.valueText}>{entry2.systemicScore || 'N/A'}</Text>
             </View>
           </View>
 
-          <View style={styles.scoreComparison}>
-            <Text style={styles.scoreLabel}>Fitness</Text>
-            <View style={styles.comparisonRow}>
-              <Text style={styles.valueText}>{entry1.fitnessScore}</Text>
-              <View style={[
-                styles.diffBadge,
-                { backgroundColor: fitnessDiff.positive ? '#4ade80' : '#ef4444' }
-              ]}>
-                <Ionicons name={fitnessDiff.arrow} size={16} color="#fff" />
-                <Text style={styles.diffText}>{fitnessDiff.value}</Text>
+          {/* ✅ FIX: Only show fitness comparison if both entries have fitness scores */}
+          {(entry1.fitnessScore || entry2.fitnessScore) && (
+            <View style={styles.scoreComparison}>
+              <Text style={styles.scoreLabel}>Fitness</Text>
+              <View style={styles.comparisonRow}>
+                <Text style={styles.valueText}>{entry1.fitnessScore || 'N/A'}</Text>
+                {fitnessDiff.value !== 'N/A' && (
+                  <View style={[
+                    styles.diffBadge,
+                    { backgroundColor: fitnessDiff.positive ? '#4ade80' : '#ef4444' }
+                  ]}>
+                    <Ionicons name={fitnessDiff.arrow} size={16} color="#fff" />
+                    <Text style={styles.diffText}>{fitnessDiff.value}</Text>
+                  </View>
+                )}
+                <Text style={styles.valueText}>{entry2.fitnessScore || 'N/A'}</Text>
               </View>
-              <Text style={styles.valueText}>{entry2.fitnessScore}</Text>
             </View>
-          </View>
+          )}
         </View>
 
         {/* Progress Summary */}
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Overall Progress</Text>
           <Text style={styles.summaryText}>
-            {bioAgeDiff.positive
-              ? `Your bio-age decreased by ${bioAgeDiff.value} years! Keep up the great work.`
-              : `Your bio-age increased by ${bioAgeDiff.value} years. Consider reviewing your health metrics.`}
+            {bioAgeDiff.value === 'N/A' 
+              ? 'Bio-age data not available for comparison.'
+              : bioAgeDiff.positive
+                ? `Your bio-age decreased by ${bioAgeDiff.value} years! Keep up the great work.`
+                : `Your bio-age increased by ${bioAgeDiff.value} years. Consider reviewing your health metrics.`}
           </Text>
         </View>
       </View>
