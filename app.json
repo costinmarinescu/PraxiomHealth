@@ -23,7 +23,8 @@
         "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to your PineTime watch for health monitoring.",
         "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to connect to your PineTime watch for health monitoring.",
         "NSHealthShareUsageDescription": "This app needs access to your health data to calculate your biological age.",
-        "NSHealthUpdateUsageDescription": "This app needs to update your health data with calculated biological age information."
+        "NSHealthUpdateUsageDescription": "This app needs to update your health data with calculated biological age information.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -32,6 +33,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.praxiom.health",
+      "versionCode": 1,
       "permissions": [
         "BLUETOOTH",
         "BLUETOOTH_ADMIN",
