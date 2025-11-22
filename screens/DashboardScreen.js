@@ -181,10 +181,10 @@ export default function DashboardScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Row 2: Tier 3 DNA Test and Fitness Assessment - ✅ NEW! */}
+        {/* Row 2: Tier 3 DNA Test and Fitness Assessment */}
         <View style={styles.quickActions}>
           <TouchableOpacity
-            style={[styles.actionButton, styles.tier3Button]}
+            style={styles.actionButton}
             onPress={() => navigation.navigate('DNATest')}
           >
             <Text style={styles.actionButtonText}>🧬 Tier 3</Text>
@@ -200,22 +200,14 @@ export default function DashboardScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Row 3: History Screens */}
+        {/* Row 3: Biomarker History */}
         <View style={styles.quickActions}>
           <TouchableOpacity
-            style={styles.actionButton}
+            style={[styles.actionButton, { flex: 1 }]}
             onPress={() => navigation.navigate('BiomarkerHistory')}
           >
             <Text style={styles.actionButtonText}>📋 Biomarker</Text>
             <Text style={styles.actionButtonText}>History</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('HistoricalData')}
-          >
-            <Text style={styles.actionButtonText}>📈 Historical</Text>
-            <Text style={styles.actionButtonText}>Data</Text>
           </TouchableOpacity>
         </View>
 
@@ -376,9 +368,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 5,
-  },
-  tier3Button: {
-    backgroundColor: '#9D4EDD',  // ✅ NEW: Purple for Tier 3 DNA Test
   },
   actionButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
   alertCard: {

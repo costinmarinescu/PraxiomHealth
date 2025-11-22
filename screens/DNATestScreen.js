@@ -8,10 +8,10 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import StorageService from '../services/StorageService'; // ✅ NEW: Import StorageService
+import StorageService from '../services/StorageService';
+import PraxiomBackground from '../components/PraxiomBackground';
 
 export default function DNATestScreen({ navigation }) {
   const [dunedinPACE, setDunedinPACE] = useState('');
@@ -107,10 +107,7 @@ export default function DNATestScreen({ navigation }) {
   };
   
   return (
-    <LinearGradient
-      colors={['rgba(255, 140, 0, 0.15)', 'rgba(0, 207, 193, 0.15)']}
-      style={styles.container}
-    >
+    <PraxiomBackground>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Info Card */}
         <View style={styles.infoCard}>
@@ -232,7 +229,7 @@ export default function DNATestScreen({ navigation }) {
           * DNA methylation tests should be performed by certified laboratories. Consult with your healthcare provider for test ordering and interpretation.
         </Text>
       </ScrollView>
-    </LinearGradient>
+    </PraxiomBackground>
   );
 }
 
