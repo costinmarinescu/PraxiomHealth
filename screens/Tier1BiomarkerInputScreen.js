@@ -153,34 +153,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
         parseInt(day)
       );
       
-      // ✅ FIX: Save to history BEFORE calculation
-      const tier1Entry = {
-        salivaryPH: parseFloat(formData.salivaryPH),
-        activeMMP8: parseFloat(formData.activeMMP8),
-        salivaryFlow: parseFloat(formData.salivaryFlow),
-        hsCRP: parseFloat(formData.hsCRP),
-        omega3Index: parseFloat(formData.omega3Index),
-        hba1c: parseFloat(formData.hba1c),
-        gdf15: parseFloat(formData.gdf15),
-        vitaminD: parseFloat(formData.vitaminD),
-        hrvValue: formData.hrvValue ? parseFloat(formData.hrvValue) : null,
-        timestamp: assessmentDate.toISOString(),
-        dateEntered: assessmentDate.toLocaleDateString(),
-        tier: 1,
-      };
-
-      try {
-        // ✅ SECURITY FIX: Use encrypted storage for medical data
-        const existingData = await SecureStorage.getItem('tier1Biomarkers');
-        const tier1Array = existingData ? existingData : [];
-        tier1Array.push(tier1Entry);
-        await SecureStorage.setItem('tier1Biomarkers', tier1Array);
-        console.log('✅ Tier 1 data saved to encrypted history');
-      } catch (error) {
-        console.error('Error saving to history:', error);
-      }
-      
-      // Update state
+      // ✅ STEP 1: Update state with biomarkers FIRST
       try {
         await updateState({
           salivaryPH: parseFloat(formData.salivaryPH),
@@ -200,8 +173,10 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
       
       console.log('✅ Biomarkers updated in state');
       
+      // Give state time to update
       await new Promise(resolve => setTimeout(resolve, 150));
       
+      // ✅ STEP 2: Calculate biological age and scores
       let biologicalAge;
       try {
         biologicalAge = await calculateBiologicalAge();
@@ -212,12 +187,63 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
       
       console.log('✅ Scores calculated, biological age:', biologicalAge);
       
+      // ✅ STEP 3: Get all calculated scores from state
       const oralScore = state?.oralHealthScore || 50;
       const systemicScore = state?.systemicHealthScore || 50;
       const vitalityIndex = state?.vitalityIndex || 50;
       const chronologicalAge = state?.chronologicalAge || 0;
+      const fitnessScore = state?.fitnessScore || null;
       
       const deviation = parseFloat((biologicalAge - chronologicalAge).toFixed(1));
+      
+      // ✅ STEP 4: NOW save complete history entry with ALL calculated values
+      const tier1Entry = {
+        // Biomarker values
+        salivaryPH: parseFloat(formData.salivaryPH),
+        activeMMP8: parseFloat(formData.activeMMP8),
+        salivaryFlow: parseFloat(formData.salivaryFlow),
+        hsCRP: parseFloat(formData.hsCRP),
+        omega3Index: parseFloat(formData.omega3Index),
+        hba1c: parseFloat(formData.hba1c),
+        gdf15: parseFloat(formData.gdf15),
+        vitaminD: parseFloat(formData.vitaminD),
+        hrvValue: formData.hrvValue ? parseFloat(formData.hrvValue) : null,
+        
+        // ✅ CRITICAL: Calculated values (previously missing!)
+        bioAge: parseFloat(biologicalAge.toFixed(1)),
+        oralScore: Math.round(oralScore),
+        systemicScore: Math.round(systemicScore),
+        vitalityIndex: Math.round(vitalityIndex),
+        fitnessScore: fitnessScore ? Math.round(fitnessScore) : null,
+        chronologicalAge: chronologicalAge,
+        deviation: deviation,
+        
+        // Metadata
+        timestamp: assessmentDate.toISOString(),
+        dateEntered: assessmentDate.toLocaleDateString(),
+        tier: 1,
+      };
+
+      try {
+        // ✅ SECURITY FIX: Use encrypted storage for medical data
+        const existingData = await SecureStorage.getItem('tier1Biomarkers');
+        const tier1Array = Array.isArray(existingData) ? existingData : (existingData ? [existingData] : []);
+        tier1Array.push(tier1Entry);
+        
+        // Sort by timestamp (newest first)
+        tier1Array.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        await SecureStorage.setItem('tier1Biomarkers', tier1Array);
+        console.log('✅ Tier 1 COMPLETE entry saved to encrypted history:', {
+          bioAge: tier1Entry.bioAge,
+          oralScore: tier1Entry.oralScore,
+          systemicScore: tier1Entry.systemicScore,
+          timestamp: tier1Entry.timestamp
+        });
+      } catch (error) {
+        console.error('❌ Error saving to history:', error);
+        // Don't throw - calculation was successful even if save failed
+      }
       
       Alert.alert(
         'Praxiom Age Calculated! ✅',
