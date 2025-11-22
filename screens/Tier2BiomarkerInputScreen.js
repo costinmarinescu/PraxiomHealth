@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { AppContext } from '../AppContext';
 import * as SecureStorage from '../services/SecureStorageService';
@@ -20,9 +19,10 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
   // ✅ FIX: Get correct functions from AppContext
   const { state, updateState, calculateScores, calculateBiologicalAge } = useContext(AppContext);
   
-  // Date selection
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  // ✅ FIX: Simple date inputs (matching Tier 1)
+  const [year, setYear] = useState('');
+  const [month, setMonth] = useState('');
+  const [day, setDay] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Inflammatory Cytokines
@@ -37,20 +37,13 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
   // Advanced Markers (optional)
   const [nadPlus, setNADPlus] = useState('');
 
-  const onDateChange = (event, date) => {
-    if (Platform.OS === 'android') {
-      if (event.type === 'set' && date) {
-        setSelectedDate(date);
-        setShowDatePicker(false);
-      } else if (event.type === 'dismissed') {
-        setShowDatePicker(false);
-      }
-    } else {
-      if (date) {
-        setSelectedDate(date);
-      }
-    }
-  };
+  // ✅ FIX: Set today's date as default
+  useEffect(() => {
+    const today = new Date();
+    setYear(today.getFullYear().toString());
+    setMonth((today.getMonth() + 1).toString());
+    setDay(today.getDate().toString());
+  }, []);
 
   const validateInputs = () => {
     const requiredFields = [
@@ -150,6 +143,33 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
   const handleCalculate = async () => {
     if (!validateInputs()) return;
 
+    // ✅ FIX: Validate and construct date from inputs
+    if (!year || !month || !day) {
+      Alert.alert('Missing Date', 'Please enter a valid assessment date');
+      return;
+    }
+
+    const yearNum = parseInt(year);
+    const monthNum = parseInt(month);
+    const dayNum = parseInt(day);
+
+    if (isNaN(yearNum) || isNaN(monthNum) || isNaN(dayNum)) {
+      Alert.alert('Invalid Date', 'Please enter numeric values for date');
+      return;
+    }
+
+    if (yearNum < 2020 || yearNum > 2030 || monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) {
+      Alert.alert('Invalid Date', 'Please check your date values (Year: 2020-2030, Month: 1-12, Day: 1-31)');
+      return;
+    }
+
+    const assessmentDate = new Date(yearNum, monthNum - 1, dayNum);
+
+    if (isNaN(assessmentDate.getTime())) {
+      Alert.alert('Invalid Date', 'The date you entered is not valid');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -180,8 +200,8 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
           ohgd8: parseFloat(ohgd8),
           proteinCarbonyls: parseFloat(proteinCarbonyls),
           nadPlus: nadPlus ? parseFloat(nadPlus) : null,
-          timestamp: selectedDate.toISOString(),
-          dateEntered: selectedDate.toLocaleDateString(),
+          timestamp: assessmentDate.toISOString(),
+          dateEntered: assessmentDate.toLocaleDateString(),
           adjustment: totalAdjustment,
           tier: 2,
         }
@@ -221,8 +241,8 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
           tier2Adjustment: totalAdjustment,
           
           // Metadata
-          timestamp: selectedDate.toISOString(),
-          dateEntered: selectedDate.toLocaleDateString(),
+          timestamp: assessmentDate.toISOString(),
+          dateEntered: assessmentDate.toLocaleDateString(),
           tier: 2,
         };
 
@@ -327,27 +347,47 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
           <Text style={styles.subtitle}>Advanced Biomarker Profiling</Text>
         </View>
 
-        {/* Date Selection */}
+        {/* Date Input Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Assessment Date</Text>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={20} color="#fff" />
-            <Text style={styles.dateText}>
-              {selectedDate.toLocaleDateString()}
-            </Text>
-          </TouchableOpacity>
-          {showDatePicker && (
-            <DateTimePicker
-              value={selectedDate}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={onDateChange}
-              maximumDate={new Date()}
-            />
-          )}
+          <Text style={styles.sectionTitle}>📅 Assessment Date</Text>
+          <View style={styles.dateInputContainer}>
+            <View style={styles.dateField}>
+              <Text style={styles.dateLabel}>Year</Text>
+              <TextInput
+                style={styles.dateInput}
+                value={year}
+                onChangeText={setYear}
+                keyboardType="number-pad"
+                placeholder="2025"
+                placeholderTextColor="rgba(255,255,255,0.5)"
+                maxLength={4}
+              />
+            </View>
+            <View style={styles.dateField}>
+              <Text style={styles.dateLabel}>Month</Text>
+              <TextInput
+                style={styles.dateInput}
+                value={month}
+                onChangeText={setMonth}
+                keyboardType="number-pad"
+                placeholder="11"
+                placeholderTextColor="rgba(255,255,255,0.5)"
+                maxLength={2}
+              />
+            </View>
+            <View style={styles.dateField}>
+              <Text style={styles.dateLabel}>Day</Text>
+              <TextInput
+                style={styles.dateInput}
+                value={day}
+                onChangeText={setDay}
+                keyboardType="number-pad"
+                placeholder="22"
+                placeholderTextColor="rgba(255,255,255,0.5)"
+                maxLength={2}
+              />
+            </View>
+          </View>
         </View>
 
         {/* Inflammatory Cytokines */}
@@ -506,20 +546,33 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  dateButton: {
+  dateInputContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    padding: 15,
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  dateField: {
+    flex: 1,
+  },
+  dateLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#fff',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  dateInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     borderRadius: 12,
+    padding: 15,
+    fontSize: 16,
+    color: '#fff',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  dateText: {
-    color: '#fff',
-    fontSize: 16,
-    marginLeft: 10,
     fontWeight: '600',
+    textAlign: 'center',
   },
   inputGroup: {
     marginBottom: 15,
