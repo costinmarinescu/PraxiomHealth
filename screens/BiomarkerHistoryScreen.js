@@ -397,7 +397,7 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
           <Text style={styles.title}>Biomarker History</Text>
           <View style={styles.headerButtons}>
             <TouchableOpacity
-              onPress={() => navigation.navigate('ComparisonScreen')}
+              onPress={() => navigation.navigate('Comparison')}
               style={styles.compareButton}
             >
               <Ionicons name="analytics-outline" size={24} color="#00d4ff" />
@@ -423,7 +423,7 @@ const BiomarkerHistoryScreen = ({ navigation }) => {
           <FlatList
             data={history}
             renderItem={renderHistoryItem}
-            keyExtractor={(item) => item.timestamp || Math.random().toString()}
+            keyExtractor={(item, index) => item.timestamp || `history-${index}`}
             scrollEnabled={false}
             contentContainerStyle={styles.listContent}
           />
