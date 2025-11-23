@@ -10,6 +10,7 @@ const SECURE_KEYS = [
   'tier1Biomarkers',
   'tier2Biomarkers',
   'tier3Biomarkers',
+  'tier3OptionalMetrics',  // NEW: Optional DNA methylation data
   'fitnessAssessment',
   'fitnessAssessments',
   'dateOfBirth',
@@ -144,10 +145,100 @@ export const getSecurityStatus = async () => {
   }
 };
 
+/**
+ * Save Tier 3 data (MRI and Genetic scores)
+ */
+export const saveTier3Data = async (mriScore, geneticScore) => {
+  try {
+    const tier3Data = {
+      mriScore: mriScore !== null ? parseFloat(mriScore) : null,
+      geneticScore: geneticScore !== null ? parseFloat(geneticScore) : null,
+      assessmentDate: new Date().toISOString(),
+      timestamp: Date.now()
+    };
+    
+    await setItem('tier3Biomarkers', tier3Data);
+    console.log('✅ Tier 3 data saved:', tier3Data);
+    return tier3Data;
+  } catch (error) {
+    console.error('Error saving Tier 3 data:', error);
+    throw error;
+  }
+};
+
+/**
+ * Load Tier 3 data (MRI and Genetic scores)
+ */
+export const loadTier3Data = async () => {
+  try {
+    const data = await getItem('tier3Biomarkers');
+    if (data) {
+      console.log('✅ Tier 3 data loaded:', data);
+      return {
+        mriScore: data.mriScore || null,
+        geneticScore: data.geneticScore || null,
+        assessmentDate: data.assessmentDate || null
+      };
+    }
+    return { mriScore: null, geneticScore: null, assessmentDate: null };
+  } catch (error) {
+    console.error('Error loading Tier 3 data:', error);
+    return { mriScore: null, geneticScore: null, assessmentDate: null };
+  }
+};
+
+/**
+ * Save Tier 3 optional data (DunedinPACE, ELOVL2, Intrinsic Capacity)
+ * These are informative only and NOT used in bio-age calculation
+ */
+export const saveTier3OptionalData = async (optionalData) => {
+  try {
+    const tier3Optional = {
+      dunedinPACE: optionalData.dunedinPACE || null,
+      elovl2Age: optionalData.elovl2Age || null,
+      intrinsicCapacity: optionalData.intrinsicCapacity || null,
+      timestamp: Date.now(),
+      note: 'These metrics are informative only and not used in bio-age calculation'
+    };
+    
+    await setItem('tier3OptionalMetrics', tier3Optional);
+    console.log('✅ Tier 3 optional data saved:', tier3Optional);
+    return tier3Optional;
+  } catch (error) {
+    console.error('Error saving Tier 3 optional data:', error);
+    throw error;
+  }
+};
+
+/**
+ * Load Tier 3 optional data (DunedinPACE, ELOVL2, Intrinsic Capacity)
+ */
+export const loadTier3OptionalData = async () => {
+  try {
+    const data = await getItem('tier3OptionalMetrics');
+    if (data) {
+      console.log('✅ Tier 3 optional data loaded:', data);
+      return {
+        dunedinPACE: data.dunedinPACE || null,
+        elovl2Age: data.elovl2Age || null,
+        intrinsicCapacity: data.intrinsicCapacity || null
+      };
+    }
+    return { dunedinPACE: null, elovl2Age: null, intrinsicCapacity: null };
+  } catch (error) {
+    console.error('Error loading Tier 3 optional data:', error);
+    return { dunedinPACE: null, elovl2Age: null, intrinsicCapacity: null };
+  }
+};
+
 export default {
   setItem,
   getItem,
   removeItem,
   getAllKeys,
-  getSecurityStatus
+  getSecurityStatus,
+  saveTier3Data,
+  loadTier3Data,
+  saveTier3OptionalData,
+  loadTier3OptionalData
 };
