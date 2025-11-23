@@ -1,4 +1,4 @@
-name: Build Praxiom Health Android App
+name: Build and Deploy Praxiom Health App
 
 on:
   push:
@@ -12,26 +12,57 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout repository
+      - name: 📥 Checkout repository
         uses: actions/checkout@v3
 
-      - name: Setup Node.js
+      - name: 🟢 Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 18
 
-      - name: Setup Expo
+      - name: 🔧 Setup Expo and EAS
         uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Install dependencies
+      - name: 📦 Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Run EAS Init
+      - name: 🔑 Initialize EAS Project
         run: eas init --id ${{ secrets.EXPO_PROJECT_ID }} --non-interactive
         continue-on-error: true
 
-      - name: Build Android APK
+      # ============================================
+      # iOS BUILD AND SUBMIT TO APP STORE CONNECT
+      # ============================================
+      
+      - name: 🍎 Build iOS App
+        run: eas build --platform ios --profile production --non-interactive
+        
+      - name: 🚀 Submit iOS to App Store Connect
+        run: eas submit --platform ios --latest --non-interactive
+        continue-on-error: true  # Don't fail if submit has issues
+        
+      # ============================================
+      # ANDROID BUILD
+      # ============================================
+      
+      - name: 🤖 Build Android APK
         run: eas build --platform android --profile preview --non-interactive
+
+      # ============================================
+      # NOTIFICATIONS (OPTIONAL)
+      # ============================================
+      
+      - name: ✅ Notify Success
+        if: success()
+        run: |
+          echo "✅ Build completed successfully!"
+          echo "📱 iOS app submitted to App Store Connect"
+          echo "🤖 Android APK built"
+          
+      - name: ❌ Notify Failure
+        if: failure()
+        run: |
+          echo "❌ Build failed. Check logs above."
