@@ -39,6 +39,11 @@ export const AppContextProvider = ({ children }) => {
     gdf15: null,
     vitaminD: null,
     
+    // Tier 3 Biomarkers (MRI & Genetic)
+    mriScore: null,
+    geneticScore: null,
+    tier3AssessmentDate: null,
+    
     // Fitness Assessment Data
     aerobicScore: null,
     flexibilityScore: null,
@@ -408,6 +413,9 @@ export const AppContextProvider = ({ children }) => {
         ouraSleepEfficiency: state.ouraSleepEfficiency,
         ouraReadinessScore: state.ouraReadinessScore,
         lastOuraSync: state.lastOuraSync,
+        mriScore: state.mriScore,
+        geneticScore: state.geneticScore,
+        tier3AssessmentDate: state.tier3AssessmentDate,
       };
       await AsyncStorage.setItem('praxiomHealthData', JSON.stringify(dataToSave));
     } catch (error) {
@@ -467,6 +475,16 @@ export const AppContextProvider = ({ children }) => {
       // Get HRV value from either PineTime or Oura
       const hrvValue = state.hrv ? parseFloat(state.hrv) : (state.ouraHRV ? parseFloat(state.ouraHRV) : null);
       
+      // Prepare Tier 3 data if available
+      const tier3Data = (state.mriScore !== null || state.geneticScore !== null) ? {
+        mriScore: state.mriScore !== null ? parseFloat(state.mriScore) : null,
+        geneticScore: state.geneticScore !== null ? parseFloat(state.geneticScore) : null,
+      } : null;
+      
+      if (tier3Data) {
+        console.log('✅ [CALC] Tier 3 data prepared:', tier3Data);
+      }
+      
       console.log('🔵 [CALC] Calling PraxiomAlgorithm.calculateBiologicalAge...');
 
       // Call the validated PraxiomAlgorithm
@@ -474,7 +492,8 @@ export const AppContextProvider = ({ children }) => {
         chronologicalAge: parseInt(state.chronologicalAge),
         biomarkers,
         fitnessData,
-        hrvValue
+        hrvValue,
+        tier3Data
       });
 
       console.log('✅ PRAXIOM ALGORITHM RESULTS:', {

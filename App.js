@@ -12,6 +12,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import BiomarkerInputScreen from './screens/BiomarkerInputScreen';
 import Tier1BiomarkerInputScreen from './screens/Tier1BiomarkerInputScreen';
 import Tier2BiomarkerInputScreen from './screens/Tier2BiomarkerInputScreen';
+import Tier3BiomarkerInputScreen from './screens/Tier3BiomarkerInputScreen';
 import FitnessAssessmentScreen from './screens/FitnessAssessmentScreen';
 import ReportScreen from './screens/ReportScreen';
 import DNATestScreen from './screens/DNATestScreen';
@@ -42,6 +43,7 @@ function DashboardStack() {
       <Stack.Screen name="BiomarkerInput" component={BiomarkerInputScreen} />
       <Stack.Screen name="Tier1BiomarkerInput" component={Tier1BiomarkerInputScreen} />
       <Stack.Screen name="Tier2BiomarkerInput" component={Tier2BiomarkerInputScreen} />
+      <Stack.Screen name="Tier3BiomarkerInput" component={Tier3BiomarkerInputScreen} />
       <Stack.Screen name="FitnessAssessment" component={FitnessAssessmentScreen} />
       <Stack.Screen name="Report" component={ReportScreen} />
       <Stack.Screen name="DNATest" component={DNATestScreen} />
