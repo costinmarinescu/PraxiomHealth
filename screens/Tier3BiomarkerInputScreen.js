@@ -14,11 +14,11 @@ import SecureStorageService from '../services/SecureStorageService';
 import PraxiomBackground from '../components/PraxiomBackground';
 
 export default function Tier3BiomarkerInputScreen({ navigation }) {
-  const { state, updateState } = useContext(AppContext);
+  const { state, updateState, calculateBiologicalAge } = useContext(AppContext);
   
   // Required scores (used in algorithm)
-  const [mriScore, setMriScore] = useState(state.tier3MriScore || null);
-  const [geneticScore, setGeneticScore] = useState(state.tier3GeneticScore || null);
+  const [mriScore, setMriScore] = useState(state.mriScore || null);
+  const [geneticScore, setGeneticScore] = useState(state.geneticScore || null);
   
   // Optional informative metrics (NOT used in algorithm calculation)
   const [showOptionalMetrics, setShowOptionalMetrics] = useState(false);
@@ -51,12 +51,17 @@ export default function Tier3BiomarkerInputScreen({ navigation }) {
 
       // Update AppContext state
       updateState({
-        tier3MriScore: mriScore,
-        tier3GeneticScore: geneticScore,
+        mriScore: mriScore,
+        geneticScore: geneticScore,
+        tier3AssessmentDate: new Date().toISOString(),
         dunedinPACE: dunedinPACE ? parseFloat(dunedinPACE) : null,
         elovl2Age: elovl2Age ? parseFloat(elovl2Age) : null,
         intrinsicCapacity: intrinsicCapacity ? parseFloat(intrinsicCapacity) : null,
       });
+
+      // Recalculate bio-age with Tier 3 data
+      console.log('🔵 Recalculating bio-age with Tier 3 data...');
+      await calculateBiologicalAge();
 
       Alert.alert(
         'Tier 3 Data Saved',

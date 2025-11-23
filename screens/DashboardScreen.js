@@ -181,14 +181,14 @@ export default function DashboardScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Row 2: Tier 3 DNA Test and Fitness Assessment */}
+        {/* Row 2: Tier 3 Assessment and Fitness Assessment */}
         <View style={styles.quickActions}>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => navigation.navigate('DNATest')}
+            onPress={() => navigation.navigate('Tier3BiomarkerInput')}
           >
             <Text style={styles.actionButtonText}>🧬 Tier 3</Text>
-            <Text style={styles.actionButtonText}>DNA Test</Text>
+            <Text style={styles.actionButtonText}>MRI & Genetic</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
