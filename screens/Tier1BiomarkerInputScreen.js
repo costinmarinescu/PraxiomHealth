@@ -38,6 +38,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
   const [formData, setFormData] = useState({
     salivaryPH: '',
     activeMMP8: '',
+    proteinCarbonyls: '', // NEW: Nov 2025 protocol addition
     salivaryFlow: '',
     hsCRP: '',
     omega3Index: '',
@@ -69,6 +70,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
     const requiredFields = {
       salivaryPH: 'Salivary pH',
       activeMMP8: 'Active MMP-8',
+      proteinCarbonyls: 'Protein Carbonyls', // NEW: Nov 2025
       salivaryFlow: 'Salivary Flow Rate',
       hsCRP: 'hs-CRP',
       omega3Index: 'Omega-3 Index',
@@ -91,6 +93,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
     const validations = {
       salivaryPH: { min: 5.0, max: 9.0, name: 'Salivary pH' },
       activeMMP8: { min: 0, max: 500, name: 'Active MMP-8' },
+      proteinCarbonyls: { min: 0, max: 20, name: 'Protein Carbonyls' }, // NEW: Nov 2025, 0-20 nmol/mg
       salivaryFlow: { min: 0, max: 10, name: 'Salivary Flow' },
       hsCRP: { min: 0, max: 50, name: 'hs-CRP' },
       omega3Index: { min: 0, max: 20, name: 'Omega-3 Index' },
@@ -185,6 +188,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
         await updateState({
           salivaryPH: parseFloat(formData.salivaryPH),
           mmp8: parseFloat(formData.activeMMP8),
+          proteinCarbonyls: parseFloat(formData.proteinCarbonyls), // NEW: Nov 2025
           flowRate: parseFloat(formData.salivaryFlow),
           hsCRP: parseFloat(formData.hsCRP),
           omega3Index: parseFloat(formData.omega3Index),
@@ -228,6 +232,7 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
         // Biomarker values
         salivaryPH: parseFloat(formData.salivaryPH),
         activeMMP8: parseFloat(formData.activeMMP8),
+        proteinCarbonyls: parseFloat(formData.proteinCarbonyls), // NEW: Nov 2025
         salivaryFlowRate: parseFloat(formData.salivaryFlow),
         hsCRP: parseFloat(formData.hsCRP),
         omega3Index: parseFloat(formData.omega3Index),
@@ -395,6 +400,18 @@ export default function Tier1BiomarkerInputScreen({ navigation }) {
               onChangeText={(value) => updateField('activeMMP8', value)}
               keyboardType="decimal-pad"
               placeholder="45"
+              placeholderTextColor="rgba(255,255,255,0.5)"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Protein Carbonyls (nmol/mg, {'<'}2.0 optimal) NEW</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.proteinCarbonyls}
+              onChangeText={(value) => updateField('proteinCarbonyls', value)}
+              keyboardType="decimal-pad"
+              placeholder="1.8"
               placeholderTextColor="rgba(255,255,255,0.5)"
             />
           </View>

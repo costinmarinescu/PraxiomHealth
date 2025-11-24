@@ -36,6 +36,13 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
 
   // Advanced Markers (optional)
   const [nadPlus, setNADPlus] = useState('');
+  const [nadRatio, setNADRatio] = useState(''); // NEW: NAD+/NADH ratio
+  const [cd38Activity, setCD38Activity] = useState(''); // NEW: CD38 enzyme activity
+
+  // InflammAge & Wearable Integration (NEW: Nov 2025)
+  const [inflammAge, setInflammAge] = useState('');
+  const [continuousHRVScore, setContinuousHRVScore] = useState('');
+  const [microbiomeRiskScore, setMicrobiomeRiskScore] = useState('');
 
   // ✅ FIX: Set today's date as default
   useEffect(() => {
@@ -465,13 +472,78 @@ const Tier2BiomarkerInputScreen = ({ navigation }) => {
           <Text style={styles.sectionTitle}>🧬 Advanced Markers (Optional)</Text>
           
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>NAD+ (μM, {'>'}40 optimal)</Text>
+            <Text style={styles.label}>NAD+ (μM, {'>'}500 optimal)</Text>
             <TextInput
               style={styles.input}
               value={nadPlus}
               onChangeText={setNADPlus}
               keyboardType="decimal-pad"
-              placeholder="45"
+              placeholder="450"
+              placeholderTextColor="rgba(255,255,255,0.5)"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>NAD+/NADH Ratio ({'>'}1.0 optimal) NEW</Text>
+            <TextInput
+              style={styles.input}
+              value={nadRatio}
+              onChangeText={setNADRatio}
+              keyboardType="decimal-pad"
+              placeholder="0.85"
+              placeholderTextColor="rgba(255,255,255,0.5)"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>CD38 Activity (nmol/min/μg, {'<'}80 optimal) NEW</Text>
+            <TextInput
+              style={styles.input}
+              value={cd38Activity}
+              onChangeText={setCD38Activity}
+              keyboardType="decimal-pad"
+              placeholder="95"
+              placeholderTextColor="rgba(255,255,255,0.5)"
+            />
+          </View>
+        </View>
+
+        {/* InflammAge & Wearable Integration */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>⏱️ InflammAge & Monitoring (NEW)</Text>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>InflammAge (years, biological inflammation age)</Text>
+            <TextInput
+              style={styles.input}
+              value={inflammAge}
+              onChangeText={setInflammAge}
+              keyboardType="decimal-pad"
+              placeholder="58"
+              placeholderTextColor="rgba(255,255,255,0.5)"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Continuous HRV Score (30-day avg, 0-100)</Text>
+            <TextInput
+              style={styles.input}
+              value={continuousHRVScore}
+              onChangeText={setContinuousHRVScore}
+              keyboardType="decimal-pad"
+              placeholder="75"
+              placeholderTextColor="rgba(255,255,255,0.5)"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Microbiome Risk Score (0-100, lower is better)</Text>
+            <TextInput
+              style={styles.input}
+              value={microbiomeRiskScore}
+              onChangeText={setMicrobiomeRiskScore}
+              keyboardType="decimal-pad"
+              placeholder="70"
               placeholderTextColor="rgba(255,255,255,0.5)"
             />
           </View>

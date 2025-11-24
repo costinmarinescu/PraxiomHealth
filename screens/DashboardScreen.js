@@ -89,6 +89,19 @@ export default function DashboardScreen({ navigation }) {
               {(state.biologicalAge - state.chronologicalAge).toFixed(1)} years
             </Text>
           </View>
+
+          {/* NEW: InflammAge if available */}
+          {state.inflammAge !== null && (
+            <View style={styles.deviationContainer}>
+              <Text style={styles.deviationLabel}>InflammAge:</Text>
+              <Text style={[
+                styles.deviationValue,
+                { color: getDeviationColor(state.inflammAge - state.chronologicalAge) }
+              ]}>
+                {state.inflammAge.toFixed(1)} years
+              </Text>
+            </View>
+          )}
         </View>
 
         <TouchableOpacity
@@ -138,6 +151,39 @@ export default function DashboardScreen({ navigation }) {
             ]} />
           </View>
         </View>
+
+        {/* NEW: Tier 2 Advanced Scores */}
+        {(state.nadScore !== null || state.enhancedSystemicScore !== null) && (
+          <View style={styles.scoreCardsContainer}>
+            {state.nadScore !== null && (
+              <View style={styles.scoreCard}>
+                <Text style={styles.scoreTitle}>NAD+ Score</Text>
+                <Text style={[styles.scoreValue, { color: getScoreColor(state.nadScore) }]}>
+                  {Math.round(state.nadScore)}%
+                </Text>
+                <Text style={styles.scoreTarget}>Target: &gt;70%</Text>
+                <View style={[
+                  styles.scoreIndicator,
+                  { backgroundColor: getScoreColor(state.nadScore) }
+                ]} />
+              </View>
+            )}
+
+            {state.enhancedSystemicScore !== null && (
+              <View style={styles.scoreCard}>
+                <Text style={styles.scoreTitle}>Enhanced SHS</Text>
+                <Text style={[styles.scoreValue, { color: getScoreColor(state.enhancedSystemicScore) }]}>
+                  {Math.round(state.enhancedSystemicScore)}%
+                </Text>
+                <Text style={styles.scoreTarget}>Target: &gt;80%</Text>
+                <View style={[
+                  styles.scoreIndicator,
+                  { backgroundColor: getScoreColor(state.enhancedSystemicScore) }
+                ]} />
+              </View>
+            )}
+          </View>
+        )}
 
         <View style={styles.scoreCardsContainer}>
           <View style={styles.scoreCard}>
