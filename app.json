@@ -35,10 +35,7 @@
         "BGTaskSchedulerPermittedIdentifiers": [
           "health.praxiom.refresh"
         ]
-      },
-      "associatedDomains": [
-        "applinks:praxiomhealth.com"
-      ]
+      }
     },
     "android": {
       "adaptiveIcon": {
