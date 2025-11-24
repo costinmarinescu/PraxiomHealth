@@ -28,7 +28,7 @@
     "expo-device": "~7.0.1",
     "expo-constants": "~17.0.3",
     "react-native-svg": "15.8.0",
-    "@react-native-community/datetimepicker": "9.0.0",
+    "@react-native-community/datetimepicker": "8.2.0",
     "expo-linear-gradient": "~14.0.1",
     "expo-font": "~13.0.1",
     "expo-asset": "~11.0.1",
