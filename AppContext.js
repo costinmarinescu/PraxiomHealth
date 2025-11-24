@@ -24,6 +24,12 @@ export const AppContextProvider = ({ children }) => {
     systemicHealthScore: 45,
     vitalityIndex: 47.5,
     fitnessScore: 65,
+    
+    // NEW: Tier 2 Scores (Nov 2025)
+    enhancedSystemicScore: null, // Tier 2 enhanced SHS with advanced markers
+    nadScore: null,              // NAD+ metabolism score
+    inflammAgeDeviance: null,    // InflammAge contribution to bio-age
+    
     watchConnected: false,
     ouraConnected: false,
     lastSync: null,
@@ -32,12 +38,21 @@ export const AppContextProvider = ({ children }) => {
     // Tier 1 Biomarkers
     salivaryPH: null,
     mmp8: null,
+    proteinCarbonyls: null, // NEW: Nov 2025 - Protein Carbonyls (nmol/mg)
     flowRate: null,
     hsCRP: null,
     omega3Index: null,
     hba1c: null,
     gdf15: null,
     vitaminD: null,
+    
+    // Tier 2 Biomarkers (Advanced - NEW: Nov 2025)
+    nadLevel: null,           // NAD+ level (μM)
+    nadRatio: null,           // NAD+/NADH ratio
+    cd38Activity: null,       // CD38 enzyme activity
+    inflammAge: null,         // InflammAge clock (years)
+    continuousHRVScore: null, // 30-day continuous HRV monitoring
+    microbiomeRiskScore: null, // Microbiome risk quantification
     
     // Tier 3 Biomarkers (MRI & Genetic)
     mriScore: null,
