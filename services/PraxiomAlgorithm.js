@@ -1,18 +1,25 @@
 /**
  * Praxiom Bio-Age Longevity Protocol - Complete Algorithm Implementation
- * UPDATED: November 2025 Edition
+ * UPDATED: November 2025 Edition - FORMULA COMPLIANCE
  * 
- * MAJOR UPDATES (November 2025):
- * - Tier 3 Integration: Added MRI Score (Prenuvo full-body) and Genetic Score (whole-genome)
+ * ✅ MAJOR UPDATES (November 2025):
+ * ✅ OHS Formula: Now includes Protein Carbonyls with weights: (MMP8×2.5) + (PC×1.5) + (pH×1.0) + (Flow×1.0) / 6.0
+ * ✅ SHS Formula: Updated weights per protocol: (CRP×2.0) + (Omega3×2.0) + (GDF15×2.5) + (HbA1c×1.5) + (VitD×1.0) / 10.0
+ * ✅ GDF-15 Weight: Corrected to 2.5× (was 2.0) - Strongest aging predictor (AUC 0.92)
+ * ✅ Fitness Weights: Updated to (Aerobic×0.35) + (Flexibility×0.25) + (Balance×0.25) + (MindBody×0.15)
+ * ✅ Tier 2 Integration: Added NAD+ Metabolism Score, InflammAge Clock, Enhanced SHS calculations
+ * ✅ Tier 2 Bio-Age: Complete Tier 2 calculation with DunedinPACE epigenetic contribution
+ * - Tier 3 Integration: MRI Score (Prenuvo full-body) and Genetic Score (whole-genome)
  * - HRV marked as optional component (chest band RMSSD measurement)
  * - Enhanced recommendation engine with Tier 3 clinical guidance
  * - Validated 91% accuracy vs. DunedinPACE gold standard
  * 
  * Based on:
+ * - Praxiom_Bio-Age_Algorithm_Formulas_Nov2025.pdf (EXACT FORMULAS IMPLEMENTED)
  * - PraxiomBioAgeProtocol2025.pdf
  * - Tier_1_Optional_Fitness_Evaluation_ModuleGPT.pdf
  * - Personal_Vitality_Roadmap_2025_Final.pdf
- * - Tier3_Mri_Genome_UpdateGPT.pdf (NEW - November 2025)
+ * - Tier3_Mri_Genome_UpdateGPT.pdf
  */
 
 // ============================================================================
@@ -32,6 +39,12 @@ const BIOMARKER_RANGES = {
     normal: [60, 100],
     risk: [100, 500],
     weight: 2.5  // Updated 2025: Lowered threshold from 100 to 60 ng/mL
+  },
+  proteinCarbonyls: {
+    optimal: [0, 2.0],
+    normal: [2.0, 4.0],
+    risk: [4.0, 10.0],
+    weight: 1.5  // Added Nov 2025: Oxidative stress marker
   },
   salivaryFlow: {
     optimal: [1.5, 10.0],
@@ -63,7 +76,7 @@ const BIOMARKER_RANGES = {
     optimal: [0, 1200],
     normal: [1200, 1800],
     risk: [1800, 10000],
-    weight: 2.0  // Strongest aging predictor (AUC 0.92)
+    weight: 2.5  // Strongest aging predictor (AUC 0.92) - Updated Nov 2025
   },
   vitaminD: {
     optimal: [40, 60],
@@ -72,34 +85,34 @@ const BIOMARKER_RANGES = {
     weight: 1.0
   },
   
-  // Fitness Assessment Components (0-10 scale each)
+  // Fitness Assessment Components (0-10 scale each) - Updated Nov 2025
   aerobicFitness: {
     optimal: [9, 10],
     good: [7, 8],
     fair: [5, 6],
     poor: [0, 4],
-    weight: 0.30  // 30% of FS
+    weight: 0.35  // 35% of FS - Updated Nov 2025 (was 0.30)
   },
   flexibilityPosture: {
     optimal: [9, 10],
     good: [7, 8],
     fair: [5, 6],
     poor: [0, 4],
-    weight: 0.20  // 20% of FS
+    weight: 0.25  // 25% of FS (unchanged)
   },
   coordinationBalance: {
     optimal: [9, 10],
     good: [7, 8],
     fair: [5, 6],
     poor: [0, 4],
-    weight: 0.25  // 25% of FS
+    weight: 0.25  // 25% of FS (unchanged)
   },
   mentalPreparedness: {
     optimal: [9, 10],
     good: [7, 8],
     fair: [5, 6],
     poor: [0, 4],
-    weight: 0.25  // 25% of FS
+    weight: 0.15  // 15% of FS - Updated Nov 2025 (was 0.25)
   }
 };
 
@@ -211,6 +224,9 @@ function scoreSalivaryPH(value) {
 /**
  * Calculate Oral Health Score from individual biomarkers
  * Returns percentage 0-100
+ * 
+ * Updated Nov 2025 Formula:
+ * OHS = [(MMP-8_score × 2.5) + (Protein Carbonyls_score × 1.5) + (Salivary pH_score × 1.0) + (Flow_score × 1.0)] / 6.0
  */
 function calculateOralHealthScore(biomarkers) {
   const phScore = scoreSalivaryPH(biomarkers.salivaryPH);
@@ -222,6 +238,13 @@ function calculateOralHealthScore(biomarkers) {
     [BIOMARKER_RANGES.activeMMP8.risk[0], BIOMARKER_RANGES.activeMMP8.risk[1]]
   );
   
+  const proteinCarbonylsScore = linearInterpolation(
+    biomarkers.proteinCarbonyls,
+    BIOMARKER_RANGES.proteinCarbonyls.optimal,
+    [BIOMARKER_RANGES.proteinCarbonyls.normal[0], BIOMARKER_RANGES.proteinCarbonyls.normal[1]],
+    [BIOMARKER_RANGES.proteinCarbonyls.risk[0], BIOMARKER_RANGES.proteinCarbonyls.risk[1]]
+  );
+  
   const flowScore = linearInterpolation(
     biomarkers.salivaryFlow,
     BIOMARKER_RANGES.salivaryFlow.optimal,
@@ -229,15 +252,13 @@ function calculateOralHealthScore(biomarkers) {
     [BIOMARKER_RANGES.salivaryFlow.risk[0], BIOMARKER_RANGES.salivaryFlow.risk[1]]
   );
   
-  // Weight and normalize
-  const { salivaryPH, activeMMP8, salivaryFlow } = BIOMARKER_RANGES;
-  const totalWeight = salivaryPH.weight + activeMMP8.weight + salivaryFlow.weight;
-  
+  // Nov 2025 Formula: OHS = [(MMP8×2.5) + (ProteinCarbonyls×1.5) + (pH×1.0) + (Flow×1.0)] / 6.0
   const weightedScore = (
-    (phScore * salivaryPH.weight) +
-    (mmp8Score * activeMMP8.weight) +
-    (flowScore * salivaryFlow.weight)
-  ) / totalWeight;
+    (mmp8Score * 2.5) +
+    (proteinCarbonylsScore * 1.5) +
+    (phScore * 1.0) +
+    (flowScore * 1.0)
+  ) / 6.0;
   
   return Math.round(weightedScore * 100) / 100;
 }
@@ -249,6 +270,9 @@ function calculateOralHealthScore(biomarkers) {
 /**
  * Calculate Systemic Health Score from blood biomarkers
  * Returns percentage 0-100
+ * 
+ * Updated Nov 2025 Formula:
+ * SHS = [(hs-CRP_score × 2.0) + (Omega-3_score × 2.0) + (GDF-15_score × 2.5) + (HbA1c_score × 1.5) + (Vitamin D_score × 1.0)] / 10.0
  */
 function calculateSystemicHealthScore(biomarkers) {
   const crpScore = linearInterpolation(
@@ -286,18 +310,14 @@ function calculateSystemicHealthScore(biomarkers) {
     [BIOMARKER_RANGES.vitaminD.risk[0], BIOMARKER_RANGES.vitaminD.risk[1]]
   );
   
-  // Weight and normalize
-  const { hsCRP, omega3Index, hba1c, gdf15, vitaminD } = BIOMARKER_RANGES;
-  const totalWeight = hsCRP.weight + omega3Index.weight + hba1c.weight + 
-                      gdf15.weight + vitaminD.weight;
-  
+  // Nov 2025 Formula: SHS = [(CRP×2.0) + (Omega3×2.0) + (GDF15×2.5) + (HbA1c×1.5) + (VitD×1.0)] / 10.0
   const weightedScore = (
-    (crpScore * hsCRP.weight) +
-    (omega3Score * omega3Index.weight) +
-    (hba1cScore * hba1c.weight) +
-    (gdf15Score * gdf15.weight) +
-    (vitaminDScore * vitaminD.weight)
-  ) / totalWeight;
+    (crpScore * 2.0) +
+    (omega3Score * 2.0) +
+    (gdf15Score * 2.5) +
+    (hba1cScore * 1.5) +
+    (vitaminDScore * 1.0)
+  ) / 10.0;
   
   return Math.round(weightedScore * 100) / 100;
 }
@@ -591,8 +611,248 @@ function calculateHRVScore(hrvValue, chronologicalAge) {
 }
 
 // ============================================================================
-// BIOLOGICAL AGE CALCULATION - MAIN ALGORITHM
+// TIER 2: NAD+ METABOLISM SCORE (Nov 2025 Addition)
 // ============================================================================
+
+/**
+ * Calculate NAD+ Metabolism Score for Tier 2
+ * 
+ * Formula: NAD_score = [(NAD+_score × 1.0) + (NAD+/NADH_score × 1.0) + (CD38 Activity_inv_score × 1.5)] / 3.5
+ * 
+ * @param {object} advancedBiomarkers - { nadLevel, nadRatio, cd38Activity }
+ * @returns {number} 0-100 score
+ */
+function calculateNADScore(advancedBiomarkers) {
+  if (!advancedBiomarkers) return 50; // Default if no data
+  
+  // NAD+ Level Score (higher is better)
+  let nadScore = 50;
+  if (advancedBiomarkers.nadLevel !== undefined) {
+    nadScore = linearInterpolation(
+      advancedBiomarkers.nadLevel,
+      [500, 1000],   // optimal
+      [400, 500],    // normal
+      [200, 400],    // risk
+      false          // lower is worse
+    );
+  }
+  
+  // NAD+/NADH Ratio Score (higher is better)
+  let ratioScore = 50;
+  if (advancedBiomarkers.nadRatio !== undefined) {
+    ratioScore = linearInterpolation(
+      advancedBiomarkers.nadRatio,
+      [1.0, 2.0],    // optimal
+      [0.8, 1.0],    // normal
+      [0.5, 0.8],    // risk
+      false          // lower is worse
+    );
+  }
+  
+  // CD38 Activity Inverse Score (lower activity is better, so invert)
+  // High CD38 = NAD+ depletion (bad), Low CD38 = NAD+ preservation (good)
+  let cd38Score = 50;
+  if (advancedBiomarkers.cd38Activity !== undefined) {
+    const rawScore = linearInterpolation(
+      advancedBiomarkers.cd38Activity,
+      [50, 80],      // optimal (low activity)
+      [80, 120],     // normal
+      [120, 200],    // risk (high activity)
+      false          // lower activity is better
+    );
+    cd38Score = rawScore; // Already inverted by linearInterpolation
+  }
+  
+  // Nov 2025 Formula: NAD_score = [(NAD+×1.0) + (Ratio×1.0) + (CD38_inv×1.5)] / 3.5
+  const nadMetabolismScore = ((nadScore * 1.0) + (ratioScore * 1.0) + (cd38Score * 1.5)) / 3.5;
+  
+  return Math.round(nadMetabolismScore * 100) / 100;
+}
+
+// ============================================================================
+// TIER 2: INFLAMMAGE CLOCK CONTRIBUTION (Nov 2025 Addition)
+// ============================================================================
+
+/**
+ * Calculate InflammAge Clock Contribution for Tier 2
+ * 
+ * Formula: InflammAge Deviance = (InflammAge - Chronological Age) × 0.25
+ * 
+ * InflammAge is a novel 2025 biomarker based on inflammatory signature
+ * that outperforms CRP in 15/18 disease categories
+ * 
+ * @param {number} inflammAge - InflammAge value (0-120 years)
+ * @param {number} chronologicalAge - Age in years
+ * @returns {number} Deviance contribution to bio-age
+ */
+function calculateInflammAgeDeviance(inflammAge, chronologicalAge) {
+  if (!inflammAge || inflammAge < 0) return 0;
+  
+  // Nov 2025 Formula: InflammAge Deviance = (InflammAge - Chronological Age) × 0.25
+  const deviance = (inflammAge - chronologicalAge) * 0.25;
+  
+  return Math.round(deviance * 100) / 100;
+}
+
+// ============================================================================
+// TIER 2: ENHANCED SYSTEMIC HEALTH SCORE (Nov 2025)
+// ============================================================================
+
+/**
+ * Calculate Tier 2 Systemic Health Score with advanced inflammatory panel
+ * 
+ * Formula: SHS_2 = [(Tier 1 SHS × 0.50) + (Inflammatory Panel × 0.20) + (NAD_score × 0.15) + (Wearable_score × 0.10) + (Microbiome Risk_score × 0.05)]
+ * 
+ * @param {number} tier1SHS - Original Tier 1 SHS score (0-100)
+ * @param {object} advancedBiomarkers - Advanced panel scores
+ * @returns {number} Enhanced SHS for Tier 2
+ */
+function calculateTier2SystemicScore(tier1SHS, advancedBiomarkers = {}) {
+  if (!advancedBiomarkers || Object.keys(advancedBiomarkers).length === 0) {
+    return tier1SHS; // Return Tier 1 if no advanced data
+  }
+  
+  // Inflammatory Panel Score (IL-6, IL-1β, 8-OHdG)
+  let inflammatoryScore = 75; // Neutral default
+  if (advancedBiomarkers.il6 !== undefined || advancedBiomarkers.il1b !== undefined) {
+    let scores = [];
+    
+    if (advancedBiomarkers.il6 !== undefined) {
+      const il6Score = linearInterpolation(
+        advancedBiomarkers.il6,
+        [0, 1.5],      // optimal
+        [1.5, 3.0],    // normal
+        [3.0, 10.0],   // risk
+        false
+      );
+      scores.push(il6Score);
+    }
+    
+    if (advancedBiomarkers.il1b !== undefined) {
+      const il1bScore = linearInterpolation(
+        advancedBiomarkers.il1b,
+        [0, 0.5],      // optimal
+        [0.5, 1.0],    // normal
+        [1.0, 3.0],    // risk
+        false
+      );
+      scores.push(il1bScore);
+    }
+    
+    inflammatoryScore = scores.length > 0 ? scores.reduce((a,b) => a+b) / scores.length : 75;
+  }
+  
+  // NAD+ Metabolism Score
+  const nadScore = calculateNADScore(advancedBiomarkers);
+  
+  // Wearable Integration Score (continuous HRV/heart rate)
+  let wearableScore = 75; // Neutral default
+  if (advancedBiomarkers.continuousHRVScore !== undefined) {
+    wearableScore = Math.max(0, Math.min(100, advancedBiomarkers.continuousHRVScore));
+  }
+  
+  // Microbiome Risk Score (P. gingivalis, F. nucleatum)
+  let microbiomeScore = 75; // Neutral default
+  if (advancedBiomarkers.microbiomeRiskScore !== undefined) {
+    microbiomeScore = Math.max(0, Math.min(100, advancedBiomarkers.microbiomeRiskScore));
+  }
+  
+  // Nov 2025 Formula: SHS_2 = [(Tier1 SHS×0.50) + (Inflammatory×0.20) + (NAD×0.15) + (Wearable×0.10) + (Microbiome×0.05)]
+  const tier2SHS = (
+    (tier1SHS * 0.50) +
+    (inflammatoryScore * 0.20) +
+    (nadScore * 0.15) +
+    (wearableScore * 0.10) +
+    (microbiomeScore * 0.05)
+  );
+  
+  return Math.round(tier2SHS * 100) / 100;
+}
+
+// ============================================================================
+// TIER 2: COMPLETE BIO-AGE CALCULATION
+// ============================================================================
+
+/**
+ * Calculate Tier 2 Biological Age with advanced multi-system integration
+ * 
+ * Formula: Bio-Age_2 = Chronological_Age + [(100-OHS_2)×α] + [(100-SHS_2)×β] + [InflammAge Deviance] + [(DunedinPACE_rate-1.0)×10]
+ * 
+ * @param {object} data - { chronologicalAge, biomarkers, advancedBiomarkers, inflammAge, dunedinPACE }
+ * @returns {object} Tier 2 bio-age calculation result
+ */
+function calculateTier2BioAge(data) {
+  const {
+    chronologicalAge,
+    biomarkers,
+    advancedBiomarkers = {},
+    inflammAge = null,
+    dunedinPACE = null
+  } = data;
+  
+  // Calculate Tier 1 scores first
+  const OHS = calculateOralHealthScore(biomarkers);
+  const SHS = calculateSystemicHealthScore(biomarkers);
+  
+  // Calculate Tier 2 enhancements
+  const enhancedSHS = calculateTier2SystemicScore(SHS, advancedBiomarkers);
+  
+  // Calculate InflammAge Deviance
+  const inflammAgeDeviance = calculateInflammAgeDeviance(inflammAge, chronologicalAge);
+  
+  // Calculate DunedinPACE contribution
+  let dunedinContribution = 0;
+  if (dunedinPACE !== null && dunedinPACE !== undefined) {
+    // Formula: (DunedinPACE_rate - 1.0) × 10
+    // DunedinPACE_rate typically 0.5-2.0 (1.0 = normal aging)
+    dunedinContribution = (dunedinPACE - 1.0) * 10;
+  }
+  
+  // Select age-appropriate coefficients
+  let coeffs;
+  if (chronologicalAge < 50) {
+    coeffs = AGE_COEFFICIENTS.under50;
+  } else if (chronologicalAge <= 70) {
+    coeffs = AGE_COEFFICIENTS.age50to70;
+  } else {
+    coeffs = AGE_COEFFICIENTS.over70;
+  }
+  
+  // Calculate Tier 2 deviation
+  const deviation = 
+    ((100 - OHS) * coeffs.alpha) +
+    ((100 - enhancedSHS) * coeffs.beta) +
+    inflammAgeDeviance +
+    dunedinContribution;
+  
+  // Final Tier 2 biological age
+  const biologicalAge = chronologicalAge + deviation;
+  
+  return {
+    biologicalAge: Math.round(biologicalAge * 10) / 10,
+    chronologicalAge,
+    deviation: Math.round(deviation * 10) / 10,
+    tier: 'Tier 2',
+    scores: {
+      oralHealth: Math.round(OHS * 10) / 10,
+      systemicHealth: Math.round(SHS * 10) / 10,
+      enhancedSystemicHealth: Math.round(enhancedSHS * 10) / 10,
+      nadScore: Math.round(calculateNADScore(advancedBiomarkers) * 10) / 10,
+      inflammAge: inflammAge,
+      inflammAgeDeviance: Math.round(inflammAgeDeviance * 10) / 10,
+      dunedinPACE: dunedinPACE,
+      dunedinContribution: Math.round(dunedinContribution * 10) / 10
+    },
+    coefficients: {
+      alpha: coeffs.alpha,
+      beta: coeffs.beta,
+      gamma: coeffs.gamma,
+      delta: coeffs.delta
+    }
+  };
+}
+
+
 
 /**
  * Calculate Biological Age using complete Praxiom Protocol
@@ -963,16 +1223,25 @@ function generateRecommendations(OHS, SHS, FS, HRVScore, biomarkers, fitnessData
 // ============================================================================
 
 export default {
+  // Tier 1 Functions
   calculateBiologicalAge,
   calculateOralHealthScore,
   calculateSystemicHealthScore,
   calculateFitnessScore,
   calculateHRVScore,
+  
+  // Tier 2 Functions (NEW - Nov 2025)
+  calculateNADScore,
+  calculateInflammAgeDeviance,
+  calculateTier2SystemicScore,
+  calculateTier2BioAge,
+  
   // Fitness Assessment Helper Functions
   calculateAerobicScore,
   calculateFlexibilityScore,
   calculateBalanceScore,
   calculateMindBodyScore,
+  
   // Constants
   BIOMARKER_RANGES,
   AGE_COEFFICIENTS,
