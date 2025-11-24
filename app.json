@@ -18,14 +18,27 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "health.praxiom",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to your PineTime watch for health monitoring.",
+        "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to your PineTime watch for continuous health monitoring.",
         "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to connect to your PineTime watch for health monitoring.",
+        "NSBluetoothWhileInUseUsageDescription": "This app needs Bluetooth access to communicate with your PineTime watch and transmit biological age data.",
+        "NSLocationWhenInUseUsageDescription": "This app needs location access to scan for nearby Bluetooth devices (required by iOS for BLE scanning).",
+        "NSLocationAlwaysUsageDescription": "Location access allows the app to maintain Bluetooth connection with your watch in the background.",
         "NSHealthShareUsageDescription": "This app needs access to your health data to calculate your biological age.",
         "NSHealthUpdateUsageDescription": "This app needs to update your health data with calculated biological age information.",
-        "ITSAppUsesNonExemptEncryption": false
-      }
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": [
+          "bluetooth-central",
+          "processing"
+        ],
+        "BGTaskSchedulerPermittedIdentifiers": [
+          "health.praxiom.refresh"
+        ]
+      },
+      "associatedDomains": [
+        "applinks:praxiomhealth.com"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -39,7 +52,8 @@
         "BLUETOOTH_ADMIN",
         "BLUETOOTH_CONNECT",
         "BLUETOOTH_SCAN",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
       ],
       "intentFilters": [
         {
@@ -71,7 +85,8 @@
             "kotlinVersion": "1.9.0"
           },
           "ios": {
-            "deploymentTarget": "15.1"
+            "deploymentTarget": "15.1",
+            "useFrameworks": "static"
           }
         }
       ],
@@ -83,7 +98,15 @@
             "peripheral",
             "central"
           ],
-          "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to your PineTime watch"
+          "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to your PineTime watch for continuous health monitoring"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to access your location to scan for nearby Bluetooth devices (required by iOS).",
+          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to access your location to scan for nearby Bluetooth devices (required by iOS).",
+          "isIosBackgroundLocationEnabled": false
         }
       ]
     ],
