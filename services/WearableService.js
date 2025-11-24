@@ -5,7 +5,7 @@
  */
 
 import { BleManager } from 'react-native-ble-plx';
-import { Platform, PermissionsAndroid, AppState, Alert } from 'react-native';
+import { Platform, PermissionsAndroid, AppState, Alert, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 
