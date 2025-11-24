@@ -1,11 +1,13 @@
 /**
- * Praxiom Health - Enhanced WearableService
- * With HRV calculation support from RR intervals
+ * Praxiom Health - iOS-Enhanced WearableService
+ * With improved BLE reliability for iOS devices
+ * Version: 2.0 - iOS Compatible
  */
 
 import { BleManager } from 'react-native-ble-plx';
-import { Platform, PermissionsAndroid, AppState } from 'react-native';
+import { Platform, PermissionsAndroid, AppState, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 
 // BLE SERVICE & CHARACTERISTIC UUIDs
 const HEART_RATE_SERVICE = '0000180D-0000-1000-8000-00805F9B34FB';
@@ -20,11 +22,17 @@ const CURRENT_TIME_CHAR_UUID = '00002A2B-0000-1000-8000-00805F9B34FB';
 const MOTION_SERVICE = '00030000-78fc-48fe-8e23-433b3a1942d0';
 const STEP_COUNT_CHAR = '00030001-78fc-48fe-8e23-433b3a1942d0';
 
-// Praxiom Custom Service - CORRECTED to match firmware broadcast
+// Praxiom Custom Service
 const PRAXIOM_SERVICE = '00190000-78fc-48fe-8e23-433b3a1942d0';
 const BIO_AGE_CHAR = '00190100-78fc-48fe-8e23-433b3a1942d0';
 
 const DEVICE_NAME = 'InfiniTime';
+
+// iOS-specific constants
+const IOS_CONNECTION_TIMEOUT = 15000; // 15 seconds
+const IOS_WRITE_TIMEOUT = 10000; // 10 seconds
+const IOS_RETRY_MAX_ATTEMPTS = 3;
+const IOS_RETRY_DELAY_BASE = 1000; // 1 second base delay
 
 class WearableService {
   constructor() {
@@ -37,14 +45,13 @@ class WearableService {
       heartRate: 0,
       steps: 0,
       battery: 0,
-      hrv: null, // Will be calculated from RR intervals
+      hrv: null,
       bioAge: 0,
       lastUpdate: null
     };
     
-    // Store RR intervals for HRV calculation
     this.rrIntervals = [];
-    this.maxRRIntervals = 20; // Keep last 20 intervals for calculation
+    this.maxRRIntervals = 20;
     
     this.subscriptions = [];
     this.pollingInterval = null;
@@ -59,11 +66,14 @@ class WearableService {
       timeSync: false
     };
     
-    // ✅ NEW: Auto-reconnect on app foreground
     this.appStateSubscription = null;
     this.shouldAutoReconnect = true;
     
-    // Initialize app state listener
+    // iOS-specific properties
+    this.negotiatedMTU = 23; // Default minimum MTU
+    this.lastConnectionAttempt = 0;
+    this.connectionRetryCount = 0;
+    
     this.initializeAppStateListener();
   }
 
@@ -73,10 +83,27 @@ class WearableService {
 
   async initialize() {
     try {
+      this.log('🔧 Initializing BLE Service...');
+      
       if (Platform.OS === 'android') {
         const granted = await this.requestAndroidPermissions();
         if (!granted) {
           this.log('❌ BLE permissions denied');
+          return false;
+        }
+      } else if (Platform.OS === 'ios') {
+        // Request location permission for iOS BLE scanning
+        const locationGranted = await this.requestIOSPermissions();
+        if (!locationGranted) {
+          this.log('❌ Location permission denied (required for iOS BLE scanning)');
+          Alert.alert(
+            'Permission Required',
+            'Location access is required by iOS to scan for Bluetooth devices. Please enable it in Settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() }
+            ]
+          );
           return false;
         }
       }
@@ -84,6 +111,11 @@ class WearableService {
       const state = await this.manager.state();
       if (state !== 'PoweredOn') {
         this.log('⚠️ Bluetooth is not enabled');
+        Alert.alert(
+          'Bluetooth Disabled',
+          'Please enable Bluetooth to connect to your PineTime watch.',
+          [{ text: 'OK' }]
+        );
         return false;
       }
 
@@ -99,16 +131,44 @@ class WearableService {
     return this.initialize();
   }
 
-  // ✅ NEW: Initialize app state listener for auto-reconnect
+  // ===================================
+  // iOS PERMISSIONS
+  // ===================================
+
+  async requestIOSPermissions() {
+    try {
+      this.log('📍 Requesting iOS location permission for BLE scanning...');
+      
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status === 'granted') {
+        this.log('✅ Location permission granted');
+        return true;
+      } else {
+        this.log('❌ Location permission denied');
+        return false;
+      }
+    } catch (error) {
+      this.log(`❌ iOS permission request failed: ${error.message}`);
+      return false;
+    }
+  }
+
   initializeAppStateListener() {
     this.appStateSubscription = AppState.addEventListener('change', async (nextAppState) => {
       if (nextAppState === 'active') {
         this.log('📱 App came to foreground');
         
-        // Only auto-reconnect if enabled and not already connected
         if (this.shouldAutoReconnect && !this.isConnected) {
           this.log('🔄 Attempting auto-reconnect...');
           await this.tryAutoReconnect();
+        }
+      } else if (nextAppState === 'background') {
+        this.log('📱 App moved to background');
+        // On iOS, BLE connections can persist in background
+        // but we should stop intensive operations
+        if (Platform.OS === 'ios') {
+          this.stopStepPolling();
         }
       }
     });
@@ -169,7 +229,10 @@ class WearableService {
       return new Promise((resolve) => {
         this.manager.startDeviceScan(
           null,
-          { allowDuplicates: false },
+          { 
+            allowDuplicates: false,
+            scanMode: Platform.OS === 'android' ? 2 : undefined // Low latency on Android
+          },
           (error, device) => {
             if (error) {
               this.log(`❌ Scan error: ${error.message}`);
@@ -190,7 +253,7 @@ class WearableService {
                     name: device.name,
                     rssi: device.rssi
                   });
-                  this.log(`📱 Found device: ${device.name} (${device.id})`);
+                  this.log(`📱 Found device: ${device.name} (${device.id}) RSSI: ${device.rssi}`);
                 }
               }
             }
@@ -223,19 +286,49 @@ class WearableService {
   }
 
   // ===================================
-  // DEVICE CONNECTION
+  // DEVICE CONNECTION (iOS-ENHANCED)
   // ===================================
 
   async connectToDevice(deviceId) {
     try {
-      this.log(`Connecting to device: ${deviceId}`);
+      this.log(`🔗 Connecting to device: ${deviceId}`);
       this.stopScan();
 
-      this.device = await this.manager.connectToDevice(deviceId);
+      // iOS: Prevent rapid reconnection attempts
+      const now = Date.now();
+      if (Platform.OS === 'ios' && now - this.lastConnectionAttempt < 2000) {
+        this.log('⚠️ iOS: Waiting before retry to avoid connection issues...');
+        await this.delay(2000);
+      }
+      this.lastConnectionAttempt = now;
+
+      // iOS: Connection with timeout
+      const connectionPromise = this.manager.connectToDevice(deviceId, {
+        autoConnect: false,
+        requestMTU: 185 // Request larger MTU for iOS
+      });
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Connection timeout')), IOS_CONNECTION_TIMEOUT)
+      );
+
+      this.device = await Promise.race([connectionPromise, timeoutPromise]);
       this.log(`✅ Connected to ${this.device.name}`);
 
+      // Discover services
       await this.device.discoverAllServicesAndCharacteristics();
       this.log('✅ Services discovered');
+
+      // iOS: Request MTU negotiation
+      if (Platform.OS === 'ios') {
+        try {
+          const mtu = await this.device.requestMTU(185);
+          this.negotiatedMTU = mtu;
+          this.log(`✅ MTU negotiated: ${mtu} bytes`);
+        } catch (error) {
+          this.log(`⚠️ MTU negotiation failed, using default: ${error.message}`);
+        }
+      }
 
       await this.detectAvailableServices();
 
@@ -244,13 +337,18 @@ class WearableService {
       }
 
       this.device.onDisconnected((error, device) => {
-        this.log(`Disconnected from ${device.name}`);
+        this.log(`❌ Disconnected from ${device.name}`);
+        if (error) {
+          this.log(`   Reason: ${error.message}`);
+        }
         this.handleDisconnection();
       });
 
       this.isConnected = true;
+      this.connectionRetryCount = 0; // Reset retry count on success
       await AsyncStorage.setItem('lastConnectedDevice', deviceId);
-      this.shouldAutoReconnect = true; // ✅ NEW: Enable auto-reconnect
+      this.shouldAutoReconnect = true;
+      
       await this.startMonitoring();
       this.startPeriodicTimeSync();
 
@@ -259,6 +357,16 @@ class WearableService {
       this.log(`❌ Connection failed: ${error.message}`);
       this.device = null;
       this.isConnected = false;
+      
+      // iOS: Exponential backoff for retries
+      if (Platform.OS === 'ios' && this.connectionRetryCount < 3) {
+        this.connectionRetryCount++;
+        const delay = Math.pow(2, this.connectionRetryCount) * 1000;
+        this.log(`⏳ iOS: Retrying in ${delay}ms (attempt ${this.connectionRetryCount}/3)...`);
+        await this.delay(delay);
+        return this.connectToDevice(deviceId);
+      }
+      
       return false;
     }
   }
@@ -272,8 +380,8 @@ class WearableService {
         this.device = null;
         this.isConnected = false;
         
-        // ✅ NEW: Disable auto-reconnect on manual disconnect
         this.shouldAutoReconnect = false;
+        this.connectionRetryCount = 0;
         await AsyncStorage.removeItem('lastConnectedDevice');
         
         this.log('✅ Disconnected successfully (auto-reconnect disabled)');
@@ -284,13 +392,11 @@ class WearableService {
   }
 
   handleDisconnection() {
-    // ✅ NOTE: Does NOT disable auto-reconnect - this is for unexpected disconnections
-    // The watch will auto-reconnect when app comes to foreground (if shouldAutoReconnect is true)
     this.device = null;
     this.isConnected = false;
     this.stopMonitoring();
     this.stopPeriodicTimeSync();
-    this.rrIntervals = []; // Clear RR intervals on disconnect
+    this.rrIntervals = [];
   }
 
   // ===================================
@@ -358,7 +464,8 @@ class WearableService {
 
       const base64Data = this.bufferToBase64(timeData);
 
-      await this.device.writeCharacteristicWithResponseForService(
+      // iOS: Use write with retry
+      await this.writeWithRetry(
         CTS_SERVICE_UUID,
         CURRENT_TIME_CHAR_UUID,
         base64Data
@@ -389,7 +496,7 @@ class WearableService {
   }
 
   // ===================================
-  // BIO-AGE TRANSMISSION
+  // BIO-AGE TRANSMISSION (iOS-ENHANCED)
   // ===================================
 
   async sendBioAge(bioAge) {
@@ -423,8 +530,9 @@ class WearableService {
       const base64Data = this.bufferToBase64(buffer);
       this.log(`   Base64: ${base64Data}`);
 
+      // iOS: Use enhanced write with retry and timeout
       this.log('📡 Writing to characteristic...');
-      await this.device.writeCharacteristicWithResponseForService(
+      await this.writeWithRetry(
         PRAXIOM_SERVICE,
         BIO_AGE_CHAR,
         base64Data
@@ -449,7 +557,46 @@ class WearableService {
     }
   }
 
-  // ✅ COMPATIBLE: sendTestAge() for TestScreen
+  // iOS: Enhanced write method with retry logic and timeout
+  async writeWithRetry(serviceUUID, characteristicUUID, base64Data, maxAttempts = IOS_RETRY_MAX_ATTEMPTS) {
+    let lastError;
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        this.log(`📝 Write attempt ${attempt}/${maxAttempts}...`);
+        
+        // Create timeout promise
+        const writePromise = this.device.writeCharacteristicWithResponseForService(
+          serviceUUID,
+          characteristicUUID,
+          base64Data
+        );
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Write timeout')), IOS_WRITE_TIMEOUT)
+        );
+
+        // Race between write and timeout
+        await Promise.race([writePromise, timeoutPromise]);
+        
+        this.log(`✅ Write successful on attempt ${attempt}`);
+        return true;
+
+      } catch (error) {
+        lastError = error;
+        this.log(`⚠️ Write attempt ${attempt} failed: ${error.message}`);
+        
+        if (attempt < maxAttempts) {
+          const delayMs = IOS_RETRY_DELAY_BASE * Math.pow(2, attempt - 1);
+          this.log(`⏳ Retrying in ${delayMs}ms...`);
+          await this.delay(delayMs);
+        }
+      }
+    }
+    
+    throw new Error(`Write failed after ${maxAttempts} attempts: ${lastError.message}`);
+  }
+
   async sendTestAge(age) {
     try {
       this.log('═══════════════════════════════════════');
@@ -470,14 +617,12 @@ class WearableService {
       }
       this.log('✅ Step 2: Praxiom service available');
 
-      // ✅ FIXED: Multiply by 10 to preserve decimal (e.g., 59.3 → 593)
       const bioAgeInt = Math.round(age * 10);
       if (bioAgeInt < 180 || bioAgeInt > 1200) {
         throw new Error('Age must be between 18 and 120');
       }
       this.log(`✅ Step 3: Age validated: ${age} (sending as ${bioAgeInt})`);
 
-      // Create buffer with detailed logging
       const buffer = new Uint8Array(4);
       buffer[0] = bioAgeInt & 0xFF;
       buffer[1] = (bioAgeInt >> 8) & 0xFF;
@@ -500,8 +645,11 @@ class WearableService {
       this.log(`   Service: ${PRAXIOM_SERVICE}`);
       this.log(`   Characteristic: ${BIO_AGE_CHAR}`);
       this.log(`   Data length: ${buffer.length} bytes`);
+      this.log(`   Platform: ${Platform.OS}`);
+      this.log(`   MTU: ${this.negotiatedMTU} bytes`);
 
-      await this.device.writeCharacteristicWithResponseForService(
+      // Use enhanced write method for iOS
+      await this.writeWithRetry(
         PRAXIOM_SERVICE,
         BIO_AGE_CHAR,
         base64Data
@@ -521,12 +669,15 @@ class WearableService {
         success: true,
         bioAge: age,
         deviceName: this.device.name,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        platform: Platform.OS,
+        mtu: this.negotiatedMTU
       };
 
     } catch (error) {
       this.log('❌ ERROR in sendTestAge:');
       this.log(`   Message: ${error.message}`);
+      this.log(`   Platform: ${Platform.OS}`);
       this.log('═══════════════════════════════════════');
       
       const timestamp = new Date().toLocaleTimeString();
@@ -535,7 +686,6 @@ class WearableService {
     }
   }
 
-  // Alias for backward compatibility
   async testBioAgeTransmission(bioAge) {
     return this.sendTestAge(bioAge);
   }
@@ -556,31 +706,37 @@ class WearableService {
   }
 
   // ===================================
-  // DATA MONITORING
+  // MONITORING
   // ===================================
 
   async startMonitoring() {
-    try {
-      this.log('📊 Starting wearable data monitoring...');
+    this.log('📊 Starting device monitoring...');
+
+    if (this.availableServices.heartRate) {
       await this.monitorHeartRate();
+    }
+
+    if (this.availableServices.battery) {
       await this.monitorBattery();
+    }
+
+    if (this.availableServices.motion) {
       this.startStepPolling();
-      this.log('✅ Monitoring started');
-    } catch (error) {
-      this.log(`⚠️ Monitoring setup failed: ${error.message}`);
     }
   }
 
   stopMonitoring() {
     this.subscriptions.forEach(sub => sub.remove());
     this.subscriptions = [];
+    this.stopStepPolling();
+    this.log('⏹️ Monitoring stopped');
+  }
 
+  stopStepPolling() {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
       this.pollingInterval = null;
     }
-
-    this.log('⏹️ Monitoring stopped');
   }
 
   async monitorHeartRate() {
@@ -596,14 +752,14 @@ class WearableService {
 
           if (characteristic && characteristic.value) {
             const hrData = this.base64ToBuffer(characteristic.value);
+            
             const result = this.parseHeartRateWithRR(hrData);
             
             if (result.heartRate > 0) {
               this.cachedData.heartRate = result.heartRate;
               this.cachedData.lastUpdate = new Date();
-              this.log(`💓 Heart Rate: ${result.heartRate} BPM`);
+              this.log(`❤️ HR: ${result.heartRate} bpm`);
               
-              // Process RR intervals for HRV if available
               if (result.rrIntervals && result.rrIntervals.length > 0) {
                 this.addRRIntervals(result.rrIntervals);
                 this.calculateHRV();
@@ -648,11 +804,14 @@ class WearableService {
   }
 
   startStepPolling() {
+    // On iOS, reduce polling frequency when in background
+    const pollingInterval = Platform.OS === 'ios' ? 15000 : 10000;
+    
     this.pollingInterval = setInterval(async () => {
       if (this.isConnected) {
         await this.readSteps();
       }
-    }, 10000);
+    }, pollingInterval);
   }
 
   async readSteps() {
@@ -713,10 +872,9 @@ class WearableService {
     const rrIntervals = [];
     
     if (hasRRInterval && data.length > offset) {
-      // RR intervals are in 1/1024 second units
       while (offset < data.length - 1) {
         const rr = data[offset] | (data[offset + 1] << 8);
-        const rrMs = (rr / 1024.0) * 1000; // Convert to milliseconds
+        const rrMs = (rr / 1024.0) * 1000;
         rrIntervals.push(rrMs);
         offset += 2;
       }
@@ -741,10 +899,8 @@ class WearableService {
   // ===================================
 
   addRRIntervals(intervals) {
-    // Add new RR intervals to the buffer
     this.rrIntervals.push(...intervals);
     
-    // Keep only the most recent intervals
     if (this.rrIntervals.length > this.maxRRIntervals) {
       this.rrIntervals = this.rrIntervals.slice(-this.maxRRIntervals);
     }
@@ -755,8 +911,6 @@ class WearableService {
       return null;
     }
 
-    // Calculate RMSSD (Root Mean Square of Successive Differences)
-    // This is a common time-domain HRV metric
     let sumSquaredDiff = 0;
     
     for (let i = 1; i < this.rrIntervals.length; i++) {
@@ -766,7 +920,6 @@ class WearableService {
     
     const rmssd = Math.sqrt(sumSquaredDiff / (this.rrIntervals.length - 1));
     
-    // Update cached HRV value
     this.cachedData.hrv = Math.round(rmssd);
     
     this.log(`📈 HRV (RMSSD): ${this.cachedData.hrv} ms (from ${this.rrIntervals.length} intervals)`);
@@ -790,7 +943,9 @@ class WearableService {
     return {
       isConnected: this.isConnected,
       deviceName: this.device ? this.device.name : null,
-      deviceId: this.device ? this.device.id : null
+      deviceId: this.device ? this.device.id : null,
+      mtu: this.negotiatedMTU,
+      platform: Platform.OS
     };
   }
 
@@ -834,8 +989,13 @@ class WearableService {
     return bytes;
   }
 
+  delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
   log(message) {
-    console.log(`[WearableService] ${message}`);
+    const timestamp = new Date().toLocaleTimeString();
+    console.log(`[${timestamp}] [WearableService] ${message}`);
   }
 
   // ===================================
@@ -849,7 +1009,8 @@ class WearableService {
   getConnectedDevice() {
     return this.device ? {
       id: this.device.id,
-      name: this.device.name
+      name: this.device.name,
+      mtu: this.negotiatedMTU
     } : null;
   }
 
@@ -876,7 +1037,6 @@ class WearableService {
   // ===================================
 
   async destroy() {
-    // ✅ NEW: Remove app state listener
     if (this.appStateSubscription) {
       this.appStateSubscription.remove();
       this.appStateSubscription = null;
