@@ -18,7 +18,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "health.praxiom",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to your PineTime watch for continuous health monitoring.",
         "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to connect to your PineTime watch for health monitoring.",
@@ -82,8 +82,7 @@
             "kotlinVersion": "1.9.0"
           },
           "ios": {
-            "deploymentTarget": "15.1",
-            "useFrameworks": "static"
+            "deploymentTarget": "15.1"
           }
         }
       ],
