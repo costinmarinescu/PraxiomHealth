@@ -34,13 +34,32 @@ jobs:
         continue-on-error: true
 
       # ============================================
+      # APPLE API KEY SETUP FOR NON-INTERACTIVE BUILD
+      # ============================================
+      
+      - name: 🔐 Setup Apple API Key
+        run: |
+          echo "Setting up Apple API key for authentication..."
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "${{ secrets.APPLE_API_KEY }}" > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
+          echo "✅ Apple API key configured"
+
+      # ============================================
       # iOS BUILD AND SUBMIT TO APP STORE CONNECT
       # ============================================
       
       - name: 🍎 Build iOS App
+        env:
+          EXPO_APPLE_API_KEY_PATH: ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
+          EXPO_APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          EXPO_APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
         run: eas build --platform ios --profile production --non-interactive
         
       - name: 🚀 Submit iOS to App Store Connect
+        env:
+          EXPO_APPLE_API_KEY_PATH: ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
+          EXPO_APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          EXPO_APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
         run: eas submit --platform ios --latest --non-interactive
         continue-on-error: true  # Don't fail if submit has issues
         
