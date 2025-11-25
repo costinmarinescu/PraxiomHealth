@@ -27,6 +27,9 @@
         "NSLocationAlwaysUsageDescription": "Location access allows the app to maintain Bluetooth connection with your watch in the background.",
         "NSHealthShareUsageDescription": "This app needs access to your health data to calculate your biological age.",
         "NSHealthUpdateUsageDescription": "This app needs to update your health data with calculated biological age information.",
+        "NSFaceIDUsageDescription": "Praxiom Health uses Face ID to protect your sensitive health information and ensure HIPAA compliance.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to save health reports to your photo library.",
+        "NSPhotoLibraryAddUsageDescription": "This app needs permission to save generated health reports to your photo library.",
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
           "bluetooth-central",
@@ -49,7 +52,11 @@
         "BLUETOOTH_CONNECT",
         "BLUETOOTH_SCAN",
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_EXTERNAL_STORAGE"
       ],
       "intentFilters": [
         {
@@ -102,6 +109,12 @@
           "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to access your location to scan for nearby Bluetooth devices (required by iOS).",
           "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to access your location to scan for nearby Bluetooth devices (required by iOS).",
           "isIosBackgroundLocationEnabled": false
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow $(PRODUCT_NAME) to use Face ID for secure authentication."
         }
       ]
     ],

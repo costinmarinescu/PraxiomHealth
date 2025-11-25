@@ -6,6 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { AppContextProvider } from './AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
+import AuthScreen from './screens/AuthScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import WatchScreen from './screens/WatchScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -27,6 +28,7 @@ import DebugTestScreen from './screens/DebugTestScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
+const RootStack = createNativeStackNavigator();
 
 const MyTheme = {
   ...DefaultTheme,
@@ -91,81 +93,102 @@ function SettingsStack() {
   );
 }
 
+// Main Tab Navigation
+function MainTabs() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName;
+
+          if (route.name === 'Dashboard') {
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'Watch') {
+            iconName = focused ? 'watch' : 'watch-outline';
+          } else if (route.name === 'OuraRing') {
+            iconName = focused ? 'fitness' : 'fitness-outline';
+          } else if (route.name === 'Garmin') {
+            iconName = focused ? 'speedometer' : 'speedometer-outline';
+          } else if (route.name === 'Settings') {
+            iconName = focused ? 'settings' : 'settings-outline';
+          } else {
+            iconName = 'ellipsis-horizontal';
+          }
+
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+        headerShown: false,
+        tabBarActiveTintColor: '#00CFC1',
+        tabBarInactiveTintColor: 'white',
+        tabBarStyle: {
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          borderTopWidth: 0,
+          elevation: 0,
+        },
+      })}
+    >
+      <Tab.Screen 
+        name="Dashboard" 
+        component={DashboardStack}
+        options={{ tabBarLabel: 'Home' }}
+      />
+      <Tab.Screen 
+        name="Watch" 
+        component={WatchStack}
+        options={{ tabBarLabel: 'Watch' }}
+      />
+      <Tab.Screen 
+        name="OuraRing" 
+        component={OuraRingStack}
+        options={{ tabBarLabel: 'Oura' }}
+      />
+      <Tab.Screen 
+        name="Garmin" 
+        component={GarminWearableStack}
+        options={{ tabBarLabel: 'Garmin' }}
+      />
+      <Tab.Screen 
+        name="Settings" 
+        component={SettingsStack}
+        options={{ tabBarLabel: 'Settings' }}
+      />
+    </Tab.Navigator>
+  );
+}
+
 export default function App() {
-  console.log('🚀 Full Praxiom Health App Starting...');
+  console.log('🚀 Full Praxiom Health App Starting with HIPAA Compliance...');
   
   return (
     <ErrorBoundary>
       <AppContextProvider>
-        {/* ✅ NEW: Transparent status bar for Android */}
         <StatusBar 
           barStyle="light-content" 
           backgroundColor="transparent" 
           translucent={true} 
         />
         
-        {/* Simple colored background instead of ImageBackground for now */}
         <View style={styles.background}>
           <NavigationContainer theme={MyTheme}>
-            <Tab.Navigator
-              screenOptions={({ route }) => ({
-                tabBarIcon: ({ focused, color, size }) => {
-                  let iconName;
-
-                  if (route.name === 'Dashboard') {
-                    iconName = focused ? 'home' : 'home-outline';
-                  } else if (route.name === 'Watch') {
-                    iconName = focused ? 'watch' : 'watch-outline';
-                  // ✅ FIX: Add Oura Ring icon
-                  } else if (route.name === 'OuraRing') {
-                    iconName = focused ? 'fitness' : 'fitness-outline';
-                  } else if (route.name === 'Garmin') {
-                    iconName = focused ? 'speedometer' : 'speedometer-outline';
-                  } else if (route.name === 'Settings') {
-                    iconName = focused ? 'settings' : 'settings-outline';
-                  } else {
-                    iconName = 'ellipsis-horizontal';
-                  }
-
-                  return <Ionicons name={iconName} size={size} color={color} />;
-                },
+            {/* Root Navigator for Authentication Flow */}
+            <RootStack.Navigator 
+              screenOptions={{ 
                 headerShown: false,
-                tabBarActiveTintColor: '#00CFC1',
-                tabBarInactiveTintColor: 'white',
-                tabBarStyle: {
-                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                  borderTopWidth: 0,
-                  elevation: 0,
-                },
-              })}
+                animation: 'slide_from_right'
+              }}
+              initialRouteName="Auth"
             >
-              <Tab.Screen 
-                name="Dashboard" 
-                component={DashboardStack}
-                options={{ tabBarLabel: 'Home' }}
+              <RootStack.Screen 
+                name="Auth" 
+                component={AuthScreen}
+                options={{ gestureEnabled: false }}
               />
-              <Tab.Screen 
-                name="Watch" 
-                component={WatchStack}
-                options={{ tabBarLabel: 'Watch' }}
+              <RootStack.Screen 
+                name="Main" 
+                component={MainTabs}
+                options={{ gestureEnabled: false }}
               />
-              {/* ✅ FIX: Add Oura Ring tab to navigation */}
-              <Tab.Screen 
-                name="OuraRing" 
-                component={OuraRingStack}
-                options={{ tabBarLabel: 'Oura' }}
-              />
-              <Tab.Screen 
-                name="Garmin" 
-                component={GarminWearableStack}
-                options={{ tabBarLabel: 'Garmin' }}
-              />
-              <Tab.Screen 
-                name="Settings" 
-                component={SettingsStack}
-                options={{ tabBarLabel: 'Settings' }}
-              />
-            </Tab.Navigator>
+            </RootStack.Navigator>
           </NavigationContainer>
         </View>
       </AppContextProvider>
