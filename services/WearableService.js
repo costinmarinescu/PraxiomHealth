@@ -565,22 +565,49 @@ class WearableService {
       try {
         this.log(`📝 Write attempt ${attempt}/${maxAttempts}...`);
         
-        // Create timeout promise
-        const writePromise = this.device.writeCharacteristicWithResponseForService(
-          serviceUUID,
-          characteristicUUID,
-          base64Data
-        );
-
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Write timeout')), IOS_WRITE_TIMEOUT)
-        );
-
-        // Race between write and timeout
-        await Promise.race([writePromise, timeoutPromise]);
+        // CRITICAL FOR iOS: Always discover services before writing
+        if (Platform.OS === 'ios' || attempt === 1) {
+          this.log('🔍 Discovering services and characteristics...');
+          await this.device.discoverAllServicesAndCharacteristics();
+          
+          // Wait for discovery to complete on iOS
+          if (Platform.OS === 'ios') {
+            await this.delay(500);
+          }
+        }
         
-        this.log(`✅ Write successful on attempt ${attempt}`);
-        return true;
+        // Try writeWithResponse first
+        try {
+          // Create timeout promise
+          const writePromise = this.device.writeCharacteristicWithResponseForService(
+            serviceUUID,
+            characteristicUUID,
+            base64Data
+          );
+
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Write timeout')), IOS_WRITE_TIMEOUT)
+          );
+
+          // Race between write and timeout
+          await Promise.race([writePromise, timeoutPromise]);
+          
+          this.log(`✅ Write successful on attempt ${attempt} (with response)`);
+          return true;
+          
+        } catch (writeError) {
+          // If writeWithResponse fails, try writeWithoutResponse
+          this.log('⚠️ WriteWithResponse failed, trying without response...');
+          
+          await this.device.writeCharacteristicWithoutResponseForService(
+            serviceUUID,
+            characteristicUUID,
+            base64Data
+          );
+          
+          this.log(`✅ Write successful on attempt ${attempt} (without response)`);
+          return true;
+        }
 
       } catch (error) {
         lastError = error;
