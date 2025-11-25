@@ -1,4 +1,4 @@
-name: Build and Deploy Praxiom Health App
+name: Build Android App
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
     
     steps:
@@ -30,22 +30,20 @@ jobs:
         run: npm install --legacy-peer-deps
 
       # ============================================
-      # iOS BUILD - Skip init, project already configured
-      # ============================================
-      
-      - name: 🍎 Build iOS App
-        run: eas build --platform ios --profile production --non-interactive
-        
-      - name: 🚀 Submit iOS to App Store Connect
-        run: eas submit --platform ios --latest --non-interactive
-        continue-on-error: true
-        
-      # ============================================
-      # ANDROID BUILD
+      # ANDROID BUILD ONLY
       # ============================================
       
       - name: 🤖 Build Android App Bundle
         run: eas build --platform android --profile production --non-interactive
+
+      # ============================================
+      # OPTIONAL: Submit to Google Play Store
+      # ============================================
+      
+      # Uncomment if you want to auto-submit to Play Store
+      # - name: 🚀 Submit Android to Google Play
+      #   run: eas submit --platform android --latest --non-interactive
+      #   continue-on-error: true
 
       # ============================================
       # NOTIFICATIONS
@@ -54,11 +52,17 @@ jobs:
       - name: ✅ Notify Success
         if: success()
         run: |
-          echo "✅ Build completed successfully!"
-          echo "📱 iOS app submitted to App Store Connect"
-          echo "🤖 Android app bundle built"
+          echo "✅ Android build completed successfully!"
+          echo "🤖 Android app bundle (.aab) created"
+          echo "📦 Ready for Google Play Store submission"
+          echo ""
+          echo "ℹ️ Note: iOS builds are handled locally"
           
       - name: ❌ Notify Failure
         if: failure()
         run: |
-          echo "❌ Build failed. Check logs above."
+          echo "❌ Android build failed. Check logs above."
+          echo "Common issues:"
+          echo "- Kotlin version mismatch (should be 1.7.20)"
+          echo "- Package dependencies"
+          echo "- Build configuration in eas.json"
