@@ -9,14 +9,14 @@
       "distribution": "internal",
       "ios": {
         "simulator": true,
-        "image": "stable"
+        "image": "latest"
       }
     },
     "preview": {
       "distribution": "internal",
       "ios": {
         "simulator": false,
-        "image": "stable"
+        "image": "latest"
       },
       "android": {
         "buildType": "apk"
@@ -26,7 +26,7 @@
       "ios": {
         "simulator": false,
         "autoIncrement": true,
-        "image": "stable"
+        "image": "latest"
       },
       "android": {
         "buildType": "apk"
