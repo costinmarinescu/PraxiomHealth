@@ -29,47 +29,14 @@ jobs:
       - name: 📦 Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: 🔑 Initialize EAS Project
-        run: eas init --id ${{ secrets.EXPO_PROJECT_ID }} --non-interactive
-        continue-on-error: true
-
       # ============================================
-      # DECODE AND SET APPLE API KEY
-      # ============================================
-      
-      - name: 🔐 Prepare Apple API Key
-        run: |
-          # If your secret is base64 encoded, decode it
-          echo "${{ secrets.APPLE_API_KEY }}" | base64 -d > /tmp/api-key.p8
-          
-          # Verify the file starts correctly
-          head -n 1 /tmp/api-key.p8
-          
-          # Export as environment variable with proper format
-          export EXPO_APPLE_APP_STORE_CONNECT_API_KEY_KEY=$(cat /tmp/api-key.p8)
-
-      # ============================================
-      # iOS BUILD
+      # iOS BUILD - Skip init, project already configured
       # ============================================
       
       - name: 🍎 Build iOS App
-        env:
-          EXPO_APPLE_APP_STORE_CONNECT_API_KEY_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          EXPO_APPLE_APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
-          EXPO_APPLE_APP_STORE_CONNECT_API_KEY_KEY: ${{ secrets.APPLE_API_KEY }}
-        run: |
-          # Debug: Verify environment variables are set
-          echo "API Key ID is set: ${EXPO_APPLE_APP_STORE_CONNECT_API_KEY_KEY_ID:0:4}..."
-          echo "Issuer ID is set: ${EXPO_APPLE_APP_STORE_CONNECT_API_KEY_ISSUER_ID:0:4}..."
-          
-          # Run the build
-          eas build --platform ios --profile production --non-interactive
+        run: eas build --platform ios --profile production --non-interactive
         
       - name: 🚀 Submit iOS to App Store Connect
-        env:
-          EXPO_APPLE_APP_STORE_CONNECT_API_KEY_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          EXPO_APPLE_APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
-          EXPO_APPLE_APP_STORE_CONNECT_API_KEY_KEY: ${{ secrets.APPLE_API_KEY }}
         run: eas submit --platform ios --latest --non-interactive
         continue-on-error: true
         
@@ -79,14 +46,6 @@ jobs:
       
       - name: 🤖 Build Android App Bundle
         run: eas build --platform android --profile production --non-interactive
-
-      # ============================================
-      # CLEANUP
-      # ============================================
-      
-      - name: 🧹 Cleanup
-        if: always()
-        run: rm -f /tmp/api-key.p8
 
       # ============================================
       # NOTIFICATIONS
