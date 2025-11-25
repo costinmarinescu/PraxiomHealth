@@ -23,13 +23,14 @@
       }
     },
     "production": {
+      "distribution": "store",
       "ios": {
         "simulator": false,
         "autoIncrement": true,
         "image": "latest"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
       }
     }
   },
