@@ -45,8 +45,6 @@
     "expo-document-picker": "~13.0.1",
     "expo-auth-session": "~6.0.0",
     "expo-web-browser": "~14.0.1",
-    "expo-notifications": "~0.29.11",
-    "expo-print": "~14.0.1",
     "expo-application": "~6.0.1",
     "expo-network": "~7.0.1",
     "expo-keep-awake": "~14.0.1"
