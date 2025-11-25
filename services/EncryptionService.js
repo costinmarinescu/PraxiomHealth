@@ -215,6 +215,38 @@ class EncryptionService {
   // ============================================================================
 
   /**
+   * Hash a PIN for secure storage
+   * Uses PBKDF2 with device-specific salt
+   */
+  async hashPin(pin) {
+    try {
+      if (!pin || pin.length !== 6) {
+        throw new Error('PIN must be 6 digits');
+      }
+      
+      // Get or generate device salt
+      let deviceSalt = await SecureStore.getItemAsync(STORAGE_KEYS.DEVICE_SALT);
+      if (!deviceSalt) {
+        const saltBytes = await Crypto.getRandomBytesAsync(ENCRYPTION_CONFIG.saltLength);
+        deviceSalt = this._bytesToBase64(saltBytes);
+        await SecureStore.setItemAsync(STORAGE_KEYS.DEVICE_SALT, deviceSalt);
+      }
+      
+      // Hash PIN with PBKDF2
+      const hashedPin = CryptoJS.PBKDF2(pin, deviceSalt, {
+        keySize: 256 / 32,
+        iterations: 10000, // Lower iterations for PIN hashing
+        hasher: CryptoJS.algo.SHA256
+      });
+      
+      return CryptoJS.enc.Base64.stringify(hashedPin);
+    } catch (error) {
+      console.error('❌ PIN hashing failed:', error);
+      throw new Error('Failed to hash PIN');
+    }
+  }
+
+  /**
    * Generate device-specific seed phrase
    * In production, this should ideally come from user biometric/PIN
    */
