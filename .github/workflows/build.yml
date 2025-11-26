@@ -29,34 +29,87 @@ jobs:
       - name: 📦 Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: 🔧 Fix Kotlin Version Issue
+      - name: 🔧 Comprehensive Kotlin Version Fix
         run: |
-          echo "Fixing Kotlin version in expo-modules-core..."
-          echo "ext.kotlin_version = '1.7.20'" > kotlin-fix.txt
+          echo "🔧 Applying comprehensive Kotlin version fix..."
+          
+          # Set target Kotlin version
+          KOTLIN_VERSION="1.7.20"
+          
+          # Fix expo-modules-core
+          echo "📝 Fixing expo-modules-core..."
           if [ -f "node_modules/expo-modules-core/android/build.gradle" ]; then
-            cat kotlin-fix.txt node_modules/expo-modules-core/android/build.gradle > temp.gradle
+            # Prepend kotlin version at the beginning of the file
+            echo "ext.kotlin_version = '${KOTLIN_VERSION}'" | cat - node_modules/expo-modules-core/android/build.gradle > temp.gradle
             mv temp.gradle node_modules/expo-modules-core/android/build.gradle
-            echo "✅ Kotlin version fixed"
+            
+            # Also replace any existing kotlin version declarations
+            sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '${KOTLIN_VERSION}'/g" node_modules/expo-modules-core/android/build.gradle
+            
+            echo "✅ expo-modules-core fixed"
+          fi
+          
+          # Fix all expo modules that use Kotlin
+          echo "📝 Fixing other expo modules..."
+          for module in node_modules/expo-*/android/build.gradle; do
+            if [ -f "$module" ]; then
+              if grep -q "kotlin" "$module" 2>/dev/null; then
+                module_name=$(echo $module | sed 's/.*\/\(expo-[^\/]*\)\/.*/\1/')
+                echo "  - Fixing $module_name"
+                sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '${KOTLIN_VERSION}'/g" "$module" 2>/dev/null || true
+              fi
+            fi
+          done
+          
+          # Create/update gradle.properties
+          echo "📝 Setting up gradle.properties..."
+          mkdir -p android
+          cat > android/gradle.properties << EOF
+          org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m
+          org.gradle.parallel=true
+          android.useAndroidX=true
+          android.enableJetifier=true
+          kotlinVersion=${KOTLIN_VERSION}
+          kotlin.version=${KOTLIN_VERSION}
+          expo.jsEngine=hermes
+          newArchEnabled=false
+          EOF
+          
+          echo "✅ Kotlin version fix complete"
+          
+          # Verify the fix
+          echo ""
+          echo "🔍 Verifying fix..."
+          if grep -q "ext.kotlin_version = '${KOTLIN_VERSION}'" node_modules/expo-modules-core/android/build.gradle; then
+            echo "✅ Verification successful - Kotlin version is set to ${KOTLIN_VERSION}"
           else
-            echo "❌ Could not find expo-modules-core build.gradle"
+            echo "❌ Verification failed - checking file contents:"
+            head -5 node_modules/expo-modules-core/android/build.gradle
             exit 1
           fi
 
+      - name: 🧹 Clean and Prebuild
+        run: |
+          # Clean any existing builds
+          rm -rf android ios
+          
+          # Prebuild with clean slate
+          npx expo prebuild --clean --platform android
+          
+          # Apply the Kotlin fix again after prebuild (in case prebuild regenerates files)
+          if [ -f "node_modules/expo-modules-core/android/build.gradle" ]; then
+            echo "ext.kotlin_version = '1.7.20'" | cat - node_modules/expo-modules-core/android/build.gradle > temp.gradle
+            mv temp.gradle node_modules/expo-modules-core/android/build.gradle
+          fi
+
       # ============================================
-      # ANDROID BUILD ONLY
+      # ANDROID BUILD
       # ============================================
       
       - name: 🤖 Build Android App Bundle
         run: eas build --platform android --profile production --non-interactive
-
-      # ============================================
-      # OPTIONAL: Submit to Google Play Store
-      # ============================================
-      
-      # Uncomment if you want to auto-submit to Play Store
-      # - name: 🚀 Submit Android to Google Play
-      #   run: eas submit --platform android --latest --non-interactive
-      #   continue-on-error: true
+        env:
+          EAS_NO_VCS: 1
 
       # ============================================
       # NOTIFICATIONS
@@ -69,13 +122,19 @@ jobs:
           echo "🤖 Android app bundle (.aab) created"
           echo "📦 Ready for Google Play Store submission"
           echo ""
-          echo "ℹ️ Note: iOS builds are handled locally"
+          echo "Build details:"
+          echo "- Kotlin Version: 1.7.20"
+          echo "- Compose Compiler: 1.3.2"
+          echo "- SDK Version: 34"
+          echo "- Min SDK: 23"
           
       - name: ❌ Notify Failure
         if: failure()
         run: |
           echo "❌ Android build failed. Check logs above."
-          echo "Common issues:"
-          echo "- Kotlin version mismatch (should be 1.7.20)"
-          echo "- Package dependencies"
-          echo "- Build configuration in eas.json"
+          echo ""
+          echo "Troubleshooting steps:"
+          echo "1. Check Kotlin version (should be 1.7.20)"
+          echo "2. Verify expo-modules-core is patched"
+          echo "3. Check for dependency conflicts"
+          echo "4. Review gradle build logs"
