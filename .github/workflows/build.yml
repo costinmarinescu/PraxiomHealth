@@ -96,3 +96,4 @@ ext.kotlin_version = '1.7.20'
           echo "- Kotlin version mismatch (should be 1.7.20)"
           echo "- Package dependencies"
           echo "- Build configuration in eas.json"
+          
