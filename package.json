@@ -7,9 +7,13 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "prebuild": "expo prebuild",
-    "prebuild:clean": "expo prebuild --clean",
-    "postinstall": "node fix-kotlin.js || true"
+    "prebuild": "npm run fix-kotlin && expo prebuild",
+    "prebuild:clean": "npm run fix-kotlin && expo prebuild --clean",
+    "postinstall": "node fix-kotlin-local.js || true",
+    "fix-kotlin": "node fix-kotlin-local.js",
+    "build-android": "npm run fix-kotlin && eas build --platform android --profile production",
+    "build-ios": "eas build --platform ios --profile production --local",
+    "test": "node test-calculations.js && node test-functionality.js"
   },
   "dependencies": {
     "expo": "~52.0.0",
