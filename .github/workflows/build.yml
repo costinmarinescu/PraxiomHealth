@@ -31,8 +31,16 @@ jobs:
 
       - name: 🔧 Fix Kotlin Version Issue
         run: |
-          echo "const fs = require('fs'); const path = require('path'); const file = path.join('node_modules', 'expo-modules-core', 'android', 'build.gradle'); if (fs.existsSync(file)) { let content = fs.readFileSync(file, 'utf8'); if (!content.includes('ext.kotlin_version')) { fs.writeFileSync(file, 'ext.kotlin_version = \"1.7.20\"\\n\\n' + content); console.log('Fixed Kotlin version'); } } else { console.error('Could not find build.gradle'); process.exit(1); }" > fix-kotlin.js
-          node fix-kotlin.js
+          echo "Fixing Kotlin version in expo-modules-core..."
+          echo "ext.kotlin_version = '1.7.20'" > kotlin-fix.txt
+          if [ -f "node_modules/expo-modules-core/android/build.gradle" ]; then
+            cat kotlin-fix.txt node_modules/expo-modules-core/android/build.gradle > temp.gradle
+            mv temp.gradle node_modules/expo-modules-core/android/build.gradle
+            echo "✅ Kotlin version fixed"
+          else
+            echo "❌ Could not find expo-modules-core build.gradle"
+            exit 1
+          fi
 
       # ============================================
       # ANDROID BUILD ONLY
