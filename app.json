@@ -104,7 +104,7 @@
             "peripheral",
             "central"
           ],
-          "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to your PineTime watch for continuous health monitoring"
+          "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to your PineTime watch for continuous health monitoring."
         }
       ],
       [
