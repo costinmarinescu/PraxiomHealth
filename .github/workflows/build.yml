@@ -31,32 +31,7 @@ jobs:
 
       - name: 🔧 Fix Kotlin Version Issue
         run: |
-          # Fix expo-modules-core Kotlin version mismatch
-          echo "Fixing Kotlin version in expo-modules-core..."
-          cat > fix-kotlin.js << 'EOF'
-          const fs = require('fs');
-          const path = require('path');
-          
-          const buildGradlePath = path.join('node_modules', 'expo-modules-core', 'android', 'build.gradle');
-          
-          if (fs.existsSync(buildGradlePath)) {
-            let content = fs.readFileSync(buildGradlePath, 'utf8');
-            
-            // Add Kotlin version override at the beginning
-            const kotlinOverride = `// Force Kotlin 1.7.20 for compatibility
-ext.kotlin_version = '1.7.20'
-
-`;
-            
-            // Write the modified content
-            fs.writeFileSync(buildGradlePath, kotlinOverride + content);
-            console.log('✅ Fixed Kotlin version in expo-modules-core');
-          } else {
-            console.error('❌ Could not find expo-modules-core build.gradle');
-            process.exit(1);
-          }
-          EOF
-          
+          echo "const fs = require('fs'); const path = require('path'); const file = path.join('node_modules', 'expo-modules-core', 'android', 'build.gradle'); if (fs.existsSync(file)) { let content = fs.readFileSync(file, 'utf8'); if (!content.includes('ext.kotlin_version')) { fs.writeFileSync(file, 'ext.kotlin_version = \"1.7.20\"\\n\\n' + content); console.log('Fixed Kotlin version'); } } else { console.error('Could not find build.gradle'); process.exit(1); }" > fix-kotlin.js
           node fix-kotlin.js
 
       # ============================================
@@ -96,4 +71,3 @@ ext.kotlin_version = '1.7.20'
           echo "- Kotlin version mismatch (should be 1.7.20)"
           echo "- Package dependencies"
           echo "- Build configuration in eas.json"
-          
